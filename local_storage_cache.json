@@ -1,0 +1,154 @@
+{
+  "users": {
+    "ramachandramurthymamidipalli@gmail.com": {
+      "$id": "user_1789724369695_46fbh",
+      "email": "ramachandramurthymamidipalli@gmail.com",
+      "password": "",
+      "first_name": "m",
+      "last_name": "a",
+      "is_mail_only": false
+    }
+  },
+  "userData": {
+    "ramachandramurthymamidipalli@gmail.com": {
+      "profile": {
+        "name": "m a",
+        "firstName": "m",
+        "lastName": "a",
+        "headline": "",
+        "email": "ramachandramurthymamidipalli@gmail.com",
+        "secondaryEmail": "",
+        "phone": "",
+        "secondaryPhone": "",
+        "location": "",
+        "bio": "",
+        "avatarUrl": "",
+        "publicProfile": false
+      },
+      "skills": [],
+      "education": [],
+      "certifications": [],
+      "experience": [],
+      "currentJob": {
+        "employer": "",
+        "role": "",
+        "startDate": "",
+        "department": "",
+        "employmentType": "internship",
+        "locationType": "on-site",
+        "currentProjects": [],
+        "dailyStandupText": "",
+        "weeklyGoals": []
+      },
+      "projects": [
+        {
+          "name": "test project 4",
+          "category": "utilities",
+          "type": "project",
+          "date": "Sep 2026",
+          "description": "Effective communication is the foundation of any successful relationship, whether personal or professional. When individuals express their thoughts and feelings clearly, it prevents misunderstandings and builds mutual trust. Active listening plays an equally critical role, as it ensures that all parties feel valued and understood. Conversely, a breakdown in communication often leads to unnecessary conflict and resentment. Ultimately, investing time in honing these skills strengthens bonds and fosters a more collaborative environment.",
+          "techStack": [
+            "Power BI",
+            "MySQL",
+            "Excel"
+          ],
+          "githubUrl": "",
+          "liveUrl": "",
+          "highlights": [
+            "Interactive KPI trackers built securely",
+            "Automated scale modeling included"
+          ],
+          "pdfUrl": "",
+          "pdfName": "Ramachandra Murthy Mamidipalli (BTECH ORGINAL CERTIFICATE) (OD).pdf",
+          "isPublic": true,
+          "id": "proj-1789634979436"
+        },
+        {
+          "name": "test project 3",
+          "category": "utilities",
+          "type": "project",
+          "date": "Sep 2026",
+          "description": "npm run devEffective communication is the foundation of any successful relationship, whether personal or professional. When individuals express their thoughts and feelings clearly, it prevents misunderstandings and builds mutual trust. Active listening plays an equally critical role, as it ensures that all parties feel valued and understood. Conversely, a breakdown in communication often leads to unnecessary conflict and resentment. Ultimately, investing time in honing these skills strengthens bonds and fosters a more collaborative environment.",
+          "techStack": [
+            "Power BI",
+            "MySQL",
+            "Excel"
+          ],
+          "githubUrl": "",
+          "liveUrl": "",
+          "highlights": [
+            "Interactive KPI trackers built securely",
+            "Automated scale modeling included"
+          ],
+          "isPublic": true,
+          "id": "proj-1789634767412"
+        },
+        {
+          "name": "test project 2",
+          "category": "utilities",
+          "type": "project",
+          "date": "Sep 2026",
+          "description": "test project 2",
+          "techStack": [
+            "Power BI",
+            "MySQL",
+            "Excel"
+          ],
+          "githubUrl": "",
+          "liveUrl": "",
+          "highlights": [
+            "Interactive KPI trackers built securely",
+            "Automated scale modeling included"
+          ],
+          "pdfUrl": "",
+          "pdfName": "RamachandraMurthyMamidipalli10THCertificate.pdf",
+          "isPublic": true,
+          "id": "proj-1789632838217"
+        },
+        {
+          "name": "excel",
+          "category": "utilities",
+          "type": "project",
+          "date": "Sep 2026",
+          "description": "hknkvlgiuryg8iarujjgrni",
+          "techStack": [
+            "Power BI",
+            "MySQL",
+            "Excel"
+          ],
+          "githubUrl": "",
+          "liveUrl": "",
+          "highlights": [
+            "Interactive KPI trackers built securely",
+            "Automated scale modeling included"
+          ],
+          "pdfUrl": "",
+          "pdfName": "Control Valve.pdf",
+          "isPublic": true,
+          "id": "proj-1789562919123"
+        }
+      ],
+      "products": [],
+      "others": [],
+      "links": [],
+      "resumeLinks": [],
+      "milestones": [],
+      "contacts": [],
+      "achievements": [],
+      "testimonials": [],
+      "documents": [],
+      "calendarEvents": [],
+      "notes": [],
+      "resumes": []
+    }
+  },
+  "shares": {
+    "m-a": {
+      "$id": "share_1789735161240",
+      "slug": "m-a",
+      "user_email": "shared_anonymous@nexus.crm",
+      "profile_json": "eyJwIjp7Im5hbWUiOiJtIGEiLCJmaXJzdE5hbWUiOiJtIiwibGFzdE5hbWUiOiJhIiwiaGVhZGxpbmUiOiIiLCJlbWFpbCI6InJhbWFjaGFuZHJhbXVydGh5bWFtaWRpcGFsbGlAZ21haWwuY29tIiwic2Vjb25kYXJ5RW1haWwiOiIiLCJwaG9uZSI6IiIsInNlY29uZGFyeVBob25lIjoiIiwibG9jYXRpb24iOiIiLCJiaW8iOiIiLCJhdmF0YXJVcmwiOiIiLCJwdWJsaWNQcm9maWxlIjpmYWxzZX0sInMiOltdLCJlIjpbXSwiYyI6W10sInByIjpbeyJuYW1lIjoidGVzdCBwcm9qZWN0IDQiLCJjYXRlZ29yeSI6InV0aWxpdGllcyIsInR5cGUiOiJwcm9qZWN0IiwiZGF0ZSI6IlNlcCAyMDI2IiwiZGVzY3JpcHRpb24iOiJFZmZlY3RpdmUgY29tbXVuaWNhdGlvbiBpcyB0aGUgZm91bmRhdGlvbiBvZiBhbnkgc3VjY2Vzc2Z1bCByZWxhdGlvbnNoaXAsIHdoZXRoZXIgcGVyc29uYWwgb3IgcHJvZmVzc2lvbmFsLiBXaGVuIGluZGl2aWR1YWxzIGV4cHJlc3MgdGhlaXIgdGhvdWdodHMgYW5kIGZlZWxpbmdzIGNsZWFybHksIGl0IHByZXZlbnRzIG1pc3VuZGVyc3RhbmRpbmdzIGFuZCBidWlsZHMgbXV0dWFsIHRydXN0LiBBY3RpdmUgbGlzdGVuaW5nIHBsYXlzIGFuIGVxdWFsbHkgY3JpdGljYWwgcm9sZSwgYXMgaXQgZW5zdXJlcyB0aGF0IGFsbCBwYXJ0aWVzIGZlZWwgdmFsdWVkIGFuZCB1bmRlcnN0b29kLiBDb252ZXJzZWx5LCBhIGJyZWFrZG93biBpbiBjb21tdW5pY2F0aW9uIG9mdGVuIGxlYWRzIHRvIHVubmVjZXNzYXJ5IGNvbmZsaWN0IGFuZCByZXNlbnRtZW50LiBVbHRpbWF0ZWx5LCBpbnZlc3RpbmcgdGltZSBpbiBob25pbmcgdGhlc2Ugc2tpbGxzIHN0cmVuZ3RoZW5zIGJvbmRzIGFuZCBmb3N0ZXJzIGEgbW9yZSBjb2xsYWJvcmF0aXZlIGVudmlyb25tZW50LiIsInRlY2hTdGFjayI6WyJQb3dlciBCSSIsIk15U1FMIiwiRXhjZWwiXSwiZ2l0aHViVXJsIjoiIiwibGl2ZVVybCI6IiIsImhpZ2hsaWdodHMiOlsiSW50ZXJhY3RpdmUgS1BJIHRyYWNrZXJzIGJ1aWx0IHNlY3VyZWx5IiwiQXV0b21hdGVkIHNjYWxlIG1vZGVsaW5nIGluY2x1ZGVkIl0sInBkZlVybCI6IiIsInBkZk5hbWUiOiJSYW1hY2hhbmRyYSBNdXJ0aHkgTWFtaWRpcGFsbGkgKEJURUNIIE9SR0lOQUwgQ0VSVElGSUNBVEUpIChPRCkucGRmIiwiaXNQdWJsaWMiOnRydWUsImlkIjoicHJvai0xNzg5NjM0OTc5NDM2In0seyJuYW1lIjoidGVzdCBwcm9qZWN0IDMiLCJjYXRlZ29yeSI6InV0aWxpdGllcyIsInR5cGUiOiJwcm9qZWN0IiwiZGF0ZSI6IlNlcCAyMDI2IiwiZGVzY3JpcHRpb24iOiJucG0gcnVuIGRldkVmZmVjdGl2ZSBjb21tdW5pY2F0aW9uIGlzIHRoZSBmb3VuZGF0aW9uIG9mIGFueSBzdWNjZXNzZnVsIHJlbGF0aW9uc2hpcCwgd2hldGhlciBwZXJzb25hbCBvciBwcm9mZXNzaW9uYWwuIFdoZW4gaW5kaXZpZHVhbHMgZXhwcmVzcyB0aGVpciB0aG91Z2h0cyBhbmQgZmVlbGluZ3MgY2xlYXJseSwgaXQgcHJldmVudHMgbWlzdW5kZXJzdGFuZGluZ3MgYW5kIGJ1aWxkcyBtdXR1YWwgdHJ1c3QuIEFjdGl2ZSBsaXN0ZW5pbmcgcGxheXMgYW4gZXF1YWxseSBjcml0aWNhbCByb2xlLCBhcyBpdCBlbnN1cmVzIHRoYXQgYWxsIHBhcnRpZXMgZmVlbCB2YWx1ZWQgYW5kIHVuZGVyc3Rvb2QuIENvbnZlcnNlbHksIGEgYnJlYWtkb3duIGluIGNvbW11bmljYXRpb24gb2Z0ZW4gbGVhZHMgdG8gdW5uZWNlc3NhcnkgY29uZmxpY3QgYW5kIHJlc2VudG1lbnQuIFVsdGltYXRlbHksIGludmVzdGluZyB0aW1lIGluIGhvbmluZyB0aGVzZSBza2lsbHMgc3RyZW5ndGhlbnMgYm9uZHMgYW5kIGZvc3RlcnMgYSBtb3JlIGNvbGxhYm9yYXRpdmUgZW52aXJvbm1lbnQuIiwidGVjaFN0YWNrIjpbIlBvd2VyIEJJIiwiTXlTUUwiLCJFeGNlbCJdLCJnaXRodWJVcmwiOiIiLCJsaXZlVXJsIjoiIiwiaGlnaGxpZ2h0cyI6WyJJbnRlcmFjdGl2ZSBLUEkgdHJhY2tlcnMgYnVpbHQgc2VjdXJlbHkiLCJBdXRvbWF0ZWQgc2NhbGUgbW9kZWxpbmcgaW5jbHVkZWQiXSwiaXNQdWJsaWMiOnRydWUsImlkIjoicHJvai0xNzg5NjM0NzY3NDEyIn0seyJuYW1lIjoidGVzdCBwcm9qZWN0IDIiLCJjYXRlZ29yeSI6InV0aWxpdGllcyIsInR5cGUiOiJwcm9qZWN0IiwiZGF0ZSI6IlNlcCAyMDI2IiwiZGVzY3JpcHRpb24iOiJ0ZXN0IHByb2plY3QgMiIsInRlY2hTdGFjayI6WyJQb3dlciBCSSIsIk15U1FMIiwiRXhjZWwiXSwiZ2l0aHViVXJsIjoiIiwibGl2ZVVybCI6IiIsImhpZ2hsaWdodHMiOlsiSW50ZXJhY3RpdmUgS1BJIHRyYWNrZXJzIGJ1aWx0IHNlY3VyZWx5IiwiQXV0b21hdGVkIHNjYWxlIG1vZGVsaW5nIGluY2x1ZGVkIl0sInBkZlVybCI6IiIsInBkZk5hbWUiOiJSYW1hY2hhbmRyYU11cnRoeU1hbWlkaXBhbGxpMTBUSENlcnRpZmljYXRlLnBkZiIsImlzUHVibGljIjp0cnVlLCJpZCI6InByb2otMTc4OTYzMjgzODIxNyJ9LHsibmFtZSI6ImV4Y2VsIiwiY2F0ZWdvcnkiOiJ1dGlsaXRpZXMiLCJ0eXBlIjoicHJvamVjdCIsImRhdGUiOiJTZXAgMjAyNiIsImRlc2NyaXB0aW9uIjoiaGtua3ZsZ2l1cnlnOGlhcnVqamdybmkiLCJ0ZWNoU3RhY2siOlsiUG93ZXIgQkkiLCJNeVNRTCIsIkV4Y2VsIl0sImdpdGh1YlVybCI6IiIsImxpdmVVcmwiOiIiLCJoaWdobGlnaHRzIjpbIkludGVyYWN0aXZlIEtQSSB0cmFja2VycyBidWlsdCBzZWN1cmVseSIsIkF1dG9tYXRlZCBzY2FsZSBtb2RlbGluZyBpbmNsdWRlZCJdLCJwZGZVcmwiOiIiLCJwZGZOYW1lIjoiQ29udHJvbCBWYWx2ZS5wZGYiLCJpc1B1YmxpYyI6dHJ1ZSwiaWQiOiJwcm9qLTE3ODk1NjI5MTkxMjMifV0sImVkIjpbXSwiYSI6W10sInQiOltdLCJsIjpbXSwiY2FsIjpbXX0",
+      "is_public": true
+    }
+  }
+}

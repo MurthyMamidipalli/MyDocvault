@@ -1,0 +1,6 @@
+{
+  "name": "Personal CRM Profile",
+  "description": "A highly-polished futuristic personal CRM, portfolio database, resume builder and secure documents vault customized for corporate full-stack engineers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
