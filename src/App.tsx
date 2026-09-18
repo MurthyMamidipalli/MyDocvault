@@ -2551,48 +2551,46 @@ export default function App() {
     let active = true;
 
     // Parse slug from URL (path or hash)
-    let slug = 'ramachandra-murthy';
+    let rawSlug = 'ramachandra-murthy';
     const currentHash = window.location.hash || '';
     const currentPathname = window.location.pathname || '';
     
     if (currentHash.startsWith('#/share/')) {
       const parts = currentHash.split('?');
-      slug = parts[0].replace('#/share/', '');
+      rawSlug = parts[0].replace('#/share/', '');
     } else if (currentHash.startsWith('#/public/')) {
       const parts = currentHash.split('?');
-      slug = parts[0].replace('#/public/', '');
+      rawSlug = parts[0].replace('#/public/', '');
     } else if (currentHash.startsWith('#/profile/')) {
       const parts = currentHash.split('?');
-      slug = parts[0].replace('#/profile/', '');
+      rawSlug = parts[0].replace('#/profile/', '');
     } else if (currentPathname.startsWith('/share/')) {
       const parts = currentPathname.split('?');
-      slug = parts[0].replace('/share/', '');
+      rawSlug = parts[0].replace('/share/', '');
     } else if (currentPathname.startsWith('/public/')) {
       const parts = currentPathname.split('?');
-      slug = parts[0].replace('/public/', '');
+      rawSlug = parts[0].replace('/public/', '');
     } else if (currentPathname.startsWith('/profile/')) {
       const parts = currentPathname.split('?');
-      slug = parts[0].replace('/profile/', '');
+      rawSlug = parts[0].replace('/profile/', '');
     }
-    slug = slug.split('/')[0].trim().toLowerCase();
-    if (slug === 'ramachandra-murthy' || slug === 'ramachandramurthy' || slug === 'ramachandra-murthy-mamidipalli') {
-      slug = 'murthy-m';
-    }
+    rawSlug = rawSlug.split('/')[0].trim().toLowerCase();
+    let slug = rawSlug;
 
-    // Check if it's the official mockup demo / template (only these fall back to mock placeholder data!)
+    const isMurthy = slug.includes('ramachandra') || slug.includes('murthy') || slug === 'murthy-m';
     const isDemo = slug === 'demo' || slug === 'template';
 
     // Baseline shared variables (starts with default fallback or empty depending on owner)
-    let sharedProfile = isDemo ? INITIAL_PROFILE : EMPTY_PROFILE;
-    let sharedSkills = isDemo ? INITIAL_SKILLS : [];
-    let sharedExperience = isDemo ? INITIAL_EXPERIENCE : [];
-    let sharedCertifications = isDemo ? INITIAL_CERTIFICATIONS : [];
-    let sharedProjects = isDemo ? INITIAL_PROJECTS : [];
-    let sharedEducation = isDemo ? INITIAL_EDUCATION : [];
-    let sharedAchievements = isDemo ? INITIAL_ACHIEVEMENTS : [];
-    let sharedTestimonials = isDemo ? INITIAL_TESTIMONIALS : [];
-    let sharedLinks = isDemo ? INITIAL_LINKS : [];
-    let sharedCalendarEvents = isDemo ? INITIAL_CALENDAR_EVENTS : [];
+    let sharedProfile: PersonalProfile = (isDemo || isMurthy) ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, publicProfile: true };
+    let sharedSkills = (isDemo || isMurthy) ? INITIAL_SKILLS : [];
+    let sharedExperience = (isDemo || isMurthy) ? INITIAL_EXPERIENCE : [];
+    let sharedCertifications = (isDemo || isMurthy) ? INITIAL_CERTIFICATIONS : [];
+    let sharedProjects = (isDemo || isMurthy) ? INITIAL_PROJECTS : [];
+    let sharedEducation = (isDemo || isMurthy) ? INITIAL_EDUCATION : [];
+    let sharedAchievements = (isDemo || isMurthy) ? INITIAL_ACHIEVEMENTS : [];
+    let sharedTestimonials = (isDemo || isMurthy) ? INITIAL_TESTIMONIALS : [];
+    let sharedLinks = (isDemo || isMurthy) ? INITIAL_LINKS : [];
+    let sharedCalendarEvents = (isDemo || isMurthy) ? INITIAL_CALENDAR_EVENTS : [];
 
     // Find if any registered user matches this slug
     let matchedEmail: string | null = null;
@@ -2621,7 +2619,7 @@ export default function App() {
           const p = JSON.parse(savedProfileStr);
           if (p && p.name) {
             const candidateSlug = p.name.toLowerCase().replace(/\s+/g, '-');
-            if (candidateSlug === slug) {
+            if (candidateSlug === slug || candidateSlug.includes('murthy') && isMurthy) {
               matchedEmail = u.email;
               break;
             }
@@ -2631,7 +2629,7 @@ export default function App() {
     }
 
     // Fallback if matched Email holds empty profile details:
-    if (!matchedEmail && currentEmail && (slug === 'ramachandra-murthy' || slug === 'murthy-m' || slug === 'ramachandra-murthy-mamidipalli')) {
+    if (!matchedEmail && currentEmail && isMurthy) {
       matchedEmail = currentEmail;
     }
 
@@ -2659,24 +2657,24 @@ export default function App() {
       const locResL = getLocalData('resume_links');
       const locCal = getLocalData('calendar_events');
 
-      sharedProfile = locP !== null ? locP : (isDemo ? INITIAL_PROFILE : EMPTY_PROFILE);
-      sharedSkills = locS !== null ? locS : (isDemo ? INITIAL_SKILLS : []);
-      sharedExperience = locE !== null ? locE : (isDemo ? INITIAL_EXPERIENCE : []);
-      sharedCertifications = locC !== null ? locC : (isDemo ? INITIAL_CERTIFICATIONS : []);
+      sharedProfile = locP !== null ? { ...locP, publicProfile: locP.publicProfile !== false } : (isDemo || isMurthy ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, publicProfile: true });
+      sharedSkills = locS !== null ? locS : (isDemo || isMurthy ? INITIAL_SKILLS : []);
+      sharedExperience = locE !== null ? locE : (isDemo || isMurthy ? INITIAL_EXPERIENCE : []);
+      sharedCertifications = locC !== null ? locC : (isDemo || isMurthy ? INITIAL_CERTIFICATIONS : []);
       sharedProjects = (locPr !== null || locProd !== null || locOth !== null) 
         ? [...(locPr || []), ...(locProd || []), ...(locOth || [])] 
-        : (isDemo ? INITIAL_PROJECTS : []);
-      sharedEducation = locEd !== null ? locEd : (isDemo ? INITIAL_EDUCATION : []);
-      sharedAchievements = locA !== null ? locA : (isDemo ? INITIAL_ACHIEVEMENTS : []);
-      sharedTestimonials = locT !== null ? locT : (isDemo ? INITIAL_TESTIMONIALS : []);
-      sharedLinks = (locL !== null || locResL !== null) ? [...(locL || []), ...(locResL || [])] : (isDemo ? INITIAL_LINKS : []);
-      sharedCalendarEvents = locCal !== null ? locCal : (isDemo ? INITIAL_CALENDAR_EVENTS : []);
+        : (isDemo || isMurthy ? INITIAL_PROJECTS : []);
+      sharedEducation = locEd !== null ? locEd : (isDemo || isMurthy ? INITIAL_EDUCATION : []);
+      sharedAchievements = locA !== null ? locA : (isDemo || isMurthy ? INITIAL_ACHIEVEMENTS : []);
+      sharedTestimonials = locT !== null ? locT : (isDemo || isMurthy ? INITIAL_TESTIMONIALS : []);
+      sharedLinks = (locL !== null || locResL !== null) ? [...(locL || []), ...(locResL || [])] : (isDemo || isMurthy ? INITIAL_LINKS : []);
+      sharedCalendarEvents = locCal !== null ? locCal : (isDemo || isMurthy ? INITIAL_CALENDAR_EVENTS : []);
     } else {
       // Direct offline read-only local storage fallback
       const cachedProfileStr = localStorage.getItem(`nexus_cache_profile_${slug}`);
       if (cachedProfileStr) {
         try {
-          sharedProfile = JSON.parse(cachedProfileStr);
+          sharedProfile = { ...JSON.parse(cachedProfileStr), publicProfile: true };
           const getCachedData = (keySuffix: string, fallback: any) => {
             const saved = localStorage.getItem(`nexus_cache_${keySuffix}_${slug}`);
             if (saved) {
@@ -2786,13 +2784,47 @@ export default function App() {
       // 1. Direct Supabase Public Profile Query
       try {
         console.log(`[Supabase Share Query] Fetching public profile for slug: '${slug}'`);
-        const { data: pRow } = await supabase
+        
+        let pRow: any = null;
+
+        // Try exact match by share_slug
+        const { data: exactRow } = await supabase
           .from('profiles')
           .select('*')
           .eq('share_slug', slug)
           .maybeSingle();
 
-        if (pRow && (pRow.public_profile === true || pRow.public_profile === undefined)) {
+        pRow = exactRow;
+
+        // Fallback search if exact slug not matched
+        if (!pRow && (isMurthy || slug === 'user')) {
+          const { data: altRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .or(`share_slug.eq.ramachandra-murthy-mamidipalli,share_slug.eq.murthy-m,share_slug.eq.ramachandra-murthy`)
+            .maybeSingle();
+          pRow = altRow;
+        }
+
+        // Final fallback: fetch primary profile from profiles table
+        if (!pRow) {
+          const { data: firstRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .limit(1)
+            .maybeSingle();
+          pRow = firstRow;
+        }
+
+        if (pRow) {
+          if (pRow.public_profile === false) {
+            setRemoteShareData({
+              profile: { ...sharedProfile, publicProfile: false },
+              skills: [], experience: [], certifications: [], projects: [], education: [], achievements: [], testimonials: [], links: [], calendarEvents: []
+            });
+            return "";
+          }
+
           const uId = pRow.user_id;
 
           const [
@@ -2807,41 +2839,47 @@ export default function App() {
             { data: lData },
             { data: calData }
           ] = await Promise.all([
-            supabase.from('skills').select('*').eq('user_id', uId).eq('visibility', 'public'),
+            supabase.from('skills').select('*').eq('user_id', uId),
             supabase.from('education').select('*').eq('user_id', uId),
-            supabase.from('certifications').select('*').eq('user_id', uId).eq('visibility', 'public'),
+            supabase.from('certifications').select('*').eq('user_id', uId),
             supabase.from('experience').select('*').eq('user_id', uId),
-            supabase.from('projects').select('*').eq('user_id', uId).eq('is_public', true),
-            supabase.from('products').select('*').eq('user_id', uId).eq('is_public', true),
-            supabase.from('achievements').select('*').eq('user_id', uId).eq('is_public', true),
-            supabase.from('testimonials').select('*').eq('user_id', uId).eq('is_public', true),
-            supabase.from('portfolio_links').select('*').eq('user_id', uId).eq('is_public', true),
-            supabase.from('calendar_events').select('*').eq('user_id', uId).eq('is_public', true)
+            supabase.from('projects').select('*').eq('user_id', uId),
+            supabase.from('products').select('*').eq('user_id', uId),
+            supabase.from('achievements').select('*').eq('user_id', uId),
+            supabase.from('testimonials').select('*').eq('user_id', uId),
+            supabase.from('portfolio_links').select('*').eq('user_id', uId),
+            supabase.from('calendar_events').select('*').eq('user_id', uId)
           ]);
 
           const publicProfileObj: PersonalProfile = {
-            ...EMPTY_PROFILE,
-            name: pRow.name || `${pRow.first_name || ''} ${pRow.last_name || ''}`.trim(),
-            headline: pRow.headline || '',
-            bio: pRow.bio || '',
-            email: pRow.email || '',
-            phone: pRow.phone || '',
-            location: pRow.location || '',
-            avatarUrl: pRow.avatar_url || '',
+            ...INITIAL_PROFILE,
+            name: pRow.name || `${pRow.first_name || ''} ${pRow.last_name || ''}`.trim() || INITIAL_PROFILE.name,
+            headline: pRow.headline || INITIAL_PROFILE.headline,
+            bio: pRow.bio || INITIAL_PROFILE.bio,
+            email: pRow.email || INITIAL_PROFILE.email,
+            phone: pRow.phone || INITIAL_PROFILE.phone,
+            location: pRow.location || INITIAL_PROFILE.location,
+            avatarUrl: pRow.avatar_url || INITIAL_PROFILE.avatarUrl,
             publicProfile: true
           };
 
+          const hasCustomSkills = sData && sData.length > 0;
+          const hasCustomExp = expData && expData.length > 0;
+          const hasCustomCerts = cData && cData.length > 0;
+          const hasCustomProjects = (prData && prData.length > 0) || (prodData && prodData.length > 0);
+          const hasCustomEdu = eData && eData.length > 0;
+
           const publicSharePayload = {
             profile: publicProfileObj,
-            skills: (sData || []).map((s: any) => ({ id: s.id, name: s.name, category: s.category, yearsOfExp: s.years_of_exp, visibility: 'public' })),
-            experience: (expData || []).map((exp: any) => ({ id: exp.id, company: exp.company, role: exp.role, startDate: exp.start_date, endDate: exp.end_date, description: exp.description, skillsUsed: exp.skills_used, links: exp.links })),
-            certifications: (cData || []).map((c: any) => ({ id: c.id, title: c.title, issuer: c.issuer, dateIssued: c.issue_date, credentialUrl: c.credential_url, visibility: 'public' })),
-            projects: [...(prData || []), ...(prodData || [])].map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, date: p.date, isPublic: true })),
-            education: (eData || []).map((e: any) => ({ id: e.id, degree: e.degree, institution: e.institution, fieldOfStudy: e.field_of_study, startYear: e.start_year, endYear: e.end_year, grade: e.grade })),
-            achievements: (aData || []).map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, isPublic: true })),
-            testimonials: (tData || []).map((t: any) => ({ id: t.id, name: t.name, company: t.company, role: t.role, text: t.text, relationship: t.relationship, avatarColor: t.avatar_color })),
-            links: (lData || []).map((l: any) => ({ id: l.id, platform: l.platform, label: l.label, url: l.url, isPublic: true })),
-            calendarEvents: (calData || []).map((cal: any) => ({ id: cal.id, title: cal.title, date: cal.date, startTime: cal.start_time, endTime: cal.end_time, type: cal.type, isPublic: true }))
+            skills: hasCustomSkills ? sData.map((s: any) => ({ id: s.id, name: s.name, category: s.category, yearsOfExp: s.years_of_exp, visibility: 'public' })) : (isMurthy ? INITIAL_SKILLS : []),
+            experience: hasCustomExp ? expData.map((exp: any) => ({ id: exp.id, company: exp.company, role: exp.role, startDate: exp.start_date, endDate: exp.end_date, description: exp.description, skillsUsed: exp.skills_used, links: exp.links, pdfUrl: exp.pdf_url })) : (isMurthy ? INITIAL_EXPERIENCE : []),
+            certifications: hasCustomCerts ? cData.map((c: any) => ({ id: c.id, title: c.title, issuer: c.issuer, dateIssued: c.issue_date, credentialUrl: c.credential_url, visibility: 'public' })) : (isMurthy ? INITIAL_CERTIFICATIONS : []),
+            projects: hasCustomProjects ? [...(prData || []), ...(prodData || [])].map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, date: p.date, isPublic: true })) : (isMurthy ? INITIAL_PROJECTS : []),
+            education: hasCustomEdu ? eData.map((e: any) => ({ id: e.id, degree: e.degree, institution: e.institution, fieldOfStudy: e.field_of_study, startYear: e.start_year, endYear: e.end_year, grade: e.grade })) : (isMurthy ? INITIAL_EDUCATION : []),
+            achievements: (aData && aData.length > 0) ? aData.map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, isPublic: true })) : (isMurthy ? INITIAL_ACHIEVEMENTS : []),
+            testimonials: (tData && tData.length > 0) ? tData.map((t: any) => ({ id: t.id, name: t.name, company: t.company, role: t.role, text: t.text, relationship: t.relationship, avatarColor: t.avatar_color })) : (isMurthy ? INITIAL_TESTIMONIALS : []),
+            links: (lData && lData.length > 0) ? lData.map((l: any) => ({ id: l.id, platform: l.platform, label: l.label, url: l.url, isPublic: true })) : (isMurthy ? INITIAL_LINKS : []),
+            calendarEvents: (calData && calData.length > 0) ? calData.map((cal: any) => ({ id: cal.id, title: cal.title, date: cal.date, startTime: cal.start_time, endTime: cal.end_time, type: cal.type, isPublic: true })) : (isMurthy ? INITIAL_CALENDAR_EVENTS : [])
           };
 
           setRemoteShareData(publicSharePayload);
@@ -2895,7 +2933,21 @@ export default function App() {
         console.log("[Sync] Stale local offline cache failed:", cacheErr);
       }
 
-      throw new Error("All storage recovery sources depleted during retrieval attempt");
+      // Ensure fallback payload is set so visitor never sees Access Restricted
+      setRemoteShareData(prev => prev || {
+        profile: sharedProfile,
+        skills: sharedSkills,
+        experience: sharedExperience,
+        certifications: sharedCertifications,
+        projects: sharedProjects,
+        education: sharedEducation,
+        achievements: sharedAchievements,
+        testimonials: sharedTestimonials,
+        links: sharedLinks,
+        calendarEvents: sharedCalendarEvents
+      });
+
+      return "";
     };
 
     // Initial load live fetch

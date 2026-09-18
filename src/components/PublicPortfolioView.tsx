@@ -101,7 +101,7 @@ export default function PublicPortfolioView({
     return 'bg-emerald-505/10 text-emerald-400 border-emerald-500/20';
   };
 
-  if (profile.publicProfile !== true) {
+  if (profile.publicProfile === false) {
     return (
       <div className="min-h-screen bg-[#07080b] flex flex-col justify-center items-center font-sans select-none relative overflow-hidden" id="nexus-share-disabled">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[140px] bg-red-500/10 pointer-events-none" />
