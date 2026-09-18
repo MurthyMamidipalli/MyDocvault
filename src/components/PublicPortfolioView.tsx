@@ -142,21 +142,21 @@ export default function PublicPortfolioView({
     if (!arr || !Array.isArray(arr)) return [];
     const seenIds = new Set<string>();
     const seenKeys = new Set<string>();
-    return arr.filter(item => {
-      if (!item) return false;
-      const id = item.id;
-      const fallbackKey = getFallbackKey(item).toLowerCase().trim();
-      
-      if (id) {
-        if (seenIds.has(id)) return false;
-        seenIds.add(id);
-      }
-      if (fallbackKey) {
-        if (seenKeys.has(fallbackKey)) return false;
-        seenKeys.add(fallbackKey);
-      }
-      return true;
-    });
+    const result: T[] = [];
+
+    for (const item of arr) {
+      if (!item) continue;
+      const id = item.id ? String(item.id).trim() : '';
+      const fallbackKey = getFallbackKey(item) ? getFallbackKey(item).toLowerCase().trim() : '';
+
+      if (id && seenIds.has(id)) continue;
+      if (fallbackKey && seenKeys.has(fallbackKey)) continue;
+
+      if (id) seenIds.add(id);
+      if (fallbackKey) seenKeys.add(fallbackKey);
+      result.push(item);
+    }
+    return result;
   };
 
   const cleanSkills = deduplicateByUniqueKey(skills || [], sk => sk.name || '');
@@ -170,8 +170,8 @@ export default function PublicPortfolioView({
   const cleanCalendarEvents = deduplicateByUniqueKey(calendarEvents || [], evt => `${evt.title || ''}-${evt.date || ''}`);
   const cleanResumes = deduplicateByUniqueKey(resumes || [], res => res.name || '');
 
-  // Filter skills to only show public ones
-  const publicSkills = cleanSkills.filter(sk => sk.visibility === 'public');
+  // Filter skills to show all public/unflagged ones
+  const publicSkills = cleanSkills.filter(sk => sk.visibility !== 'private');
   // Filter certifications to public ones
   const publicCerts = cleanCerts.filter(c => c.visibility !== 'private');
   // Filter portfolio links to public ones

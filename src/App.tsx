@@ -2871,15 +2871,18 @@ export default function App() {
 
           const publicSharePayload = {
             profile: publicProfileObj,
-            skills: hasCustomSkills ? sData.map((s: any) => ({ id: s.id, name: s.name, category: s.category, yearsOfExp: s.years_of_exp, visibility: 'public' })) : (isMurthy ? INITIAL_SKILLS : []),
+            skills: hasCustomSkills ? sData.map((s: any) => ({ id: s.id, name: s.name, category: s.category, yearsOfExp: s.years_of_exp, visibility: s.visibility || 'public' })) : (isMurthy ? INITIAL_SKILLS : []),
             experience: hasCustomExp ? expData.map((exp: any) => ({ id: exp.id, company: exp.company, role: exp.role, startDate: exp.start_date, endDate: exp.end_date, description: exp.description, skillsUsed: exp.skills_used, links: exp.links, pdfUrl: exp.pdf_url })) : (isMurthy ? INITIAL_EXPERIENCE : []),
-            certifications: hasCustomCerts ? cData.map((c: any) => ({ id: c.id, title: c.title, issuer: c.issuer, dateIssued: c.issue_date, credentialUrl: c.credential_url, visibility: 'public' })) : (isMurthy ? INITIAL_CERTIFICATIONS : []),
-            projects: hasCustomProjects ? [...(prData || []), ...(prodData || [])].map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, date: p.date, isPublic: true })) : (isMurthy ? INITIAL_PROJECTS : []),
+            certifications: hasCustomCerts ? cData.map((c: any) => ({ id: c.id, title: c.title, issuer: c.issuer, dateIssued: c.issue_date, credentialUrl: c.credential_url, visibility: c.visibility || 'public' })) : (isMurthy ? INITIAL_CERTIFICATIONS : []),
+            projects: hasCustomProjects ? [
+              ...(prData || []).map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, pdfUrl: p.pdf_url, imageUrl: p.image_url, date: p.date, isPublic: p.is_public !== false, type: p.type || 'project' })),
+              ...(prodData || []).map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, pdfUrl: p.pdf_url, imageUrl: p.image_url, date: p.date, isPublic: p.is_public !== false, type: p.type || 'product' }))
+            ] : (isMurthy ? INITIAL_PROJECTS : []),
             education: hasCustomEdu ? eData.map((e: any) => ({ id: e.id, degree: e.degree, institution: e.institution, fieldOfStudy: e.field_of_study, startYear: e.start_year, endYear: e.end_year, grade: e.grade })) : (isMurthy ? INITIAL_EDUCATION : []),
-            achievements: (aData && aData.length > 0) ? aData.map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, isPublic: true })) : (isMurthy ? INITIAL_ACHIEVEMENTS : []),
+            achievements: (aData && aData.length > 0) ? aData.map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, isPublic: a.is_public !== false })) : (isMurthy ? INITIAL_ACHIEVEMENTS : []),
             testimonials: (tData && tData.length > 0) ? tData.map((t: any) => ({ id: t.id, name: t.name, company: t.company, role: t.role, text: t.text, relationship: t.relationship, avatarColor: t.avatar_color })) : (isMurthy ? INITIAL_TESTIMONIALS : []),
-            links: (lData && lData.length > 0) ? lData.map((l: any) => ({ id: l.id, platform: l.platform, label: l.label, url: l.url, isPublic: true })) : (isMurthy ? INITIAL_LINKS : []),
-            calendarEvents: (calData && calData.length > 0) ? calData.map((cal: any) => ({ id: cal.id, title: cal.title, date: cal.date, startTime: cal.start_time, endTime: cal.end_time, type: cal.type, isPublic: true })) : (isMurthy ? INITIAL_CALENDAR_EVENTS : [])
+            links: (lData && lData.length > 0) ? lData.map((l: any) => ({ id: l.id, platform: l.platform, label: l.label, url: l.url, isPublic: l.is_public !== false })) : (isMurthy ? INITIAL_LINKS : []),
+            calendarEvents: (calData && calData.length > 0) ? calData.map((cal: any) => ({ id: cal.id, title: cal.title, date: cal.date, startTime: cal.start_time, endTime: cal.end_time, type: cal.type, isPublic: cal.is_public !== false })) : (isMurthy ? INITIAL_CALENDAR_EVENTS : [])
           };
 
           setRemoteShareData(publicSharePayload);
