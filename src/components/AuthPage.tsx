@@ -627,7 +627,7 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
                         <input
                           type="text"
                           required
-                          placeholder="e.g. Murthy"
+                          placeholder="First Name"
                           value={firstName}
                           onChange={e => setFirstName(e.target.value)}
                           className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-emerald-500 transition-all font-sans"
@@ -640,7 +640,7 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
                       <div className="relative">
                         <input
                           type="text"
-                          placeholder="e.g. AM"
+                          placeholder="Last Name"
                           value={lastName}
                           onChange={e => setLastName(e.target.value)}
                           className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-emerald-500 transition-all font-sans"
