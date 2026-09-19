@@ -1090,7 +1090,8 @@ export default function App() {
             secondaryPhone: pData.secondary_phone || prev.secondaryPhone,
             location: pData.location || prev.location,
             avatarUrl: pData.avatar_url || prev.avatarUrl,
-            publicProfile: pData.public_profile ?? prev.publicProfile
+            publicProfile: pData.public_profile ?? prev.publicProfile,
+            shareSlug: pData.share_slug || prev.shareSlug
           }));
         }
       } catch (err) {
@@ -2852,6 +2853,25 @@ export default function App() {
           .maybeSingle();
 
         pRow = exactRow;
+
+        // Fallback: match by candidate name slug or email handle
+        if (!pRow) {
+          const { data: allP } = await supabase.from('profiles').select('*');
+          if (allP && allP.length > 0) {
+            pRow = allP.find((p: any) => {
+              if (p.share_slug && p.share_slug.toLowerCase() === slug) return true;
+              if (p.name) {
+                const candidate = p.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+                if (candidate === slug) return true;
+              }
+              if (p.email) {
+                const handle = p.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '');
+                if (handle === slug) return true;
+              }
+              return false;
+            });
+          }
+        }
 
         if (pRow) {
           if (pRow.public_profile === false) {
