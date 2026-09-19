@@ -228,18 +228,16 @@ export default function App() {
                 }
               }
             }
-            return unique.map((s: any) => {
-              if (!s.visibility) {
-                return {
-                  id: s.id,
-                  name: s.name,
-                  visibility: 'public',
-                  yearsOfExp: s.yearsOfExp || 1,
-                  endorsements: s.endorsements || 0
-                };
-              }
-              return s;
-            });
+            return unique.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              category: s.category || 'Technical',
+              proficiency: s.proficiency || 'Intermediate',
+              yearsOfExp: s.yearsOfExp || 1,
+              endorsements: s.endorsements || 0,
+              description: s.description || '',
+              visibility: s.visibility || 'public'
+            }));
           }
         } catch (e) {}
       }
@@ -1005,15 +1003,18 @@ export default function App() {
       try {
         const dCerts = await heavyStorage.get(`${email}_certs`);
         if (dCerts && Array.isArray(dCerts) && dCerts.length > 0) {
-          const sanitized = dCerts.map((c: any) => {
-            const dVal = c.dateIssued || c.issueDate || c.issue_date || c.date_issued || '';
-            return {
-              ...c,
-              dateIssued: dVal,
-              issueDate: dVal
-            };
+          setCertifications(prev => {
+            const sanitized = dCerts.map((c: any) => {
+              const existing = prev.find(p => p.id === c.id || (p.title && c.title && p.title.toLowerCase().trim() === c.title.toLowerCase().trim()));
+              const dVal = c.dateIssued || c.issueDate || c.issue_date || c.date_issued || existing?.dateIssued || existing?.issueDate || '';
+              return {
+                ...c,
+                dateIssued: dVal,
+                issueDate: dVal
+              };
+            });
+            return mergeArrayRecords(sanitized, prev);
           });
-          setCertifications(prev => mergeArrayRecords(sanitized, prev));
         }
       } catch (err) {
         console.warn("Async restoration of certifications deferred:", err);
@@ -1124,22 +1125,31 @@ export default function App() {
           }));
           setSkills(mapped);
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(mapped));
-        } else if (skills.length > 0) {
-          for (const sk of skills) {
-            const skId = ensureUUID(sk.id);
-            try {
-              await supabase.from('skills').upsert({
-                id: skId,
-                user_id: userId,
-                name: sk.name,
-                category: sk.category || 'Technical',
-                proficiency: sk.proficiency || 'Intermediate',
-                years_of_exp: sk.yearsOfExp || 1,
-                endorsements: sk.endorsements || 0,
-                description: sk.description || '',
-                visibility: sk.visibility || 'public'
-              });
-            } catch (err) {}
+        } else {
+          const emailKey = currentUser?.email?.toLowerCase().trim();
+          let currentLocalSkills: Skill[] = skills;
+          if ((!currentLocalSkills || currentLocalSkills.length === 0) && emailKey) {
+            const raw = localStorage.getItem(`${emailKey}_skills`);
+            if (raw) { try { currentLocalSkills = JSON.parse(raw); } catch (e) {} }
+          }
+          if (currentLocalSkills && currentLocalSkills.length > 0) {
+            setSkills(currentLocalSkills);
+            for (const sk of currentLocalSkills) {
+              const skId = ensureUUID(sk.id);
+              try {
+                await supabase.from('skills').upsert({
+                  id: skId,
+                  user_id: userId,
+                  name: sk.name,
+                  category: sk.category || 'Technical',
+                  proficiency: sk.proficiency || 'Intermediate',
+                  years_of_exp: sk.yearsOfExp || 1,
+                  endorsements: sk.endorsements || 0,
+                  description: sk.description || '',
+                  visibility: sk.visibility || 'public'
+                });
+              } catch (err) {}
+            }
           }
         }
       } catch (err) { console.warn("[Supabase Skills Load]", err); }
@@ -1191,29 +1201,38 @@ export default function App() {
           });
           setCertifications(mapped);
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(mapped));
-        } else if (certifications.length > 0) {
-          for (const c of certifications) {
-            const cId = ensureUUID(c.id);
-            const dVal = c.dateIssued || c.issueDate || '';
-            try {
-              await supabase.from('certifications').upsert({
-                id: cId,
-                user_id: userId,
-                title: c.title,
-                issuer: c.issuer,
-                credential_id: c.credentialId,
-                issue_date: dVal,
-                expiry_date: c.expirationDate || c.expiryDate,
-                credential_url: c.credentialUrl,
-                description: c.description,
-                file_name: c.fileName,
-                file_url: c.fileUrl,
-                storage_path: c.storagePath,
-                type: c.type || 'study',
-                percentage: c.percentage,
-                visibility: c.visibility || 'public'
-              });
-            } catch (err) {}
+        } else {
+          const emailKey = currentUser?.email?.toLowerCase().trim();
+          let currentLocalCerts: Certification[] = certifications;
+          if ((!currentLocalCerts || currentLocalCerts.length === 0) && emailKey) {
+            const raw = localStorage.getItem(`${emailKey}_certs`);
+            if (raw) { try { currentLocalCerts = JSON.parse(raw); } catch (e) {} }
+          }
+          if (currentLocalCerts && currentLocalCerts.length > 0) {
+            setCertifications(currentLocalCerts);
+            for (const c of currentLocalCerts) {
+              const cId = ensureUUID(c.id);
+              const dVal = c.dateIssued || c.issueDate || '';
+              try {
+                await supabase.from('certifications').upsert({
+                  id: cId,
+                  user_id: userId,
+                  title: c.title,
+                  issuer: c.issuer,
+                  credential_id: c.credentialId,
+                  issue_date: dVal,
+                  expiry_date: c.expirationDate || c.expiryDate,
+                  credential_url: c.credentialUrl,
+                  description: c.description,
+                  file_name: c.fileName,
+                  file_url: c.fileUrl,
+                  storage_path: c.storagePath,
+                  type: c.type || 'study',
+                  percentage: c.percentage,
+                  visibility: c.visibility || 'public'
+                });
+              } catch (err) {}
+            }
           }
         }
       } catch (err) { console.warn("[Supabase Certifications Load]", err); }
@@ -1599,8 +1618,9 @@ export default function App() {
     const skill: Skill = { ...newSk, id };
     const updatedSkills = [skill, ...skills];
     setSkills(updatedSkills);
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(updatedSkills));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updatedSkills));
     }
     triggerToast(`Exposed technical skill capability: ${newSk.name}`);
 
@@ -1624,10 +1644,11 @@ export default function App() {
   const handleUpdateSkill = async (upSkill: Skill) => {
     const targetId = ensureUUID(upSkill.id);
     const updatedSkill = { ...upSkill, id: targetId };
-    const updatedSkills = skills.map(s => s.id === upSkill.id ? updatedSkill : s);
+    const updatedSkills = skills.map(s => (s.id === upSkill.id || s.id === targetId) ? updatedSkill : s);
     setSkills(updatedSkills);
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(updatedSkills));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updatedSkills));
     }
     triggerToast(`Optimized technical status: ${upSkill.name}`);
 
@@ -1654,8 +1675,9 @@ export default function App() {
     const updated = skills.filter(s => s.id !== id && s.id !== targetId);
     setSkills(updated);
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(updated));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updated));
     }
     triggerToast(`Purged technical coordinate.`);
 
@@ -1768,7 +1790,6 @@ export default function App() {
           issuer: newCert.issuer,
           credential_id: newCert.credentialId,
           issue_date: dVal,
-          date_issued: dVal,
           expiry_date: newCert.expirationDate || newCert.expiryDate,
           credential_url: newCert.credentialUrl,
           description: newCert.description,
@@ -1811,7 +1832,7 @@ export default function App() {
     const targetId = ensureUUID(updatedCert.id);
     const dVal = updatedCert.dateIssued || updatedCert.issueDate || '';
     const item = { ...updatedCert, id: targetId, dateIssued: dVal, issueDate: dVal };
-    const updatedCerts = certifications.map(c => c.id === updatedCert.id ? item : c);
+    const updatedCerts = certifications.map(c => (c.id === updatedCert.id || c.id === targetId) ? item : c);
     setCertifications(updatedCerts);
     if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
@@ -1829,7 +1850,6 @@ export default function App() {
           issuer: updatedCert.issuer,
           credential_id: updatedCert.credentialId,
           issue_date: dVal,
-          date_issued: dVal,
           expiry_date: updatedCert.expirationDate || updatedCert.expiryDate,
           credential_url: updatedCert.credentialUrl,
           description: updatedCert.description,
@@ -3366,9 +3386,53 @@ export default function App() {
             experience: hasCustomExp ? expData.map((exp: any) => ({ id: exp.id, company: exp.company, role: exp.role, startDate: exp.start_date, endDate: exp.end_date, description: exp.description, skillsUsed: exp.skills_used, links: exp.links, pdfUrl: exp.pdf_url })) : (isDemo ? INITIAL_EXPERIENCE : []),
             certifications: hasCustomCerts ? cData.map((c: any) => ({ id: c.id, title: c.title, issuer: c.issuer, dateIssued: c.issue_date, credentialUrl: c.credential_url, visibility: c.visibility || 'public' })) : (isDemo ? INITIAL_CERTIFICATIONS : []),
             projects: hasCustomProjects ? [
-              ...(prData || []).map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, pdfUrl: p.pdf_url, imageUrl: p.image_url, date: p.date, isPublic: p.is_public !== false, type: p.type || 'project' })),
-              ...(prodData || []).map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, pdfUrl: p.pdf_url, imageUrl: p.image_url, date: p.date, isPublic: p.is_public !== false, type: p.type || 'product' })),
-              ...(othData || []).map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, highlights: p.highlights, techStack: p.tech_stack, liveUrl: p.live_url, githubUrl: p.github_url, pdfUrl: p.pdf_url, imageUrl: p.image_url, date: p.date, isPublic: p.is_public !== false, type: p.type || 'other', docType: p.doc_type || p.category }))
+              ...(prData || []).map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                description: p.description,
+                highlights: p.highlights,
+                techStack: p.tech_stack,
+                liveUrl: p.live_url,
+                githubUrl: p.github_url,
+                pdfUrl: p.pdf_url,
+                imageUrl: p.image_url,
+                date: p.date,
+                isPublic: p.is_public !== false,
+                type: p.type || (p.category === 'products' || p.category === 'product' ? 'product' : p.category === 'others' || p.category === 'other' || p.doc_type ? 'other' : 'project'),
+                docType: p.doc_type || p.category
+              })),
+              ...(prodData || []).map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                description: p.description,
+                highlights: p.highlights,
+                techStack: p.tech_stack,
+                liveUrl: p.live_url,
+                githubUrl: p.github_url,
+                pdfUrl: p.pdf_url,
+                imageUrl: p.image_url,
+                date: p.date,
+                isPublic: p.is_public !== false,
+                type: 'product'
+              })),
+              ...(othData || []).map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                description: p.description,
+                highlights: p.highlights,
+                techStack: p.tech_stack,
+                liveUrl: p.live_url,
+                githubUrl: p.github_url,
+                pdfUrl: p.pdf_url,
+                imageUrl: p.image_url,
+                date: p.date,
+                isPublic: p.is_public !== false,
+                type: 'other',
+                docType: p.doc_type || p.category || 'Report'
+              }))
             ] : (isDemo ? INITIAL_PROJECTS : []),
             education: hasCustomEdu ? eData.map((e: any) => ({ id: e.id, degree: e.degree, institution: e.institution, fieldOfStudy: e.field_of_study, startYear: e.start_year, endYear: e.end_year, grade: e.grade })) : (isDemo ? INITIAL_EDUCATION : []),
             achievements: (aData && aData.length > 0) ? aData.map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, isPublic: a.is_public !== false })) : (isDemo ? INITIAL_ACHIEVEMENTS : []),

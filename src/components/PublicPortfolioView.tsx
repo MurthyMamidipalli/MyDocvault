@@ -169,7 +169,7 @@ export default function PublicPortfolioView({
   const cleanSkills = deduplicateByUniqueKey(skills || [], sk => sk.name || '');
   const cleanExperience = deduplicateByUniqueKey(experience || [], exp => `${exp.role || ''}-${exp.company || ''}`);
   const cleanCerts = deduplicateByUniqueKey(certifications || [], c => c.title || '');
-  const cleanProjects = deduplicateByUniqueKey(projects || [], proj => proj.name || '');
+  const cleanProjects = deduplicateByUniqueKey(projects || [], proj => `${proj.type || 'project'}-${proj.name || ''}`);
   const cleanEducation = deduplicateByUniqueKey(education || [], edu => `${edu.degree || ''}-${edu.institution || ''}`);
   const cleanAchievements = deduplicateByUniqueKey(achievements || [], ach => ach.title || '');
   const cleanTestimonials = deduplicateByUniqueKey(testimonials || [], rec => `${rec.name || ''}-${rec.company || ''}`);
@@ -196,9 +196,9 @@ export default function PublicPortfolioView({
   const publicDocuments = cleanDocuments.filter(doc => doc.visibility === 'public');
 
   // Categorize Projects, Products, and Others (Reports)
-  const projectsList = publicProjects.filter(p => (p.type === 'project' || (!p.type && (p.category as any) !== 'products' && (p.category as any) !== 'others' && !p.docType)));
-  const productsList = publicProjects.filter(p => (p.type === 'product' || (p.category as any) === 'products'));
-  const othersList = publicProjects.filter(p => (p.type === 'other' || (p.category as any) === 'others' || !!p.docType));
+  const projectsList = publicProjects.filter(p => (p.type === 'project' || (!p.type && (p.category as any) !== 'products' && (p.category as any) !== 'product' && (p.category as any) !== 'others' && (p.category as any) !== 'other' && !p.docType)));
+  const productsList = publicProjects.filter(p => (p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product'));
+  const othersList = publicProjects.filter(p => (p.type === 'other' || (p.category as any) === 'others' || (p.category as any) === 'other' || !!p.docType));
 
   return (
     <div className="min-h-screen bg-[#07080b] text-gray-305 flex flex-col font-sans selection:bg-emerald-500/20 antialiased" id="public-live-portfolio">
