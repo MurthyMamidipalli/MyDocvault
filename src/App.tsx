@@ -1920,6 +1920,18 @@ export default function App() {
     }
   };
 
+  const getActiveUserId = async (): Promise<string | null> => {
+    if (currentUser?.id) return currentUser.id;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) return session.user.id;
+      const { data: { user } } = await supabase.auth.getUser();
+      return user?.id || null;
+    } catch (e) {
+      return null;
+    }
+  };
+
   // Current Job
   const handleUpdateCurrentJob = async (newJob: CurrentJob) => {
     setCurrentJob(newJob);
@@ -1929,7 +1941,8 @@ export default function App() {
     }
     triggerToast("Updated current job position.");
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         const companyName = newJob.company || newJob.employer || 'Current Employer';
         const roleName = newJob.role || 'Current Role';
@@ -1937,7 +1950,7 @@ export default function App() {
         const empType = newJob.employmentType || 'Full-Time';
 
         const payload = {
-          user_id: currentUser.id,
+          user_id: userId,
           company: companyName,
           role: roleName,
           department: newJob.department || '',
@@ -1954,20 +1967,24 @@ export default function App() {
         const { data: existing } = await supabase
           .from('current_jobs')
           .select('id')
-          .eq('user_id', currentUser.id)
+          .eq('user_id', userId)
           .maybeSingle();
 
         if (existing && existing.id) {
           const { error } = await supabase.from('current_jobs').update(payload).eq('id', existing.id);
           if (error) console.error("[Supabase Current Job Update Error]", error);
+          else console.log("[Supabase Current Job Updated]", payload);
         } else {
           const { error } = await supabase.from('current_jobs').insert({
             id: generateUUID(),
             ...payload
           });
           if (error) console.error("[Supabase Current Job Insert Error]", error);
+          else console.log("[Supabase Current Job Inserted]", payload);
         }
       } catch (err) { console.warn("[Supabase Current Job Exception]", err); }
+    } else {
+      console.warn("[Supabase Current Job] User is not authenticated in Supabase.");
     }
   };
 
@@ -1983,11 +2000,12 @@ export default function App() {
     }
     triggerToast(`Published career milestone checkpoint.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         const { error } = await supabase.from('career_timeline').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           title: newMil.title || 'Career Milestone',
           date: newMil.date || new Date().toISOString().substring(0, 7),
           category: newMil.category || newMil.type || 'career',
@@ -1996,7 +2014,10 @@ export default function App() {
           is_public: true
         });
         if (error) console.error("[Supabase Add Milestone Error]", error);
+        else console.log("[Supabase Add Milestone Success]", id);
       } catch (err) { console.warn("[Supabase Add Milestone Exception]", err); }
+    } else {
+      console.warn("[Supabase Milestone] User is not authenticated in Supabase.");
     }
   };
 
