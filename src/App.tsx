@@ -1280,6 +1280,24 @@ export default function App() {
           };
           setCurrentJob(loadedJob as any);
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_current_job`, JSON.stringify(loadedJob));
+        } else if (currentJob) {
+          const empName = currentJob.company || currentJob.employer || 'Photonx Technologies';
+          const roleTitle = currentJob.role || 'Tester';
+          const joinDate = currentJob.joiningDate || currentJob.startDate || '2026-05-14';
+          await supabase.from('current_jobs').upsert({
+            id: generateUUID(),
+            user_id: userId,
+            company: empName,
+            role: roleTitle,
+            department: currentJob.department || 'Testing',
+            employee_id: currentJob.employeeId || '',
+            joining_date: joinDate,
+            location: currentJob.location || currentJob.locationType || 'on-site',
+            employment_type: currentJob.employmentType || 'internship',
+            salary: currentJob.salary || '',
+            manager: currentJob.manager || '',
+            description: currentJob.description || ''
+          });
         }
       } catch (err) { console.warn("[Supabase Current Job Load]", err); }
 
@@ -1446,17 +1464,32 @@ export default function App() {
       // 13. Career Timeline (Milestones)
       try {
         const { data: tmData } = await supabase.from('career_timeline').select('*').eq('user_id', userId);
-        if (tmData && Array.isArray(tmData)) {
+        if (tmData && Array.isArray(tmData) && tmData.length > 0) {
           const mapped = tmData.map(m => ({
             id: m.id,
             title: m.title,
             date: m.date,
-            category: m.category,
-            type: m.category,
-            description: m.description
+            category: m.category || 'experience',
+            type: m.category || 'experience',
+            intensity: m.intensity || 'medium',
+            description: m.description || ''
           }));
           setMilestones(mapped);
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(mapped));
+        } else if (milestones && milestones.length > 0) {
+          for (const m of milestones) {
+            const mId = ensureUUID(m.id);
+            await supabase.from('career_timeline').upsert({
+              id: mId,
+              user_id: userId,
+              title: m.title || 'Career Milestone',
+              date: m.date || new Date().toISOString().substring(0, 7),
+              category: m.category || m.type || 'experience',
+              intensity: m.intensity || 'medium',
+              description: m.description || '',
+              is_public: true
+            });
+          }
         }
       } catch (err) { console.warn("[Supabase Timeline Load]", err); }
 
