@@ -450,15 +450,14 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
             <form onSubmit={handleSaveJob} className="flex-1 overflow-y-auto p-6 space-y-4">
               
               {/* Employer / Workplace name */}
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-300 block">Employer / Company Name</label>
+              <div className="space-y-1">
+                <label className="text-xs font-mono text-gray-400">Employer / Company Name *</label>
                 <input 
-                  type="text"
-                  required
-                  value={employer}
-                  onChange={e => setEmployer(e.target.value)}
-                  placeholder="e.g. Photonx Technologies"
-                  className="w-full bg-[#131215] border border-slate-800/80 rounded-xl px-3 py-3 text-white text-xs focus:border-[#10b981] outline-none transition duration-150"
+                  type="text" required
+                  value={formData.company || formData.employer || ''}
+                  onChange={e => setFormData({ ...formData, company: e.target.value, employer: e.target.value })}
+                  placeholder="Enter company name"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
 

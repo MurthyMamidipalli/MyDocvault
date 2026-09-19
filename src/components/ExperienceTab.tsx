@@ -125,7 +125,7 @@ export default function ExperienceTab({
                 type="text" required
                 value={role}
                 onChange={e=>setRole(e.target.value)}
-                placeholder="Enter role title (e.g. QA Automation Tester or Business Analyst)"
+                placeholder="Enter role title"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -135,7 +135,7 @@ export default function ExperienceTab({
                 type="text" required
                 value={company}
                 onChange={e=>setCompany(e.target.value)}
-                placeholder="Enter company name (e.g. Photonx Technologies)"
+                placeholder="Enter company name"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -145,7 +145,7 @@ export default function ExperienceTab({
                 type="text"
                 value={location}
                 onChange={e=>setLocation(e.target.value)}
-                placeholder="Enter work location (e.g. Hyderabad, India)"
+                placeholder="Enter work location"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -156,7 +156,7 @@ export default function ExperienceTab({
                   type="text"
                   value={startDate}
                   onChange={e=>setStartDate(e.target.value)}
-                  placeholder="Enter start date (e.g. 2026-05)"
+                  placeholder="Enter start date"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
@@ -167,7 +167,7 @@ export default function ExperienceTab({
                   disabled={isCurrent}
                   value={isCurrent ? 'Present' : endDate}
                   onChange={e=>setEndDate(e.target.value)}
-                  placeholder="Enter end date (e.g. Present or 2026-12)"
+                  placeholder="Enter end date"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none disabled:opacity-40"
                 />
               </div>
@@ -200,7 +200,7 @@ export default function ExperienceTab({
                 type="text"
                 value={skillsText}
                 onChange={e=>setSkillsText(e.target.value)}
-                placeholder="Enter skills / tools used (e.g. Cypress, QA Automation, Power BI)"
+                placeholder="Enter skills / tools used"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -216,7 +216,7 @@ export default function ExperienceTab({
                     type="text"
                     value={linkLabel}
                     onChange={e => setLinkLabel(e.target.value)}
-                    placeholder="e.g. GitHub Repo"
+                    placeholder="Enter link label"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
                   />
                 </div>
@@ -342,14 +342,6 @@ export default function ExperienceTab({
       <div className="space-y-6">
         {experience.map(exp => (
           <div key={exp.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative group">
-            <button 
-              onClick={() => onDeleteExperience(exp.id)}
-              className="absolute top-6 right-6 p-1.5 rounded-lg text-gray-500 hover:text-rose-450 hover:bg-slate-950 cursor-pointer opacity-0 group-hover:opacity-100 transition"
-              title="Delete Career Ledger"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 pb-4 border-b border-slate-800/60">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl h-fit">
@@ -362,6 +354,15 @@ export default function ExperienceTab({
               </div>
 
               <div className="flex flex-col items-end gap-1.5 text-xs font-mono text-gray-500 text-left md:text-right md:shrink-0">
+                {/* Delete option directly above the date */}
+                <button 
+                  onClick={() => onDeleteExperience(exp.id)}
+                  className="p-1 rounded-lg text-gray-500 hover:text-rose-450 hover:bg-slate-950 cursor-pointer opacity-0 group-hover:opacity-100 transition flex items-center gap-1 text-[11px] font-mono"
+                  title="Delete Career Ledger"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
                 <span className="flex items-center gap-1.5 font-medium">
                   <Calendar className="w-3.5 h-3.5 text-gray-600" />
                   {exp.startDate} – {exp.endDate}

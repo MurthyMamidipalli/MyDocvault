@@ -136,34 +136,34 @@ export default function ContactsTab({
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-mono text-gray-400">Contact / Recruiter Name</label>
+            <label className="text-xs font-mono text-gray-400">Full Name *</label>
             <input 
               type="text" required
               value={name}
               onChange={e=>setName(e.target.value)}
-              placeholder="e.g. Rachel Adams"
+              placeholder="Enter contact name"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-mono text-gray-400">Professional Title / Role</label>
+            <label className="text-xs font-mono text-gray-400">Role / Title *</label>
             <input 
               type="text" required
               value={role}
               onChange={e=>setRole(e.target.value)}
-              placeholder="e.g. Lead Tech Recruiter"
+              placeholder="Enter role title"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs font-mono text-gray-400">Employer Company name</label>
+            <label className="text-xs font-mono text-gray-400">Company / Organization *</label>
             <input 
-              type="text"
+              type="text" required
               value={company}
               onChange={e=>setCompany(e.target.value)}
-              placeholder="e.g. Google Cloud"
+              placeholder="Enter company name"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
             />
           </div>

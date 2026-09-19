@@ -23,7 +23,8 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
     percentage: '',
     enrollmentId: '',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    isCurrentlyPursuing: false
   });
 
   const handleStartEdit = (edu: Education) => {
@@ -39,7 +40,8 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       percentage: edu.percentage || '',
       enrollmentId: edu.enrollmentId || '',
       startDate: edu.startDate || '',
-      endDate: edu.endDate || ''
+      endDate: edu.endDate || '',
+      isCurrentlyPursuing: edu.isCurrentlyPursuing || edu.endDate === 'Present' || edu.endYear === 'Present'
     });
     setShowForm(true);
   };
@@ -57,7 +59,8 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       percentage: '',
       enrollmentId: '',
       startDate: '',
-      endDate: ''
+      endDate: '',
+      isCurrentlyPursuing: false
     });
     setShowForm(true);
   };
@@ -68,12 +71,13 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
 
     // Automatically map date selections back to standard startYear & endYear strings
     const sYear = formData.startDate ? formData.startDate.substring(0, 4) : '2010';
-    const eYear = formData.endDate ? formData.endDate.substring(0, 4) : '2014';
+    const eYear = formData.isCurrentlyPursuing ? 'Present' : (formData.endDate ? formData.endDate.substring(0, 4) : '2014');
 
     const finalData = {
       ...formData,
       startYear: sYear,
-      endYear: eYear
+      endYear: eYear,
+      endDate: formData.isCurrentlyPursuing ? 'Present' : formData.endDate
     };
 
     if (editingItem) {
@@ -97,7 +101,8 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       percentage: '',
       enrollmentId: '',
       startDate: '',
-      endDate: ''
+      endDate: '',
+      isCurrentlyPursuing: false
     });
     setEditingItem(null);
     setShowForm(false);
@@ -105,6 +110,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
 
   const formatDateDisplay = (dateStr?: string) => {
     if (!dateStr) return '';
+    if (dateStr === 'Present') return 'Present';
     try {
       const parts = dateStr.split('-');
       if (parts.length === 3) {
@@ -118,6 +124,10 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
   };
 
   const displayDuration = (edu: Education) => {
+    if (edu.isCurrentlyPursuing || edu.endDate === 'Present' || edu.endYear === 'Present') {
+      const start = edu.startDate ? formatDateDisplay(edu.startDate) : (edu.startYear || '');
+      return `${start} — Present`;
+    }
     if (edu.startDate && edu.endDate) {
       return `${formatDateDisplay(edu.startDate)} — ${formatDateDisplay(edu.endDate)}`;
     }
@@ -172,7 +182,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                 required
                 value={formData.institution}
                 onChange={e => setFormData({ ...formData, institution: e.target.value })}
-                placeholder="Enter school / institution name (e.g. Amity University)"
+                placeholder="Enter school / institution name"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -186,7 +196,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                   required
                   value={formData.degree}
                   onChange={e => setFormData({ ...formData, degree: e.target.value })}
-                  placeholder="Enter degree (e.g. B.Tech. or MBA)"
+                  placeholder="Enter degree"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
@@ -197,7 +207,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                   required
                   value={formData.fieldOfStudy}
                   onChange={e => setFormData({ ...formData, fieldOfStudy: e.target.value })}
-                  placeholder="Enter field of study (e.g. Business Analytics)"
+                  placeholder="Enter field of study"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
@@ -212,7 +222,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                   type="text"
                   value={formData.enrollmentId || ''}
                   onChange={e => setFormData({ ...formData, enrollmentId: e.target.value })}
-                  placeholder="Enter student ID / enrollment number (e.g. STU-123456)"
+                  placeholder="Enter student ID / enrollment number"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-12 pr-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
@@ -234,12 +244,27 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                 <label className="text-xs font-mono text-gray-400">End Date</label>
                 <input 
                   type="date"
-                  required
-                  value={formData.endDate || ''}
+                  required={!formData.isCurrentlyPursuing}
+                  disabled={formData.isCurrentlyPursuing}
+                  value={formData.isCurrentlyPursuing ? '' : (formData.endDate || '')}
                   onChange={e => setFormData({ ...formData, endDate: e.target.value })}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none text-gray-300 [color-scheme:dark]"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none text-gray-300 [color-scheme:dark] disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                 />
               </div>
+            </div>
+
+            {/* Currently Pursuing Tick Checkbox Option */}
+            <div className="flex items-center gap-2 pt-1">
+              <input 
+                type="checkbox"
+                id="isCurrentlyPursuingCheck"
+                checked={!!formData.isCurrentlyPursuing}
+                onChange={e => setFormData({ ...formData, isCurrentlyPursuing: e.target.checked })}
+                className="w-4 h-4 rounded text-emerald-500 border-slate-800 bg-slate-950 cursor-pointer"
+              />
+              <label htmlFor="isCurrentlyPursuingCheck" className="text-xs text-emerald-400 font-mono select-none cursor-pointer font-semibold">
+                Currently pursuing / Presently enrolled
+              </label>
             </div>
 
             {/* Grade Field */}
@@ -250,7 +275,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                   type="text" 
                   value={formData.grade || ''}
                   onChange={e => setFormData({ ...formData, grade: e.target.value })}
-                  placeholder="Enter grade / CGPA (e.g. 8.5 CGPA)"
+                  placeholder="Enter grade / CGPA"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
@@ -260,11 +285,12 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                   type="text" 
                   value={formData.percentage || ''}
                   onChange={e => setFormData({ ...formData, percentage: e.target.value })}
-                  placeholder="Enter percentage (e.g. 85%)"
+                  placeholder="Enter percentage"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
             </div>
+
 
             {/* Activities & Societies Field */}
             <div className="space-y-1">

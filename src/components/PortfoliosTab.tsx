@@ -76,34 +76,26 @@ export default function PortfoliosTab({
         <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 max-w-xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Platform Coordinate</label>
+              <label className="text-xs font-mono text-gray-400">Resume Name</label>
               <input 
                 type="text" required
-                value={platform}
-                onChange={e=>setPlatform(e.target.value)}
-                placeholder="Enter platform name (e.g. GitHub, LinkedIn, Medium)"
+                value={label}
+                onChange={e=>{
+                  setLabel(e.target.value);
+                  if (!platform) setPlatform('Resume Link');
+                }}
+                placeholder="Enter resume name"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Resource Label/Display Text</label>
-              <input 
-                type="text" required
-                value={label}
-                onChange={e=>setLabel(e.target.value)}
-                placeholder="Enter link title (e.g. github.com/ramachandramurthy)"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
-              />
-            </div>
-
-            <div className="space-y-1 md:col-span-2">
-              <label className="text-xs font-mono text-gray-400">Direct Destination URL</label>
+              <label className="text-xs font-mono text-gray-400">Resume Link</label>
               <input 
                 type="url" required
                 value={url}
                 onChange={e=>setUrl(e.target.value)}
-                placeholder="Enter link URL (e.g. https://github.com/ramachandramurthy)"
+                placeholder="Enter resume link (e.g. https://drive.google.com/...)"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -166,7 +158,6 @@ export default function PortfoliosTab({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono font-medium text-gray-550 uppercase tracking-widest">{link.platform}</span>
                   <span className={`px-1.5 py-0.2 rounded text-[7px] font-mono uppercase font-bold border ${
                     link.isPublic !== false 
                       ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' 

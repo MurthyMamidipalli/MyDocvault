@@ -46,6 +46,7 @@ export interface Education {
   startDate?: string;
   endDate?: string;
   description?: string;
+  isCurrentlyPursuing?: boolean;
 }
 
 export interface Certification {
@@ -168,6 +169,9 @@ export interface Achievement {
   description: string;
   isPublic?: boolean;
   badgeUrl?: string;
+  fileName?: string;
+  fileUrl?: string;
+  fileDataUrl?: string;
 }
 
 export interface Testimonial {

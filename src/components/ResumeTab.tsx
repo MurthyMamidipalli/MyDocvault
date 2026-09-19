@@ -89,7 +89,7 @@ export default function ResumeTab({
 
   // State managers for Form Data (Upload Modal)
   const [recordName, setRecordName] = useState('');
-  const [documentType, setDocumentType] = useState('Resume');
+  const [documentType, setDocumentType] = useState('Resume & CV');
   const [visibility, setVisibility] = useState<'public' | 'private'>('private');
   const [isVisibilityDropdownOpen, setIsVisibilityDropdownOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; size: string; dataUrl?: string } | null>(null);
@@ -201,7 +201,7 @@ export default function ResumeTab({
 
     // Reset fields
     setRecordName('');
-    setDocumentType('Resume');
+    setDocumentType('Resume & CV');
     setVisibility('private');
     setSelectedFile(null);
     setDocLinkUrl('');
@@ -698,11 +698,7 @@ export default function ResumeTab({
                     onChange={e => setDocumentType(e.target.value)}
                     className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer pr-10 select-none"
                   >
-                    <option value="Resume">Resume</option>
-                    <option value="Cover Letter">Cover Letter</option>
-                    <option value="Academic Transcript">Academic Transcript</option>
-                    <option value="Certificate">Certificate</option>
-                    <option value="Other">Other Document</option>
+                    <option value="Resume & CV">Resume & CV</option>
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
                 </div>
@@ -910,36 +906,28 @@ export default function ResumeTab({
 
           <form onSubmit={handleSaveLink} className="space-y-5">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Platform Name</label>
+              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Resume Name</label>
               <input 
                 type="text"
                 required
-                value={linkPlatform}
-                onChange={e => setLinkPlatform(e.target.value)}
-                placeholder="e.g. GitHub, LinkedIn, Dribbble"
-                className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none placeholder-gray-600 select-text"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Label / Short Description</label>
-              <input 
-                type="text"
                 value={linkLabel}
-                onChange={e => setLinkLabel(e.target.value)}
-                placeholder="e.g. github.com/username"
+                onChange={e => {
+                  setLinkLabel(e.target.value);
+                  if (!linkPlatform) setLinkPlatform('Resume Link');
+                }}
+                placeholder="Enter resume name"
                 className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none placeholder-gray-600 select-text"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Target Url link</label>
+              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Resume Link</label>
               <input 
                 type="text"
                 required
                 value={linkUrl}
                 onChange={e => setLinkUrl(e.target.value)}
-                placeholder="https://github.com/my-profile"
+                placeholder="Enter resume link (e.g. https://drive.google.com/...)"
                 className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none placeholder-gray-650 select-text"
               />
             </div>

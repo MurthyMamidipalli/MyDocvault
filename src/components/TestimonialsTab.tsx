@@ -97,45 +97,45 @@ export default function TestimonialsTab({
         <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 max-w-xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Recommender Name</label>
+              <label className="text-xs font-mono text-gray-400">Endorser Name *</label>
               <input 
                 type="text" required
                 value={name}
                 onChange={e=>setName(e.target.value)}
-                placeholder="e.g. Richard Hendricks"
+                placeholder="Enter endorser name"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Corporate Title</label>
+              <label className="text-xs font-mono text-gray-400">Professional Title / Role *</label>
               <input 
                 type="text" required
                 value={role}
                 onChange={e=>setRole(e.target.value)}
-                placeholder="e.g. VP of Cloud Solutions"
+                placeholder="Enter professional title / role"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Employer Company</label>
+              <label className="text-xs font-mono text-gray-400">Company / Organization *</label>
               <input 
                 type="text" required
                 value={company}
                 onChange={e=>setCompany(e.target.value)}
-                placeholder="e.g. Hooli Inc."
+                placeholder="Enter company name"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Relationship Coordinates</label>
+              <label className="text-xs font-mono text-gray-400">Relationship *</label>
               <input 
-                type="text"
+                type="text" required
                 value={relationship}
                 onChange={e=>setRelationship(e.target.value)}
-                placeholder="e.g. Former CTO / Direct Manager"
+                placeholder="Enter relationship"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>

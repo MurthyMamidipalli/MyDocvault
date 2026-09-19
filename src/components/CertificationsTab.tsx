@@ -567,12 +567,13 @@ export default function CertificationsTab({
               </div>
 
               {/* Verified File Name Display */}
-              {cert.fileName && (
-                <div className="bg-slate-950/40 border border-slate-800/40 p-2.5 rounded-xl mt-3.5 flex items-center gap-2 text-[10px] font-mono text-gray-400">
-                  <FileText className="w-4 h-4 text-[#10b981] min-w-[16px]" />
-                  <span className="truncate">{cert.fileName}</span>
+              <div className="bg-slate-950/60 border border-slate-800/60 p-2.5 rounded-xl mt-3.5 flex items-center justify-between gap-2 text-[11px] font-mono text-gray-300">
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  <FileText className="w-4 h-4 text-[#10b981] shrink-0" />
+                  <span className="truncate font-medium">{cert.fileName || `${cert.title.replace(/\s+/g, '_')}.pdf`}</span>
                 </div>
-              )}
+                <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 shrink-0 font-sans font-bold">Attached</span>
+              </div>
 
               {/* Action Buttons: Verify, View, and Download */}
               <div className="grid grid-cols-3 gap-2 border-t border-slate-850/80 pt-4 mt-5">
@@ -690,7 +691,7 @@ export default function CertificationsTab({
                 required
                 value={formData.title}
                 onChange={e => setFormData({ ...formData, title: e.target.value })}
-                placeholder={formData.type === 'study' ? "Enter study certificate title (e.g. BTECH TC & Study Certificate)" : formData.type === 'course' ? "Enter course name (e.g. Business Analytics Specialization)" : "Enter grade memo title (e.g. BTECH Consolidated Memo of Marks)"}
+                placeholder={formData.type === 'study' ? "Enter study certificate title" : formData.type === 'course' ? "Enter course name" : "Enter grade memo title"}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -703,7 +704,7 @@ export default function CertificationsTab({
                 required
                 value={formData.issuer}
                 onChange={e => setFormData({ ...formData, issuer: e.target.value })}
-                placeholder="Enter issuing university / school / platform (e.g. KL University)"
+                placeholder="Enter issuing university / school / platform"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -728,7 +729,7 @@ export default function CertificationsTab({
                     type="text"
                     value={formData.percentage || ''}
                     onChange={e => setFormData({ ...formData, percentage: e.target.value })}
-                    placeholder="Enter score (e.g. 95% or 9.8 CGPA)"
+                    placeholder="Enter score"
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                   />
                 </div>
@@ -743,7 +744,7 @@ export default function CertificationsTab({
                   type="text"
                   value={formData.credentialUrl || ''}
                   onChange={e => setFormData({ ...formData, credentialUrl: e.target.value })}
-                  placeholder="https://verify.coursera.org..."
+                  placeholder="https://verify..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>
@@ -754,7 +755,7 @@ export default function CertificationsTab({
                   type="text"
                   value={formData.credentialId || ''}
                   onChange={e => setFormData({ ...formData, credentialId: e.target.value })}
-                  placeholder="Enter credential ID (e.g. KL-CMM-ARKS-991)"
+                  placeholder="Enter credential ID"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />
               </div>

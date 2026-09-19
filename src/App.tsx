@@ -1144,13 +1144,18 @@ export default function App() {
             id: c.id,
             title: c.title,
             issuer: c.issuer,
-            credentialId: c.credential_id,
-            issueDate: c.issue_date,
-            expiryDate: c.expiry_date,
-            credentialUrl: c.credential_url,
+            credentialId: c.credential_id || c.credentialId,
+            dateIssued: c.issue_date || c.dateIssued || '',
+            issueDate: c.issue_date || c.issueDate || '',
+            expirationDate: c.expiry_date || c.expirationDate || '',
+            expiryDate: c.expiry_date || c.expiryDate || '',
+            credentialUrl: c.credential_url || c.credentialUrl,
             description: c.description,
-            fileUrl: c.file_url,
-            storagePath: c.storage_path,
+            fileName: c.file_name || c.fileName || '',
+            fileUrl: c.file_url || c.fileUrl,
+            storagePath: c.storage_path || c.storagePath,
+            type: c.type || 'study',
+            percentage: c.percentage || '',
             visibility: c.visibility || 'public'
           }));
           setCertifications(mapped);
@@ -1667,12 +1672,15 @@ export default function App() {
           title: newCert.title,
           issuer: newCert.issuer,
           credential_id: newCert.credentialId,
-          issue_date: newCert.issueDate,
-          expiry_date: newCert.expiryDate,
+          issue_date: newCert.dateIssued || newCert.issueDate,
+          expiry_date: newCert.expirationDate || newCert.expiryDate,
           credential_url: newCert.credentialUrl,
           description: newCert.description,
+          file_name: newCert.fileName,
           file_url: newCert.fileUrl,
           storage_path: newCert.storagePath,
+          type: newCert.type || 'study',
+          percentage: newCert.percentage,
           visibility: newCert.visibility || 'public'
         });
       } catch (err) { console.warn("[Supabase Add Cert Error]", err); }
@@ -1717,12 +1725,15 @@ export default function App() {
           title: updatedCert.title,
           issuer: updatedCert.issuer,
           credential_id: updatedCert.credentialId,
-          issue_date: updatedCert.issueDate,
-          expiry_date: updatedCert.expiryDate,
+          issue_date: updatedCert.dateIssued || updatedCert.issueDate,
+          expiry_date: updatedCert.expirationDate || updatedCert.expiryDate,
           credential_url: updatedCert.credentialUrl,
           description: updatedCert.description,
+          file_name: updatedCert.fileName,
           file_url: updatedCert.fileUrl,
           storage_path: updatedCert.storagePath,
+          type: updatedCert.type || 'study',
+          percentage: updatedCert.percentage,
           visibility: updatedCert.visibility || 'public'
         });
       } catch (err) { console.warn("[Supabase Update Cert Error]", err); }
@@ -2271,6 +2282,28 @@ export default function App() {
     }
   };
 
+  const handleUpdateAchievement = async (updatedAch: Achievement) => {
+    const targetId = ensureUUID(updatedAch.id);
+    const item = { ...updatedAch, id: targetId };
+    setAchievements(prev => prev.map(a => a.id === updatedAch.id ? item : a));
+    triggerToast(`Updated achievement details: ${updatedAch.title}`);
+
+    if (currentUser?.id) {
+      try {
+        await supabase.from('achievements').upsert({
+          id: targetId,
+          user_id: currentUser.id,
+          title: updatedAch.title,
+          issuer: updatedAch.issuer,
+          date: updatedAch.date,
+          description: updatedAch.description,
+          badge_url: updatedAch.badgeUrl,
+          is_public: updatedAch.isPublic !== false
+        });
+      } catch (err) { console.warn("[Supabase Update Achievement Error]", err); }
+    }
+  };
+
   // Testimonials
   const handleAddTestimonial = async (newRec: Omit<Testimonial, 'id'>) => {
     const id = generateUUID();
@@ -2713,7 +2746,7 @@ export default function App() {
       });
       const publicCalendarOnly = calendarEvents.filter(evt => evt.isPublic !== false);
       const publicLinksOnly = [...links, ...resumeLinks].filter(lk => lk.isPublic !== false);
-      const publicProjectsOnly = [...projects, ...products].filter(proj => proj.isPublic !== false);
+      const publicProjectsOnly = [...projects, ...products, ...others].filter(proj => proj.isPublic !== false);
 
       // Deduplicate arrays with a precise key comparison to prevent payload duplicates
       const deduplicatePayloadArray = <T extends { id?: string }>(arr: T[], getFallbackKey: (item: any) => string): T[] => {
@@ -3792,6 +3825,7 @@ export default function App() {
               achievements={achievements}
               onAddAchievement={handleAddAchievement}
               onDeleteAchievement={handleDeleteAchievement}
+              onUpdateAchievement={handleUpdateAchievement}
             />
           )}
 
