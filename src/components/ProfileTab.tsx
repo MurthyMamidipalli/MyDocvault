@@ -482,8 +482,8 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                     <span>Public Username / Slug Identifier</span>
                     {isCheckingUsername && <span className="text-emerald-400 text-[10px]">Checking availability...</span>}
                   </label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-4 text-xs font-mono text-gray-500 font-semibold select-none">
+                  <div className="flex items-center rounded-xl border border-slate-800 bg-slate-950 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/30 overflow-hidden shadow-inner font-mono text-sm">
+                    <span className="bg-slate-900 border-r border-slate-800 px-3.5 py-2.5 text-xs text-gray-400 font-semibold select-none shrink-0">
                       {getOrigin()}/
                     </span>
                     <input 
@@ -491,7 +491,7 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                       value={formData.shareSlug || ''}
                       onChange={e => handleUsernameChange(e.target.value)}
                       placeholder="e.g. ram or ramachandra-murthy"
-                      className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-32 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner font-mono"
+                      className="w-full bg-transparent px-3.5 py-2.5 text-white text-sm outline-none font-mono"
                     />
                   </div>
                   {usernameError ? (
