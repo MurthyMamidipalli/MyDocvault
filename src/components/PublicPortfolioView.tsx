@@ -317,21 +317,35 @@ export default function PublicPortfolioView({
                 themeColor === 'cyan' ? 'border-cyan-400/20' : themeColor === 'purple' ? 'border-purple-400/20' : 'border-emerald-400/20'
               } flex items-center justify-center font-bold text-3xl text-white select-none ring-4 ${getThemeGlowRing()}`}>
                 {(() => {
-                  if (profile.firstName && profile.lastName) {
-                    const f = profile.firstName.trim()[0];
-                    const l = profile.lastName.trim()[0];
-                    if (f && l) return (f + l).toUpperCase();
+                  const fn = (profile.firstName || '').trim();
+                  const ln = (profile.lastName || '').trim();
+                  if (fn && ln) {
+                    return (fn[0] + ln[0]).toUpperCase();
                   }
-                  if (profile.name) {
-                    const parts = profile.name.trim().split(/\s+/).filter(Boolean);
+
+                  const name = (profile.name || '').trim();
+                  if (name) {
+                    const parts = name.split(/\s+/).filter(Boolean);
                     if (parts.length >= 2) {
                       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
                     }
                     if (parts.length === 1 && parts[0].length >= 2) {
                       return parts[0].slice(0, 2).toUpperCase();
                     }
+                    if (parts.length === 1 && parts[0].length === 1) {
+                      return parts[0].toUpperCase();
+                    }
                   }
-                  return "RM";
+
+                  const email = (profile.email || '').trim();
+                  if (email && email.includes('@')) {
+                    const handle = email.split('@')[0].replace(/[^a-zA-Z]/g, '');
+                    if (handle.length >= 2) {
+                      return handle.slice(0, 2).toUpperCase();
+                    }
+                  }
+
+                  return "DV";
                 })()}
               </div>
             )}
