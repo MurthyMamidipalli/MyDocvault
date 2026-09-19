@@ -2301,20 +2301,22 @@ export default function App() {
 
     if (currentUser?.id) {
       try {
-        await supabase.from('contacts').insert({
+        const { error } = await supabase.from('contacts').insert({
           id,
           user_id: currentUser.id,
           name: newCt.name,
-          email: newCt.email,
-          phone: newCt.phone,
-          role: newCt.role,
-          company: newCt.company,
-          category: newCt.relationship || newCt.category || 'Professional',
-          location: newCt.location,
-          notes: newCt.notes,
-          last_interacted: newCt.lastInteracted,
+          email: newCt.email || '',
+          phone: newCt.phone || '',
+          role: newCt.role || '',
+          company: newCt.company || '',
+          relationship: newCt.relationship || newCt.category || 'Professional',
+          category: newCt.category || newCt.relationship || 'Professional',
+          location: newCt.location || '',
+          notes: newCt.notes || '',
+          last_interacted: newCt.lastInteracted || new Date().toISOString().substring(0, 10),
           interaction_logs: []
         });
+        if (error) console.error("[Supabase Add Contact Error]", error);
       } catch (err) { console.warn("[Supabase Add Contact Error]", err); }
     }
   };
@@ -2351,20 +2353,22 @@ export default function App() {
 
     if (currentUser?.id) {
       try {
-        await supabase.from('contacts').upsert({
+        const { error } = await supabase.from('contacts').upsert({
           id: targetId,
           user_id: currentUser.id,
           name: updatedCt.name,
-          email: updatedCt.email,
-          phone: updatedCt.phone,
-          role: updatedCt.role,
-          company: updatedCt.company,
-          category: updatedCt.relationship || updatedCt.category || 'Professional',
-          location: updatedCt.location,
-          notes: updatedCt.notes,
-          last_interacted: updatedCt.lastInteracted,
+          email: updatedCt.email || '',
+          phone: updatedCt.phone || '',
+          role: updatedCt.role || '',
+          company: updatedCt.company || '',
+          relationship: updatedCt.relationship || updatedCt.category || 'Professional',
+          category: updatedCt.category || updatedCt.relationship || 'Professional',
+          location: updatedCt.location || '',
+          notes: updatedCt.notes || '',
+          last_interacted: updatedCt.lastInteracted || '',
           interaction_logs: updatedCt.interactionLogs || []
         });
+        if (error) console.error("[Supabase Update Contact Error]", error);
       } catch (err) { console.warn("[Supabase Update Contact Error]", err); }
     }
   };
@@ -2392,21 +2396,23 @@ export default function App() {
     if (currentUser?.id && updatedContact) {
       const targetId = ensureUUID((updatedContact as Contact).id);
       try {
-        await supabase.from('contacts').upsert({
+        const { error } = await supabase.from('contacts').upsert({
           id: targetId,
           user_id: currentUser.id,
           name: (updatedContact as Contact).name,
-          email: (updatedContact as Contact).email,
-          phone: (updatedContact as Contact).phone,
-          role: (updatedContact as Contact).role,
-          company: (updatedContact as Contact).company,
-          category: (updatedContact as Contact).relationship || (updatedContact as Contact).category || 'Professional',
-          location: (updatedContact as Contact).location,
-          notes: (updatedContact as Contact).notes,
-          last_interacted: (updatedContact as Contact).lastInteracted,
+          email: (updatedContact as Contact).email || '',
+          phone: (updatedContact as Contact).phone || '',
+          role: (updatedContact as Contact).role || '',
+          company: (updatedContact as Contact).company || '',
+          relationship: (updatedContact as Contact).relationship || (updatedContact as Contact).category || 'Professional',
+          category: (updatedContact as Contact).category || (updatedContact as Contact).relationship || 'Professional',
+          location: (updatedContact as Contact).location || '',
+          notes: (updatedContact as Contact).notes || '',
+          last_interacted: (updatedContact as Contact).lastInteracted || '',
           interaction_logs: (updatedContact as Contact).interactionLogs || []
         });
-      } catch (err) { console.warn("[Supabase Contact Log Error]", err); }
+        if (error) console.error("[Supabase Interaction Contact Error]", error);
+      } catch (err) { console.warn("[Supabase Interaction Contact Exception]", err); }
     }
   };
 

@@ -703,7 +703,7 @@ export default function CalendarTab({
       {/* MODAL LIGHT DIALOG FOR ADDING & EDITING EVENTS */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
-          <div className="bg-[#0b0c10] border border-slate-850 rounded-2xl w-full max-w-lg p-6 shadow-2xl relative">
+          <div className="bg-[#0b0c10] border border-slate-850 rounded-2xl w-full max-w-md p-4 md:p-5 shadow-2xl relative max-h-[88vh] overflow-y-auto">
             <button 
               onClick={() => {
                 setShowForm(false);
@@ -711,7 +711,7 @@ export default function CalendarTab({
               }}
               className="absolute top-4 right-4 text-gray-450 hover:text-white transition p-1"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
 
             <h3 className="text-white font-extrabold text-base mb-1 flex items-center gap-2">

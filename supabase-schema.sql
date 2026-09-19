@@ -82,8 +82,11 @@ CREATE TABLE IF NOT EXISTS certifications (
   expiry_date VARCHAR(50),
   credential_url TEXT,
   description TEXT,
+  file_name VARCHAR(255),
   file_url TEXT,
   storage_path TEXT,
+  type VARCHAR(50) DEFAULT 'study',
+  percentage VARCHAR(50),
   visibility VARCHAR(20) DEFAULT 'public',
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
@@ -114,7 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_experience_user_id ON experience(user_id);
 -- 6. CURRENT JOBS TABLE
 CREATE TABLE IF NOT EXISTS current_jobs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
   company VARCHAR(255) NOT NULL,
   role VARCHAR(255) NOT NULL,
   department VARCHAR(100),
@@ -255,9 +258,13 @@ CREATE TABLE IF NOT EXISTS contacts (
   company VARCHAR(255),
   role VARCHAR(255),
   relationship VARCHAR(100),
+  category VARCHAR(100) DEFAULT 'Professional',
+  location VARCHAR(255),
+  last_interacted VARCHAR(50),
   notes TEXT,
   avatar_url TEXT,
   interactions JSONB DEFAULT '[]'::jsonb,
+  interaction_logs JSONB DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
