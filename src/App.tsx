@@ -1934,25 +1934,34 @@ export default function App() {
 
   // Current Job
   const handleUpdateCurrentJob = async (newJob: CurrentJob) => {
-    setCurrentJob(newJob);
+    const empName = newJob.company || newJob.employer || 'Current Employer';
+    const roleTitle = newJob.role || 'Current Role';
+    const joinDate = newJob.joiningDate || newJob.startDate || new Date().toISOString().substring(0, 10);
+    const empType = newJob.employmentType || 'Full-Time';
+
+    const normalizedJob = {
+      ...newJob,
+      company: empName,
+      employer: empName,
+      role: roleTitle,
+      joiningDate: joinDate,
+      startDate: joinDate,
+      employmentType: empType
+    };
+
+    setCurrentJob(normalizedJob as any);
     const email = currentUser?.email?.toLowerCase().trim();
     if (email) {
-      safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(newJob));
+      safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(normalizedJob));
     }
-    triggerToast("Updated current job position.");
 
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        const companyName = newJob.company || newJob.employer || 'Current Employer';
-        const roleName = newJob.role || 'Current Role';
-        const joinDate = newJob.joiningDate || newJob.startDate || '';
-        const empType = newJob.employmentType || 'Full-Time';
-
         const payload = {
           user_id: userId,
-          company: companyName,
-          role: roleName,
+          company: empName,
+          role: roleTitle,
           department: newJob.department || '',
           employee_id: newJob.employeeId || '',
           joining_date: joinDate,
@@ -1964,27 +1973,46 @@ export default function App() {
           updated_at: new Date().toISOString()
         };
 
-        const { data: existing } = await supabase
-          .from('current_jobs')
-          .select('id')
-          .eq('user_id', userId)
-          .maybeSingle();
+        const { error: upsertErr } = await supabase.from('current_jobs').upsert({
+          user_id: userId,
+          ...payload
+        }, { onConflict: 'user_id' });
 
-        if (existing && existing.id) {
-          const { error } = await supabase.from('current_jobs').update(payload).eq('id', existing.id);
-          if (error) console.error("[Supabase Current Job Update Error]", error);
-          else console.log("[Supabase Current Job Updated]", payload);
+        if (upsertErr) {
+          console.error("[Supabase Current Job Upsert Error]", upsertErr);
+          // Fallback update / insert
+          const { data: existing } = await supabase
+            .from('current_jobs')
+            .select('id')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (existing && existing.id) {
+            const { error: updateErr } = await supabase.from('current_jobs').update(payload).eq('id', existing.id);
+            if (updateErr) {
+              console.error("[Supabase Current Job Update Error]", updateErr);
+              triggerToast(`Current Job Error: ${updateErr.message}`);
+            } else {
+              triggerToast("Current Job saved to Supabase successfully!");
+            }
+          } else {
+            const { error: insErr } = await supabase.from('current_jobs').insert({
+              id: generateUUID(),
+              ...payload
+            });
+            if (insErr) {
+              console.error("[Supabase Current Job Insert Error]", insErr);
+              triggerToast(`Current Job Error: ${insErr.message}`);
+            } else {
+              triggerToast("Current Job inserted to Supabase successfully!");
+            }
+          }
         } else {
-          const { error } = await supabase.from('current_jobs').insert({
-            id: generateUUID(),
-            ...payload
-          });
-          if (error) console.error("[Supabase Current Job Insert Error]", error);
-          else console.log("[Supabase Current Job Inserted]", payload);
+          triggerToast("Current Job synchronized with Supabase!");
         }
       } catch (err) { console.warn("[Supabase Current Job Exception]", err); }
     } else {
-      console.warn("[Supabase Current Job] User is not authenticated in Supabase.");
+      triggerToast("Job updated locally (Sign in to sync with Supabase)");
     }
   };
 
@@ -1998,7 +2026,6 @@ export default function App() {
     if (email) {
       safeLocalStorageSetItem(`${email}_milestones`, JSON.stringify(updated));
     }
-    triggerToast(`Published career milestone checkpoint.`);
 
     const userId = await getActiveUserId();
     if (userId) {
@@ -2013,11 +2040,15 @@ export default function App() {
           description: newMil.description || '',
           is_public: true
         });
-        if (error) console.error("[Supabase Add Milestone Error]", error);
-        else console.log("[Supabase Add Milestone Success]", id);
+        if (error) {
+          console.error("[Supabase Add Milestone Error]", error);
+          triggerToast(`Milestone Error: ${error.message}`);
+        } else {
+          triggerToast("Career Milestone saved to Supabase!");
+        }
       } catch (err) { console.warn("[Supabase Add Milestone Exception]", err); }
     } else {
-      console.warn("[Supabase Milestone] User is not authenticated in Supabase.");
+      triggerToast("Milestone added locally (Sign in to sync with Supabase)");
     }
   };
 

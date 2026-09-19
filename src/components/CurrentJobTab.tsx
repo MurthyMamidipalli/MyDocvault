@@ -57,9 +57,8 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
 
   const handleSaveJob = (e: React.FormEvent) => {
     e.preventDefault();
-    const empName = employer.trim();
-    const roleTitle = role.trim();
-    if (!roleTitle || !empName) return;
+    const empName = employer.trim() || 'Current Employer';
+    const roleTitle = role.trim() || 'Current Role';
     
     onUpdateCurrentJob({
       ...currentJob,
