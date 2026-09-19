@@ -89,7 +89,7 @@ export default function ResumeTab({
 
   // State managers for Form Data (Upload Modal)
   const [recordName, setRecordName] = useState('');
-  const [documentType, setDocumentType] = useState('Resume & CV');
+  const [documentType, setDocumentType] = useState('Resume');
   const [visibility, setVisibility] = useState<'public' | 'private'>('private');
   const [isVisibilityDropdownOpen, setIsVisibilityDropdownOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; size: string; dataUrl?: string } | null>(null);
@@ -188,7 +188,7 @@ export default function ResumeTab({
       fileName: finalFileName,
       size: finalSize,
       uploadDate: new Date().toISOString().split('T')[0],
-      category: "SUPABASE",
+      category: documentType,
       fileDataUrl: sourceType === 'file' ? selectedFile?.dataUrl : undefined,
       linkUrl: sourceType === 'link' ? docLinkUrl : undefined
     };
@@ -290,7 +290,7 @@ export default function ResumeTab({
                 {viewingResume.name}
               </h3>
               <p className="text-[10px] text-gray-500 font-mono tracking-wider select-none uppercase mt-0.5">
-                {viewingResume.category} // {viewingResume.type}
+                {viewingResume.type || 'Resume'}
               </p>
             </div>
           </div>
@@ -698,7 +698,8 @@ export default function ResumeTab({
                     onChange={e => setDocumentType(e.target.value)}
                     className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none appearance-none cursor-pointer pr-10 select-none"
                   >
-                    <option value="Resume & CV">Resume & CV</option>
+                    <option value="Resume">Resume</option>
+                    <option value="CV">CV</option>
                   </select>
                   <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
                 </div>
@@ -955,7 +956,7 @@ export default function ResumeTab({
           <span className="text-3xl select-none">📜</span>
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Resume & Links Vault</h1>
-            <p className="text-xs text-gray-400 mt-1">High-performance CV intelligence powered by Supabase Storage.</p>
+            <p className="text-xs text-gray-400 mt-1">High-performance CV intelligence and document vault.</p>
           </div>
         </div>
 
@@ -1078,8 +1079,8 @@ export default function ResumeTab({
                   <h3 className="text-sm font-bold text-white truncate pr-2 select-text" title={res.name}>
                     {res.name}
                   </h3>
-                  <span className="text-[10px] text-gray-500 tracking-widest font-bold font-mono uppercase mt-1 block select-none">
-                    {res.category}
+                  <span className="text-[10px] text-emerald-400/80 tracking-widest font-bold font-mono uppercase mt-1 block select-none">
+                    {res.type || 'Resume'}
                   </span>
                 </div>
               </div>

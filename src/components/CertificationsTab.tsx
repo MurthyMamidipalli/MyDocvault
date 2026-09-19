@@ -303,7 +303,8 @@ export default function CertificationsTab({
     setFormData({
       title: cert.title,
       issuer: cert.issuer,
-      dateIssued: cert.dateIssued || '',
+      dateIssued: cert.dateIssued || cert.issueDate || '',
+      issueDate: cert.dateIssued || cert.issueDate || '',
       expirationDate: cert.expirationDate || '',
       credentialId: cert.credentialId || '',
       credentialUrl: cert.credentialUrl || '',
@@ -341,10 +342,12 @@ export default function CertificationsTab({
     // Auto-generate a decent credentialId if left empty
     const finalId = formData.credentialId || `CRED-${Math.floor(Math.random() * 90000) + 10000}`;
     
+    const finalDate = formData.dateIssued || formData.issueDate || new Date().toISOString().split('T')[0];
     const finalData = {
       ...formData,
       credentialId: finalId,
-      dateIssued: formData.dateIssued || new Date().toISOString().split('T')[0]
+      dateIssued: finalDate,
+      issueDate: finalDate
     };
 
     if (editingItem && onUpdateCertification) {
@@ -562,7 +565,7 @@ export default function CertificationsTab({
                 {/* Date and ID */}
                 <div className="flex items-center gap-1.5 text-xs text-gray-500 pt-0.5 font-sans">
                   <Calendar className="w-4 h-4 text-gray-600" />
-                  <span>{formatDisplayDate(cert.dateIssued)}</span>
+                  <span>{formatDisplayDate(cert.dateIssued || cert.issueDate || '')}</span>
                 </div>
               </div>
 
