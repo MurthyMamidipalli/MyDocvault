@@ -28,18 +28,83 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
   const [success, setSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+
   // Sync state if profile prop changes externally
   React.useEffect(() => {
     setFormData({ ...profile });
   }, [profile]);
 
-  const shareSlug = formData.name ? formData.name.toLowerCase().replace(/\s+/g, '-') : 'ramachandra-murthy';
-  const shareUrl = passedShareUrl || `${window.location.origin}/#/public/${shareSlug}`;
+  const getOrigin = () => {
+    if (typeof window !== 'undefined') {
+      return (import.meta as any).env?.VITE_PUBLIC_URL || window.location.origin;
+    }
+    return '';
+  };
+
+  const shareSlug = formData.shareSlug || (formData.name ? formData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'user');
+  const shareUrl = passedShareUrl || `${getOrigin()}/${shareSlug}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(shareUrl);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  const handleShareNative = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${formData.name || 'User'} - MyDocVault Profile`,
+          text: `Check out my MyDocVault public profile: ${shareUrl}`,
+          url: shareUrl
+        });
+      } catch (e) {}
+    } else {
+      handleCopy();
+    }
+  };
+
+  const checkUsernameAvailability = async (slugToCheck: string): Promise<boolean> => {
+    const cleanSlug = slugToCheck.toLowerCase().trim().replace(/[^a-z0-9-]/g, '');
+    if (!cleanSlug) return true;
+    setIsCheckingUsername(true);
+    setUsernameError(null);
+    try {
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('share_slug', cleanSlug);
+
+      if (error) {
+        setIsCheckingUsername(false);
+        return true;
+      }
+
+      const isTaken = data && data.some(row => row.user_id !== currentUser?.id);
+      setIsCheckingUsername(false);
+      if (isTaken) {
+        setUsernameError("Username already taken. Please choose another username.");
+        return false;
+      }
+      return true;
+    } catch (err) {
+      setIsCheckingUsername(false);
+      return true;
+    }
+  };
+
+  const handleUsernameChange = async (newVal: string) => {
+    const cleanSlug = newVal.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const updated = { ...formData, shareSlug: cleanSlug };
+    setFormData(updated);
+    if (cleanSlug.length >= 2) {
+      await checkUsernameAvailability(cleanSlug);
+    } else {
+      setUsernameError(null);
+    }
   };
 
   const handleChange = (field: keyof PersonalProfile, value: any) => {
@@ -48,8 +113,12 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
     onUpdateProfile(updated);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.shareSlug) {
+      const isAvailable = await checkUsernameAvailability(formData.shareSlug);
+      if (!isAvailable) return;
+    }
     onUpdateProfile(formData);
     setSuccess(true);
     setTimeout(() => setSuccess(false), 3000);
@@ -406,7 +475,37 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
 
             <div className="grid grid-cols-1 gap-5">
               <div className="space-y-4">
+                
+                {/* Public Username / Slug Selection */}
                 <div className="space-y-2">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase flex items-center justify-between">
+                    <span>Public Username / Slug Identifier</span>
+                    {isCheckingUsername && <span className="text-emerald-400 text-[10px]">Checking availability...</span>}
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-4 text-xs font-mono text-gray-500 font-semibold select-none">
+                      {getOrigin()}/
+                    </span>
+                    <input 
+                      type="text" 
+                      value={formData.shareSlug || ''}
+                      onChange={e => handleUsernameChange(e.target.value)}
+                      placeholder="e.g. ram or ramachandra-murthy"
+                      className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-32 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner font-mono"
+                    />
+                  </div>
+                  {usernameError ? (
+                    <p className="text-xs font-semibold text-rose-400 font-sans bg-rose-500/10 p-2.5 border border-rose-500/20 rounded-xl">
+                      ⚠️ {usernameError}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-gray-500">
+                      Your unique URL slug identifier. Lowercase letters, numbers, and hyphens allowed.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2 pt-1">
                   <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
                     Public Profile Status
                   </label>
@@ -444,30 +543,46 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
 
                 <div className="space-y-2 pt-2">
                   <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                    Your Dedicated Public Link URL
+                    Your Dedicated Public Profile Link
                   </label>
-                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-3 flex items-center justify-between gap-4">
+                  <div className="bg-slate-950 border border-slate-900 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <span className="text-[11px] font-mono text-gray-300 truncate select-all">{shareUrl}</span>
-                    <div className="flex items-center gap-1.5 shrink-0 font-sans">
+                    <div className="flex items-center gap-2 shrink-0 font-sans">
                       <button
                         type="button"
                         onClick={handleCopy}
                         title="Copy public link"
-                        className="bg-slate-900 hover:bg-slate-850 text-gray-400 hover:text-white p-2 rounded-lg border border-slate-800 transition active:scale-90 cursor-pointer"
+                        className="bg-slate-900 hover:bg-slate-850 text-gray-300 hover:text-white px-3 py-2 rounded-lg border border-slate-800 transition active:scale-95 cursor-pointer text-xs font-bold flex items-center gap-1.5"
                       >
-                        {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        {copied ? (
+                          <>
+                            <Check className="w-4 h-4 text-emerald-400" />
+                            <span className="text-emerald-400">Copied!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4 text-gray-400" />
+                            <span>Copy Link</span>
+                          </>
+                        )}
                       </button>
                       <a
                         href={shareUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Open public live link"
-                        className="bg-slate-900 hover:bg-slate-850 text-gray-400 hover:text-white p-2 rounded-lg border border-slate-800 transition inline-flex items-center active:scale-90 cursor-pointer"
+                        className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-lg transition inline-flex items-center gap-1.5 text-xs font-bold active:scale-95 cursor-pointer"
                       >
                         <ExternalLink className="w-4 h-4" />
+                        <span>Open Profile</span>
                       </a>
                     </div>
                   </div>
+                  {copied && (
+                    <p className="text-xs text-emerald-400 font-semibold font-mono animate-fade-in">
+                      ✓ Public profile link copied.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

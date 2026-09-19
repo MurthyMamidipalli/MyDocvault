@@ -18,6 +18,7 @@ export interface PersonalProfile {
   bio: string;
   avatarUrl: string;
   publicProfile?: boolean;
+  shareSlug?: string;
 }
 
 export interface Skill {
@@ -26,6 +27,9 @@ export interface Skill {
   visibility: 'public' | 'private';
   yearsOfExp: number;
   endorsements: number;
+  category?: string;
+  proficiency?: string;
+  description?: string;
 }
 
 export interface Education {
@@ -41,6 +45,7 @@ export interface Education {
   enrollmentId?: string;
   startDate?: string;
   endDate?: string;
+  description?: string;
 }
 
 export interface Certification {
@@ -56,6 +61,10 @@ export interface Certification {
   fileName?: string;
   fileUrl?: string;
   percentage?: string;
+  issueDate?: string;
+  expiryDate?: string;
+  storagePath?: string;
+  description?: string;
 }
 
 export interface Experience {
@@ -72,6 +81,7 @@ export interface Experience {
   pdfUrl?: string;
   pdfName?: string;
   isPublic?: boolean;
+  employmentType?: string;
 }
 
 export interface CurrentJob {
@@ -84,6 +94,14 @@ export interface CurrentJob {
   currentProjects: { id: string; name: string; status: 'planning' | 'in-progress' | 'completed'; desc: string }[];
   dailyStandupText: string;
   weeklyGoals: { id: string; text: string; completed: boolean }[];
+  company?: string;
+  employerId?: string;
+  employeeId?: string;
+  joiningDate?: string;
+  location?: string;
+  salary?: string;
+  manager?: string;
+  description?: string;
 }
 
 export interface Project {
@@ -102,6 +120,7 @@ export interface Project {
   coverUrl?: string;
   pdfUrl?: string;
   pdfName?: string;
+  imageUrl?: string;
   percentage?: string;
   isPublic?: boolean;
 }
@@ -121,6 +140,7 @@ export interface TimelineMilestone {
   category: 'education' | 'experience' | 'certification' | 'achievement' | 'project';
   description: string;
   intensity: 'low' | 'medium' | 'high';
+  type?: string;
 }
 
 export interface Contact {
@@ -136,6 +156,8 @@ export interface Contact {
   status: 'active' | 'cold' | 'hot' | 'on-hold';
   lastInteracted: string;
   interactionLogs: { id: string; timestamp: string; type: 'email' | 'call' | 'meeting' | 'note'; summary: string }[];
+  relationship?: string;
+  location?: string;
 }
 
 export interface Achievement {
@@ -145,6 +167,7 @@ export interface Achievement {
   issuer: string;
   description: string;
   isPublic?: boolean;
+  badgeUrl?: string;
 }
 
 export interface Testimonial {
@@ -155,6 +178,7 @@ export interface Testimonial {
   avatarColor: string;
   relationship: string;
   text: string;
+  isPublic?: boolean;
 }
 
 export interface VaultDocument {
@@ -172,6 +196,13 @@ export interface VaultDocument {
   ownerId?: string;
   webViewLink?: string;
   webContentLink?: string;
+  title?: string;
+  description?: string;
+  fileType?: string;
+  storagePath?: string;
+  expiryDate?: string;
+  tags?: string[];
+  visibility?: string;
 }
 
 export interface CalendarEvent {

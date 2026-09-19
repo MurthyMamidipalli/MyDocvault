@@ -34,12 +34,14 @@ interface DocumentVaultTabProps {
   documents: VaultDocument[];
   onAddDocument: (doc: Omit<VaultDocument, 'id'>) => void;
   onDeleteDocument: (id: string) => void;
+  onUpdateDocument?: (doc: VaultDocument) => void;
 }
 
 export default function DocumentVaultTab({
   documents,
   onAddDocument,
-  onDeleteDocument
+  onDeleteDocument,
+  onUpdateDocument
 }: DocumentVaultTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -472,6 +474,23 @@ export default function DocumentVaultTab({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const newVis = doc.visibility === 'public' ? 'private' : 'public';
+                      if (onUpdateDocument) {
+                        onUpdateDocument({ ...doc, visibility: newVis });
+                      }
+                    }}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-mono uppercase font-bold border transition cursor-pointer flex items-center gap-1 ${
+                      doc.visibility === 'public'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                        : 'bg-red-500/10 text-rose-400 border-red-500/30 hover:bg-red-500/20'
+                    }`}
+                    title={doc.visibility === 'public' ? "Publicly visible on your profile. Click to make private." : "Private. Hidden from public profile. Click to make public."}
+                  >
+                    {doc.visibility === 'public' ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                    <span>{doc.visibility === 'public' ? 'Public' : 'Private'}</span>
+                  </button>
                   <button 
                     onClick={() => handleViewDocument(doc)}
                     disabled={resolvingFileId !== null}

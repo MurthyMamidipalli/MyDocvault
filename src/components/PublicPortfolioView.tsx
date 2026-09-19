@@ -35,7 +35,8 @@ import {
   Testimonial,
   PortfolioLink,
   CalendarEvent,
-  ResumeItem
+  ResumeItem,
+  VaultDocument
 } from '../types';
 
 interface PublicPortfolioViewProps {
@@ -50,6 +51,7 @@ interface PublicPortfolioViewProps {
   links: PortfolioLink[];
   calendarEvents: CalendarEvent[];
   resumes?: ResumeItem[];
+  documents?: VaultDocument[];
   onGoToConsole?: () => void;
 }
 
@@ -65,6 +67,7 @@ export default function PublicPortfolioView({
   links,
   calendarEvents,
   resumes = [],
+  documents = [],
   onGoToConsole
 }: PublicPortfolioViewProps) {
   const [themeColor] = useState<'emerald' | 'cyan' | 'purple'>(() => {
@@ -147,7 +150,7 @@ export default function PublicPortfolioView({
     for (const item of arr) {
       if (!item) continue;
       const id = item.id ? String(item.id).trim() : '';
-      const fallbackKey = getFallbackKey(item) ? getFallbackKey(item).toLowerCase().trim() : '';
+      const fallbackKey = getFallbackKey(item) ? getFallbackKey(item).toLowerCase().trim().replace(/\/+$/, '') : '';
 
       if (id && seenIds.has(id)) continue;
       if (fallbackKey && seenKeys.has(fallbackKey)) continue;
@@ -166,9 +169,10 @@ export default function PublicPortfolioView({
   const cleanEducation = deduplicateByUniqueKey(education || [], edu => `${edu.degree || ''}-${edu.institution || ''}`);
   const cleanAchievements = deduplicateByUniqueKey(achievements || [], ach => ach.title || '');
   const cleanTestimonials = deduplicateByUniqueKey(testimonials || [], rec => `${rec.name || ''}-${rec.company || ''}`);
-  const cleanLinks = deduplicateByUniqueKey(links || [], lk => lk.url || '');
+  const cleanLinks = deduplicateByUniqueKey(links || [], lk => (lk.url || lk.label || ''));
   const cleanCalendarEvents = deduplicateByUniqueKey(calendarEvents || [], evt => `${evt.title || ''}-${evt.date || ''}`);
   const cleanResumes = deduplicateByUniqueKey(resumes || [], res => res.name || '');
+  const cleanDocuments = deduplicateByUniqueKey(documents || [], doc => doc.name || doc.title || '');
 
   // Filter skills to show all public/unflagged ones
   const publicSkills = cleanSkills.filter(sk => sk.visibility !== 'private');
@@ -184,6 +188,8 @@ export default function PublicPortfolioView({
   const publicAchievements = cleanAchievements.filter(ach => ach.isPublic !== false);
   // Filter public resumes
   const publicResumes = cleanResumes.filter(res => res.visibility !== 'private');
+  // Filter public documents
+  const publicDocuments = cleanDocuments.filter(doc => doc.visibility === 'public');
 
   // Categorize Projects, Products, and Others
   const projectsList = publicProjects.filter(p => p.type === 'project' || (!p.type && p.type !== 'product' && p.type !== 'other'));
@@ -400,6 +406,54 @@ export default function PublicPortfolioView({
                             <Download className="w-3 h-3" />
                             <span>Download</span>
                           </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Public Vault Documents Section */}
+            {publicDocuments.length > 0 && (
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
+                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                  <Folder className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                  Public Documents & Files
+                </h3>
+                <div className="space-y-3 pt-1">
+                  {publicDocuments.map(doc => (
+                    <div key={doc.id} className="bg-slate-950/45 p-3.5 rounded-xl border border-slate-900 space-y-2.5 hover:bg-slate-900/30 transition">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-mono text-emerald-400 uppercase font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          {doc.category || 'Document'}
+                        </span>
+                        <span className="text-[9px] font-mono text-gray-500">{doc.uploadDate || doc.size || 'Verified'}</span>
+                      </div>
+                      <h4 className="text-white font-semibold text-xs leading-snug truncate" title={doc.name}>{doc.name}</h4>
+                      {doc.description && <p className="text-[11px] text-gray-400 line-clamp-2">{doc.description}</p>}
+                      
+                      <div className="flex items-center gap-2 pt-1 font-mono text-[10px]">
+                        {doc.fileUrl && (
+                          <>
+                            <a
+                              href={doc.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>View</span>
+                            </a>
+                            <a
+                              href={doc.fileUrl}
+                              download={doc.fileName || doc.name}
+                              className="bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Download</span>
+                            </a>
+                          </>
                         )}
                       </div>
                     </div>
