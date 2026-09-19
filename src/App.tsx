@@ -1968,7 +1968,6 @@ export default function App() {
             date: newPr.date
           };
           await supabase.from('products').insert(payload);
-          await supabase.from('projects').insert(payload);
         } catch (err) { console.warn("[Supabase Add Product Error]", err); }
       }
     } else if (newPr.type === 'other') {
@@ -1996,7 +1995,6 @@ export default function App() {
             date: newPr.date
           };
           await supabase.from('others').insert(payload);
-          await supabase.from('projects').insert(payload);
         } catch (err) { console.warn("[Supabase Add Other Error]", err); }
       }
     } else {
@@ -2054,13 +2052,16 @@ export default function App() {
       try {
         await supabase.from('projects').delete().eq('id', targetId).eq('user_id', currentUser.id);
         await supabase.from('products').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('others').delete().eq('id', targetId).eq('user_id', currentUser.id);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('projects').delete().eq('id', id).eq('user_id', currentUser.id);
           await supabase.from('products').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('others').delete().eq('id', id).eq('user_id', currentUser.id);
         }
         if (targetItem?.name) {
           await supabase.from('projects').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
           await supabase.from('products').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
+          await supabase.from('others').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
         }
       } catch (err) { console.warn("[Supabase Delete Project/Product Error]", err); }
     }
@@ -2097,7 +2098,8 @@ export default function App() {
             date: updatedPr.date
           };
           await supabase.from('products').upsert(payload);
-          await supabase.from('projects').upsert(payload);
+          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          await supabase.from('others').delete().eq('id', targetId).eq('user_id', currentUser.id);
         } catch (err) { console.warn("[Supabase Update Product Error]", err); }
       }
     } else if (updatedPr.type === 'other') {
@@ -2127,7 +2129,8 @@ export default function App() {
             date: updatedPr.date
           };
           await supabase.from('others').upsert(payload);
-          await supabase.from('projects').upsert(payload);
+          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          await supabase.from('products').delete().eq('id', targetId).eq('user_id', currentUser.id);
         } catch (err) { console.warn("[Supabase Update Other Error]", err); }
       }
     } else {
@@ -2155,6 +2158,8 @@ export default function App() {
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date
           });
+          await supabase.from('products').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          await supabase.from('others').delete().eq('id', targetId).eq('user_id', currentUser.id);
         } catch (err) { console.warn("[Supabase Update Project Error]", err); }
       }
     }
