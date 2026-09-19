@@ -239,9 +239,9 @@ export default function ResumeTab({
   // Submit Link upload modal
   const handleSaveLink = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!linkPlatform.trim() || !linkUrl.trim()) return;
+    if (!linkUrl.trim()) return;
 
-    const finalPlatform = linkPlatform.trim();
+    const finalPlatform = (linkPlatform || 'Resume Link').trim();
     const finalLabel = linkLabel.trim() || linkUrl.replace(/(^\w+:|^)\/\//, '');
     const finalUrl = linkUrl.trim().startsWith('http') ? linkUrl.trim() : `https://${linkUrl.trim()}`;
 

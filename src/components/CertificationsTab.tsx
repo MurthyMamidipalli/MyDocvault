@@ -570,7 +570,7 @@ export default function CertificationsTab({
               <div className="bg-slate-950/60 border border-slate-800/60 p-2.5 rounded-xl mt-3.5 flex items-center justify-between gap-2 text-[11px] font-mono text-gray-300">
                 <div className="flex items-center gap-2 truncate min-w-0">
                   <FileText className="w-4 h-4 text-[#10b981] shrink-0" />
-                  <span className="truncate font-medium">{cert.fileName || `${cert.title.replace(/\s+/g, '_')}.pdf`}</span>
+                  <span className="truncate font-medium">{cert.fileName || `${(cert.title || 'Certification').replace(/\s+/g, '_')}.pdf`}</span>
                 </div>
                 <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 shrink-0 font-sans font-bold">Attached</span>
               </div>
@@ -605,7 +605,7 @@ export default function CertificationsTab({
 
                 <a
                   href={cert.fileUrl || generateCertificationPdf(cert)}
-                  download={cert.fileName || `${cert.title.replace(/\s+/g, '_')}.pdf`}
+                  download={cert.fileName || `${(cert.title || 'Certification').replace(/\s+/g, '_')}.pdf`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 cursor-pointer transition select-none"

@@ -35,10 +35,11 @@ export default function PortfoliosTab({
     e.preventDefault();
     if (!url || !label) return;
     
+    const finalPlatform = platform || 'Resume Link';
     if (editingLink) {
-      onUpdateLink({ id: editingLink.id, platform, url, label, isPublic });
+      onUpdateLink({ id: editingLink.id, platform: finalPlatform, url, label, isPublic });
     } else {
-      onAddLink({ platform, url, label, isPublic });
+      onAddLink({ platform: finalPlatform, url, label, isPublic });
     }
 
     setUrl('');
