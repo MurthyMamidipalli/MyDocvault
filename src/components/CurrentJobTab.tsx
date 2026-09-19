@@ -46,10 +46,10 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
   const [newProjDesc, setNewProjDesc] = useState('');
 
   const handleOpenEdit = () => {
-    setEmployer(currentJob?.employer || '');
+    setEmployer(currentJob?.employer || currentJob?.company || '');
     setRole(currentJob?.role || '');
     setDepartment(currentJob?.department || '');
-    setStartDate(currentJob?.startDate || '');
+    setStartDate(currentJob?.startDate || currentJob?.joiningDate || '');
     setEmploymentType(currentJob?.employmentType || 'full-time');
     setLocationType(currentJob?.locationType || 'on-site');
     setShowModal(true);
@@ -57,14 +57,18 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
 
   const handleSaveJob = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!role.trim() || !employer.trim()) return;
+    const empName = employer.trim();
+    const roleTitle = role.trim();
+    if (!roleTitle || !empName) return;
     
     onUpdateCurrentJob({
       ...currentJob,
-      role: role.trim(),
-      employer: employer.trim(),
-      department: department.trim(),
+      role: roleTitle,
+      employer: empName,
+      company: empName,
       startDate: startDate.trim(),
+      joiningDate: startDate.trim(),
+      department: department.trim(),
       employmentType,
       locationType,
     });
@@ -80,8 +84,10 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
     onUpdateCurrentJob({
       ...currentJob,
       employer: '',
+      company: '',
       role: '',
       startDate: '',
+      joiningDate: '',
       department: '',
       employmentType: undefined,
       locationType: undefined,
@@ -140,7 +146,7 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
     return dateStr;
   };
 
-  const isConfigured = currentJob?.role || currentJob?.employer;
+  const isConfigured = currentJob?.role || currentJob?.employer || currentJob?.company;
 
   return (
     <div className="space-y-6 animate-fade-in" id="current-job-pane">

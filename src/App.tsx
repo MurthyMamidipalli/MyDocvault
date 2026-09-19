@@ -1263,18 +1263,23 @@ export default function App() {
       try {
         const { data: jobData } = await supabase.from('current_jobs').select('*').eq('user_id', userId).maybeSingle();
         if (jobData) {
-          setCurrentJob({
+          const loadedJob = {
             company: jobData.company || '',
+            employer: jobData.company || '',
             role: jobData.role || '',
             department: jobData.department || '',
             employeeId: jobData.employee_id || '',
             joiningDate: jobData.joining_date || '',
+            startDate: jobData.joining_date || '',
             location: jobData.location || '',
-            employmentType: jobData.employment_type || 'Full-Time',
+            locationType: jobData.location || 'on-site',
+            employmentType: jobData.employment_type || 'full-time',
             salary: jobData.salary || '',
             manager: jobData.manager || '',
             description: jobData.description || ''
-          });
+          };
+          setCurrentJob(loadedJob as any);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_current_job`, JSON.stringify(loadedJob));
         }
       } catch (err) { console.warn("[Supabase Current Job Load]", err); }
 
