@@ -2705,18 +2705,33 @@ export default function App() {
         for (const r of newResumes) {
           const targetId = ensureUUID(r.id);
           try {
-            await supabase.from('resumes').upsert({
+            // Convert string size (e.g. "120 KB") to integer for PostgreSQL BIGINT
+            let numericSize = 0;
+            if (typeof r.size === 'number') {
+              numericSize = r.size;
+            } else if (typeof r.size === 'string') {
+              const parsed = parseInt(r.size.replace(/[^0-9]/g, ''), 10);
+              numericSize = isNaN(parsed) ? 0 : parsed;
+            } else if (r.fileSize) {
+              const parsed = parseInt(String(r.fileSize).replace(/[^0-9]/g, ''), 10);
+              numericSize = isNaN(parsed) ? 0 : parsed;
+            }
+
+            const { error } = await supabase.from('resumes').upsert({
               id: targetId,
               user_id: currentUser.id,
               title: r.name || r.title || 'Resume',
-              file_name: r.fileName,
-              file_url: r.fileUrl || r.fileDataUrl || r.linkUrl,
+              file_name: r.fileName || r.name || 'resume.pdf',
+              file_url: r.fileUrl || r.fileDataUrl || r.linkUrl || 'https://example.com/resume.pdf',
               storage_path: r.storagePath || '',
-              file_size: r.size || r.fileSize || '',
+              file_size: numericSize,
               file_type: r.type || r.fileType || 'Resume',
               is_primary: r.isPrimary || false,
               is_public: r.visibility === 'public' || r.isPublic !== false
             });
+            if (error) {
+              console.error("[Supabase Resume Upsert Error]", error);
+            }
           } catch (err) { console.warn("[Supabase Resume Upsert Error]", err); }
         }
       }

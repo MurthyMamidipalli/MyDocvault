@@ -173,6 +173,27 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE INDEX IF NOT EXISTS idx_products_user_id ON products(user_id);
 
+-- 8.5. OTHERS / REPORTS TABLE
+CREATE TABLE IF NOT EXISTS others (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(100) DEFAULT 'others',
+  description TEXT,
+  highlights JSONB DEFAULT '[]'::jsonb,
+  tech_stack JSONB DEFAULT '[]'::jsonb,
+  live_url TEXT,
+  github_url TEXT,
+  pdf_url TEXT,
+  image_url TEXT,
+  is_public BOOLEAN DEFAULT TRUE,
+  date VARCHAR(50),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_others_user_id ON others(user_id);
+
 -- 9. RESUMES TABLE
 CREATE TABLE IF NOT EXISTS resumes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -355,6 +376,7 @@ ALTER TABLE experience ENABLE ROW LEVEL SECURITY;
 ALTER TABLE current_jobs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE others ENABLE ROW LEVEL SECURITY;
 ALTER TABLE resumes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE portfolio_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE career_timeline ENABLE ROW LEVEL SECURITY;
@@ -403,6 +425,11 @@ CREATE POLICY "projects_public_read" ON projects FOR SELECT USING (is_public = t
 -- 8. PRODUCTS POLICIES
 CREATE POLICY "products_owner_crud" ON products FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "products_public_read" ON products FOR SELECT USING (is_public = true);
+
+-- 8.5. OTHERS POLICIES
+ALTER TABLE others ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "others_owner_crud" ON others FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "others_public_read" ON others FOR SELECT USING (is_public = true);
 
 -- 9. RESUMES POLICIES
 CREATE POLICY "resumes_owner_crud" ON resumes FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
