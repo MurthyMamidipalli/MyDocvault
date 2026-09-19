@@ -2304,26 +2304,7 @@ export default function App() {
     triggerToast(`Updated resume link: ${updatedLk.label}`);
   };
 
-  // Milestones
-  const handleAddMilestone = async (newMil: Omit<TimelineMilestone, 'id'>) => {
-    const id = generateUUID();
-    const mil: TimelineMilestone = { ...newMil, id };
-    setMilestones(prev => [mil, ...prev]);
-    triggerToast(`Published career milestone checkpoint.`);
 
-    if (currentUser?.id) {
-      try {
-        await supabase.from('career_timeline').insert({
-          id,
-          user_id: currentUser.id,
-          title: newMil.title,
-          date: newMil.date,
-          category: newMil.type || newMil.category || 'Milestone',
-          description: newMil.description
-        });
-      } catch (err) { console.warn("[Supabase Add Milestone Error]", err); }
-    }
-  };
 
   const handleDeleteMilestone = async (id: string) => {
     const targetItem = milestones.find(m => m.id === id);
