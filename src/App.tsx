@@ -2141,31 +2141,35 @@ export default function App() {
     const id = generateUUID();
     const proj: Project = { ...newPr, id };
     const email = currentUser?.email?.toLowerCase().trim();
+    const userId = await getActiveUserId();
 
     if (newPr.type === 'product') {
       const updatedProducts = [proj, ...products];
       setProducts(updatedProducts);
       if (email) safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
       triggerToast(`Published product assets: ${newPr.name}`);
-      if (currentUser?.id) {
+      if (userId) {
         try {
           const payload = {
             id,
-            user_id: currentUser.id,
+            user_id: userId,
             name: newPr.name,
-            category: newPr.category,
-            type: 'product',
-            description: newPr.description,
+            category: newPr.category || 'products',
+            description: newPr.description || '',
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
-            live_url: newPr.liveUrl,
-            github_url: newPr.githubUrl,
-            pdf_url: newPr.pdfUrl,
-            image_url: newPr.imageUrl,
+            live_url: newPr.liveUrl || '',
+            github_url: newPr.githubUrl || '',
+            pdf_url: newPr.pdfUrl || '',
+            image_url: newPr.imageUrl || newPr.coverUrl || '',
             is_public: newPr.isPublic !== false,
-            date: newPr.date
+            date: newPr.date || ''
           };
-          await supabase.from('products').insert(payload);
+          const { error } = await supabase.from('products').upsert(payload);
+          if (error) {
+            console.error("[Supabase Add Product Error]", error);
+            triggerToast(`Product Error: ${error.message}`);
+          }
         } catch (err) { console.warn("[Supabase Add Product Error]", err); }
       }
     } else if (newPr.type === 'other') {
@@ -2173,26 +2177,28 @@ export default function App() {
       setOthers(updatedOthers);
       if (email) safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
       triggerToast(`Added document: ${newPr.name}`);
-      if (currentUser?.id) {
+      if (userId) {
         try {
           const payload = {
             id,
-            user_id: currentUser.id,
+            user_id: userId,
             name: newPr.name,
-            category: newPr.category,
-            type: 'other',
-            doc_type: newPr.docType || 'Report',
-            description: newPr.description,
+            category: newPr.category || 'others',
+            description: newPr.description || '',
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
-            live_url: newPr.liveUrl,
-            github_url: newPr.githubUrl,
-            pdf_url: newPr.pdfUrl,
-            image_url: newPr.imageUrl,
+            live_url: newPr.liveUrl || '',
+            github_url: newPr.githubUrl || '',
+            pdf_url: newPr.pdfUrl || '',
+            image_url: newPr.imageUrl || newPr.coverUrl || '',
             is_public: newPr.isPublic !== false,
-            date: newPr.date
+            date: newPr.date || ''
           };
-          await supabase.from('others').insert(payload);
+          const { error } = await supabase.from('others').upsert(payload);
+          if (error) {
+            console.error("[Supabase Add Other Error]", error);
+            triggerToast(`Document Error: ${error.message}`);
+          }
         } catch (err) { console.warn("[Supabase Add Other Error]", err); }
       }
     } else {
@@ -2200,24 +2206,28 @@ export default function App() {
       setProjects(updatedProjects);
       if (email) safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
       triggerToast(`Published project assets: ${newPr.name}`);
-      if (currentUser?.id) {
+      if (userId) {
         try {
-          await supabase.from('projects').insert({
+          const payload = {
             id,
-            user_id: currentUser.id,
+            user_id: userId,
             name: newPr.name,
-            category: newPr.category,
-            type: 'project',
-            description: newPr.description,
+            category: newPr.category || 'projects',
+            description: newPr.description || '',
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
-            live_url: newPr.liveUrl,
-            github_url: newPr.githubUrl,
-            pdf_url: newPr.pdfUrl,
-            image_url: newPr.imageUrl,
+            live_url: newPr.liveUrl || '',
+            github_url: newPr.githubUrl || '',
+            pdf_url: newPr.pdfUrl || '',
+            image_url: newPr.imageUrl || newPr.coverUrl || '',
             is_public: newPr.isPublic !== false,
-            date: newPr.date
-          });
+            date: newPr.date || ''
+          };
+          const { error } = await supabase.from('projects').upsert(payload);
+          if (error) {
+            console.error("[Supabase Add Project Error]", error);
+            triggerToast(`Project Error: ${error.message}`);
+          }
         } catch (err) { console.warn("[Supabase Add Project Error]", err); }
       }
     }
@@ -2246,20 +2256,21 @@ export default function App() {
     }
     triggerToast(`Archived record.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        await supabase.from('projects').delete().eq('id', targetId).eq('user_id', currentUser.id);
-        await supabase.from('products').delete().eq('id', targetId).eq('user_id', currentUser.id);
-        await supabase.from('others').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
+        await supabase.from('products').delete().eq('id', targetId).eq('user_id', userId);
+        await supabase.from('others').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('projects').delete().eq('id', id).eq('user_id', currentUser.id);
-          await supabase.from('products').delete().eq('id', id).eq('user_id', currentUser.id);
-          await supabase.from('others').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('projects').delete().eq('id', id).eq('user_id', userId);
+          await supabase.from('products').delete().eq('id', id).eq('user_id', userId);
+          await supabase.from('others').delete().eq('id', id).eq('user_id', userId);
         }
         if (targetItem?.name) {
-          await supabase.from('projects').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
-          await supabase.from('products').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
-          await supabase.from('others').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
+          await supabase.from('projects').delete().eq('name', targetItem.name).eq('user_id', userId);
+          await supabase.from('products').delete().eq('name', targetItem.name).eq('user_id', userId);
+          await supabase.from('others').delete().eq('name', targetItem.name).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Project/Product Error]", err); }
     }
@@ -2269,6 +2280,7 @@ export default function App() {
     const targetId = ensureUUID(updatedPr.id);
     const item = { ...updatedPr, id: targetId };
     const email = currentUser?.email?.toLowerCase().trim();
+    const userId = await getActiveUserId();
 
     if (updatedPr.type === 'product') {
       const updatedProducts = products.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p);
@@ -2277,27 +2289,26 @@ export default function App() {
       setProducts(updatedProducts);
       if (email) safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
       triggerToast(`Updated product assets: ${updatedPr.name}`);
-      if (currentUser?.id) {
+      if (userId) {
         try {
           const payload = {
             id: targetId,
-            user_id: currentUser.id,
+            user_id: userId,
             name: updatedPr.name,
-            category: updatedPr.category,
-            type: 'product',
-            description: updatedPr.description,
+            category: updatedPr.category || 'products',
+            description: updatedPr.description || '',
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
-            live_url: updatedPr.liveUrl,
-            github_url: updatedPr.githubUrl,
-            pdf_url: updatedPr.pdfUrl,
-            image_url: updatedPr.imageUrl,
+            live_url: updatedPr.liveUrl || '',
+            github_url: updatedPr.githubUrl || '',
+            pdf_url: updatedPr.pdfUrl || '',
+            image_url: updatedPr.imageUrl || updatedPr.coverUrl || '',
             is_public: updatedPr.isPublic !== false,
-            date: updatedPr.date
+            date: updatedPr.date || ''
           };
           await supabase.from('products').upsert(payload);
-          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', currentUser.id);
-          await supabase.from('others').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
+          await supabase.from('others').delete().eq('id', targetId).eq('user_id', userId);
         } catch (err) { console.warn("[Supabase Update Product Error]", err); }
       }
     } else if (updatedPr.type === 'other') {
@@ -2307,28 +2318,26 @@ export default function App() {
       setOthers(updatedOthers);
       if (email) safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
       triggerToast(`Updated document: ${updatedPr.name}`);
-      if (currentUser?.id) {
+      if (userId) {
         try {
           const payload = {
             id: targetId,
-            user_id: currentUser.id,
+            user_id: userId,
             name: updatedPr.name,
-            category: updatedPr.category,
-            type: 'other',
-            doc_type: updatedPr.docType || 'Report',
-            description: updatedPr.description,
+            category: updatedPr.category || 'others',
+            description: updatedPr.description || '',
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
-            live_url: updatedPr.liveUrl,
-            github_url: updatedPr.githubUrl,
-            pdf_url: updatedPr.pdfUrl,
-            image_url: updatedPr.imageUrl,
+            live_url: updatedPr.liveUrl || '',
+            github_url: updatedPr.githubUrl || '',
+            pdf_url: updatedPr.pdfUrl || '',
+            image_url: updatedPr.imageUrl || updatedPr.coverUrl || '',
             is_public: updatedPr.isPublic !== false,
-            date: updatedPr.date
+            date: updatedPr.date || ''
           };
           await supabase.from('others').upsert(payload);
-          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', currentUser.id);
-          await supabase.from('products').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
+          await supabase.from('products').delete().eq('id', targetId).eq('user_id', userId);
         } catch (err) { console.warn("[Supabase Update Other Error]", err); }
       }
     } else {
@@ -2338,26 +2347,26 @@ export default function App() {
       setProjects(updatedProjects);
       if (email) safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
       triggerToast(`Updated project assets: ${updatedPr.name}`);
-      if (currentUser?.id) {
+      if (userId) {
         try {
-          await supabase.from('projects').upsert({
+          const payload = {
             id: targetId,
-            user_id: currentUser.id,
+            user_id: userId,
             name: updatedPr.name,
-            category: updatedPr.category,
-            type: 'project',
-            description: updatedPr.description,
+            category: updatedPr.category || 'projects',
+            description: updatedPr.description || '',
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
-            live_url: updatedPr.liveUrl,
-            github_url: updatedPr.githubUrl,
-            pdf_url: updatedPr.pdfUrl,
-            image_url: updatedPr.imageUrl,
+            live_url: updatedPr.liveUrl || '',
+            github_url: updatedPr.githubUrl || '',
+            pdf_url: updatedPr.pdfUrl || '',
+            image_url: updatedPr.imageUrl || updatedPr.coverUrl || '',
             is_public: updatedPr.isPublic !== false,
-            date: updatedPr.date
-          });
-          await supabase.from('products').delete().eq('id', targetId).eq('user_id', currentUser.id);
-          await supabase.from('others').delete().eq('id', targetId).eq('user_id', currentUser.id);
+            date: updatedPr.date || ''
+          };
+          await supabase.from('projects').upsert(payload);
+          await supabase.from('products').delete().eq('id', targetId).eq('user_id', userId);
+          await supabase.from('others').delete().eq('id', targetId).eq('user_id', userId);
         } catch (err) { console.warn("[Supabase Update Project Error]", err); }
       }
     }
