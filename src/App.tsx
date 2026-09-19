@@ -1005,7 +1005,15 @@ export default function App() {
       try {
         const dCerts = await heavyStorage.get(`${email}_certs`);
         if (dCerts && Array.isArray(dCerts) && dCerts.length > 0) {
-          setCertifications(dCerts);
+          const sanitized = dCerts.map((c: any) => {
+            const dVal = c.dateIssued || c.issueDate || c.issue_date || c.date_issued || '';
+            return {
+              ...c,
+              dateIssued: dVal,
+              issueDate: dVal
+            };
+          });
+          setCertifications(prev => mergeArrayRecords(sanitized, prev));
         }
       } catch (err) {
         console.warn("Async restoration of certifications deferred:", err);
@@ -1254,12 +1262,12 @@ export default function App() {
       // 7. Projects
       try {
         const { data: projData } = await supabase.from('projects').select('*').eq('user_id', userId);
-        if (projData && Array.isArray(projData)) {
-          const mapped = projData.filter(p => p.category !== 'products').map(p => ({
+        if (projData && Array.isArray(projData) && projData.length > 0) {
+          const mapped = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
             id: p.id,
             name: p.name,
             category: p.category,
-            type: 'project',
+            type: 'project' as const,
             description: p.description,
             highlights: p.highlights || [],
             techStack: p.tech_stack || [],
@@ -1278,12 +1286,12 @@ export default function App() {
       // 8. Products
       try {
         const { data: prodData } = await supabase.from('products').select('*').eq('user_id', userId);
-        if (prodData && Array.isArray(prodData)) {
+        if (prodData && Array.isArray(prodData) && prodData.length > 0) {
           const mapped = prodData.map(p => ({
             id: p.id,
             name: p.name,
             category: p.category,
-            type: 'product',
+            type: 'product' as const,
             description: p.description,
             highlights: p.highlights || [],
             techStack: p.tech_stack || [],
@@ -1298,6 +1306,31 @@ export default function App() {
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_products`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Products Load]", err); }
+
+      // 8.5 Others / Reports
+      try {
+        const { data: othData } = await supabase.from('others').select('*').eq('user_id', userId);
+        if (othData && Array.isArray(othData) && othData.length > 0) {
+          const mapped = othData.map(p => ({
+            id: p.id,
+            name: p.name,
+            category: p.category,
+            type: 'other' as const,
+            docType: p.doc_type || p.category || 'Report',
+            description: p.description,
+            highlights: p.highlights || [],
+            techStack: p.tech_stack || [],
+            liveUrl: p.live_url,
+            githubUrl: p.github_url,
+            pdfUrl: p.pdf_url,
+            imageUrl: p.image_url,
+            isPublic: p.is_public !== false,
+            date: p.date
+          }));
+          setOthers(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(mapped));
+        }
+      } catch (err) { console.warn("[Supabase Others Load]", err); }
 
       // 9. Resumes
       try {
@@ -1889,17 +1922,21 @@ export default function App() {
   const handleAddProj = async (newPr: Omit<Project, 'id'>) => {
     const id = generateUUID();
     const proj: Project = { ...newPr, id };
+    const email = currentUser?.email?.toLowerCase().trim();
+
     if (newPr.type === 'product') {
       const updatedProducts = [proj, ...products];
       setProducts(updatedProducts);
+      if (email) safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
       triggerToast(`Published product assets: ${newPr.name}`);
       if (currentUser?.id) {
         try {
-          await supabase.from('products').insert({
+          const payload = {
             id,
             user_id: currentUser.id,
             name: newPr.name,
             category: newPr.category,
+            type: 'product',
             description: newPr.description,
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
@@ -1909,20 +1946,25 @@ export default function App() {
             image_url: newPr.imageUrl,
             is_public: newPr.isPublic !== false,
             date: newPr.date
-          });
+          };
+          await supabase.from('products').insert(payload);
+          await supabase.from('projects').insert(payload);
         } catch (err) { console.warn("[Supabase Add Product Error]", err); }
       }
     } else if (newPr.type === 'other') {
       const updatedOthers = [proj, ...others];
       setOthers(updatedOthers);
+      if (email) safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
       triggerToast(`Added document: ${newPr.name}`);
       if (currentUser?.id) {
         try {
-          await supabase.from('projects').insert({
+          const payload = {
             id,
             user_id: currentUser.id,
             name: newPr.name,
             category: newPr.category,
+            type: 'other',
+            doc_type: newPr.docType || 'Report',
             description: newPr.description,
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
@@ -1932,12 +1974,15 @@ export default function App() {
             image_url: newPr.imageUrl,
             is_public: newPr.isPublic !== false,
             date: newPr.date
-          });
-        } catch (err) { console.warn("[Supabase Add Project Error]", err); }
+          };
+          await supabase.from('others').insert(payload);
+          await supabase.from('projects').insert(payload);
+        } catch (err) { console.warn("[Supabase Add Other Error]", err); }
       }
     } else {
       const updatedProjects = [proj, ...projects];
       setProjects(updatedProjects);
+      if (email) safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
       triggerToast(`Published project assets: ${newPr.name}`);
       if (currentUser?.id) {
         try {
@@ -1946,6 +1991,7 @@ export default function App() {
             user_id: currentUser.id,
             name: newPr.name,
             category: newPr.category,
+            type: 'project',
             description: newPr.description,
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
@@ -2003,18 +2049,23 @@ export default function App() {
   const handleUpdateProj = async (updatedPr: Project) => {
     const targetId = ensureUUID(updatedPr.id);
     const item = { ...updatedPr, id: targetId };
+    const email = currentUser?.email?.toLowerCase().trim();
+
     if (updatedPr.type === 'product') {
+      const updatedProducts = products.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p);
       setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-      setProducts(prev => prev.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
+      setProducts(updatedProducts);
+      if (email) safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
       triggerToast(`Updated product assets: ${updatedPr.name}`);
       if (currentUser?.id) {
         try {
-          await supabase.from('products').upsert({
+          const payload = {
             id: targetId,
             user_id: currentUser.id,
             name: updatedPr.name,
             category: updatedPr.category,
+            type: 'product',
             description: updatedPr.description,
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
@@ -2024,21 +2075,48 @@ export default function App() {
             image_url: updatedPr.imageUrl,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date
-          });
+          };
+          await supabase.from('products').upsert(payload);
+          await supabase.from('projects').upsert(payload);
         } catch (err) { console.warn("[Supabase Update Product Error]", err); }
       }
-    } else {
-      if (updatedPr.type === 'other') {
-        setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-        setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-        setOthers(prev => prev.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
-        triggerToast(`Updated document: ${updatedPr.name}`);
-      } else {
-        setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-        setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-        setProjects(prev => prev.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
-        triggerToast(`Updated project assets: ${updatedPr.name}`);
+    } else if (updatedPr.type === 'other') {
+      const updatedOthers = others.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p);
+      setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
+      setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
+      setOthers(updatedOthers);
+      if (email) safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
+      triggerToast(`Updated document: ${updatedPr.name}`);
+      if (currentUser?.id) {
+        try {
+          const payload = {
+            id: targetId,
+            user_id: currentUser.id,
+            name: updatedPr.name,
+            category: updatedPr.category,
+            type: 'other',
+            doc_type: updatedPr.docType || 'Report',
+            description: updatedPr.description,
+            highlights: updatedPr.highlights || [],
+            tech_stack: updatedPr.techStack || [],
+            live_url: updatedPr.liveUrl,
+            github_url: updatedPr.githubUrl,
+            pdf_url: updatedPr.pdfUrl,
+            image_url: updatedPr.imageUrl,
+            is_public: updatedPr.isPublic !== false,
+            date: updatedPr.date
+          };
+          await supabase.from('others').upsert(payload);
+          await supabase.from('projects').upsert(payload);
+        } catch (err) { console.warn("[Supabase Update Other Error]", err); }
       }
+    } else {
+      const updatedProjects = projects.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p);
+      setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
+      setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
+      setProjects(updatedProjects);
+      if (email) safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
+      triggerToast(`Updated project assets: ${updatedPr.name}`);
       if (currentUser?.id) {
         try {
           await supabase.from('projects').upsert({
@@ -2046,6 +2124,7 @@ export default function App() {
             user_id: currentUser.id,
             name: updatedPr.name,
             category: updatedPr.category,
+            type: 'project',
             description: updatedPr.description,
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
