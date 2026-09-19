@@ -454,8 +454,8 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                 <label className="text-xs font-mono text-gray-400">Employer / Company Name *</label>
                 <input 
                   type="text" required
-                  value={formData.company || formData.employer || ''}
-                  onChange={e => setFormData({ ...formData, company: e.target.value, employer: e.target.value })}
+                  value={employer}
+                  onChange={e => setEmployer(e.target.value)}
                   placeholder="Enter company name"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none"
                 />

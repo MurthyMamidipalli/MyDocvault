@@ -103,6 +103,7 @@ export interface CurrentJob {
   salary?: string;
   manager?: string;
   description?: string;
+  isPublic?: boolean;
 }
 
 export interface Project {
@@ -695,6 +696,7 @@ export interface NotepadNote {
   updatedAt: string;
   category?: string;
   isPinned?: boolean;
+  isPublic?: boolean;
 }
 
 export interface ResumeItem {
@@ -708,6 +710,13 @@ export interface ResumeItem {
   category: string; // e.g. "SUPABASE"
   fileDataUrl?: string;
   linkUrl?: string;
+  title?: string;
+  fileUrl?: string;
+  storagePath?: string;
+  fileSize?: string;
+  fileType?: string;
+  isPrimary?: boolean;
+  isPublic?: boolean;
 }
 
 export interface SharedPortfolioData {
