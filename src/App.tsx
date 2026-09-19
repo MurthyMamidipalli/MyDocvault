@@ -1564,7 +1564,11 @@ export default function App() {
   const handleAddSkill = async (newSk: Omit<Skill, 'id'>) => {
     const id = generateUUID();
     const skill: Skill = { ...newSk, id };
-    setSkills(prev => [skill, ...prev]);
+    const updatedSkills = [skill, ...skills];
+    setSkills(updatedSkills);
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(updatedSkills));
+    }
     triggerToast(`Exposed technical skill capability: ${newSk.name}`);
 
     if (currentUser?.id) {
@@ -1587,7 +1591,11 @@ export default function App() {
   const handleUpdateSkill = async (upSkill: Skill) => {
     const targetId = ensureUUID(upSkill.id);
     const updatedSkill = { ...upSkill, id: targetId };
-    setSkills(prev => prev.map(s => s.id === upSkill.id ? updatedSkill : s));
+    const updatedSkills = skills.map(s => s.id === upSkill.id ? updatedSkill : s);
+    setSkills(updatedSkills);
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(updatedSkills));
+    }
     triggerToast(`Optimized technical status: ${upSkill.name}`);
 
     if (currentUser?.id) {
@@ -1707,8 +1715,15 @@ export default function App() {
   // Certifications
   const handleAddCert = async (newCert: Omit<Certification, 'id'>) => {
     const id = generateUUID();
-    const cert: Certification = { ...newCert, id };
-    setCertifications(prev => [cert, ...prev]);
+    const dVal = newCert.dateIssued || newCert.issueDate || '';
+    const cert: Certification = { ...newCert, id, dateIssued: dVal, issueDate: dVal };
+    const updatedCerts = [cert, ...certifications];
+    setCertifications(updatedCerts);
+    if (currentUser?.email) {
+      const email = currentUser.email.toLowerCase().trim();
+      safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
+      heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
+    }
     triggerToast(`Exposed regulatory certificate: ${newCert.title}`);
 
     if (currentUser?.id) {
@@ -1719,7 +1734,8 @@ export default function App() {
           title: newCert.title,
           issuer: newCert.issuer,
           credential_id: newCert.credentialId,
-          issue_date: newCert.dateIssued || newCert.issueDate,
+          issue_date: dVal,
+          date_issued: dVal,
           expiry_date: newCert.expirationDate || newCert.expiryDate,
           credential_url: newCert.credentialUrl,
           description: newCert.description,
@@ -1760,8 +1776,15 @@ export default function App() {
 
   const handleUpdateCert = async (updatedCert: Certification) => {
     const targetId = ensureUUID(updatedCert.id);
-    const item = { ...updatedCert, id: targetId };
-    setCertifications(prev => prev.map(c => c.id === updatedCert.id ? item : c));
+    const dVal = updatedCert.dateIssued || updatedCert.issueDate || '';
+    const item = { ...updatedCert, id: targetId, dateIssued: dVal, issueDate: dVal };
+    const updatedCerts = certifications.map(c => c.id === updatedCert.id ? item : c);
+    setCertifications(updatedCerts);
+    if (currentUser?.email) {
+      const email = currentUser.email.toLowerCase().trim();
+      safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
+      heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
+    }
     triggerToast(`Updated file attachment for: ${updatedCert.title}`);
 
     if (currentUser?.id) {
@@ -1772,7 +1795,8 @@ export default function App() {
           title: updatedCert.title,
           issuer: updatedCert.issuer,
           credential_id: updatedCert.credentialId,
-          issue_date: updatedCert.dateIssued || updatedCert.issueDate,
+          issue_date: dVal,
+          date_issued: dVal,
           expiry_date: updatedCert.expirationDate || updatedCert.expiryDate,
           credential_url: updatedCert.credentialUrl,
           description: updatedCert.description,

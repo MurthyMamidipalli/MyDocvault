@@ -195,10 +195,10 @@ export default function PublicPortfolioView({
   // Filter public documents
   const publicDocuments = cleanDocuments.filter(doc => doc.visibility === 'public');
 
-  // Categorize Projects, Products, and Others
-  const projectsList = publicProjects.filter(p => p.type === 'project' || (!p.type && p.type !== 'product' && p.type !== 'other'));
-  const productsList = publicProjects.filter(p => p.type === 'product');
-  const othersList = publicProjects.filter(p => p.type === 'other');
+  // Categorize Projects, Products, and Others (Reports)
+  const projectsList = publicProjects.filter(p => (p.type === 'project' || (!p.type && (p.category as any) !== 'products' && (p.category as any) !== 'others' && !p.docType)));
+  const productsList = publicProjects.filter(p => (p.type === 'product' || (p.category as any) === 'products'));
+  const othersList = publicProjects.filter(p => (p.type === 'other' || (p.category as any) === 'others' || !!p.docType));
 
   return (
     <div className="min-h-screen bg-[#07080b] text-gray-305 flex flex-col font-sans selection:bg-emerald-500/20 antialiased" id="public-live-portfolio">
