@@ -251,17 +251,52 @@ export const INITIAL_PROFILE: PersonalProfile = {
   publicProfile: true
 };
 
+export const toUUID = (idStr?: string): string => {
+  if (!idStr) {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr)) {
+    return idStr;
+  }
+  let hash = 0;
+  for (let i = 0; i < idStr.length; i++) {
+    hash = ((hash << 5) - hash) + idStr.charCodeAt(i);
+    hash |= 0;
+  }
+  const hex = Math.abs(hash).toString(16).padStart(8, '0');
+  const hexFull = (hex + '1234567890abcdef1234567890abcdef').substring(0, 32);
+  return `${hexFull.substring(0, 8)}-${hexFull.substring(8, 12)}-4${hexFull.substring(13, 16)}-8${hexFull.substring(17, 20)}-${hexFull.substring(20, 32)}`;
+};
+
+export const generateUUID = (): string => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
 export const INITIAL_SKILLS: Skill[] = [
-  { id: 'sk-1', name: 'Power BI & Tableau', visibility: 'public', yearsOfExp: 3, endorsements: 24 },
-  { id: 'sk-2', name: 'SQL Database Querying', visibility: 'public', yearsOfExp: 4, endorsements: 29 },
-  { id: 'sk-3', name: 'Excel Advanced Analytics', visibility: 'public', yearsOfExp: 5, endorsements: 31 },
-  { id: 'sk-4', name: 'Business Intelligence Reporting', visibility: 'public', yearsOfExp: 3, endorsements: 22 },
-  { id: 'sk-5', name: 'Data Modeling & ETL', visibility: 'public', yearsOfExp: 3, endorsements: 18 },
-  { id: 'sk-6', name: 'Python for Data Science', visibility: 'private', yearsOfExp: 2, endorsements: 15 },
-  { id: 'sk-7', name: 'Process Mapping & Optimization', visibility: 'public', yearsOfExp: 3, endorsements: 19 },
-  { id: 'sk-8', name: 'Manual & Automated QA Testing', visibility: 'public', yearsOfExp: 1, endorsements: 12 },
-  { id: 'sk-9', name: 'Requirements Engineering', visibility: 'private', yearsOfExp: 3, endorsements: 16 },
-  { id: 'sk-10', name: 'Agile & Scrum Delivery', visibility: 'public', yearsOfExp: 3, endorsements: 14 }
+  { id: toUUID('sk-1'), name: 'Power BI & Tableau', visibility: 'public', yearsOfExp: 3, endorsements: 24 },
+  { id: toUUID('sk-2'), name: 'SQL Database Querying', visibility: 'public', yearsOfExp: 4, endorsements: 29 },
+  { id: toUUID('sk-3'), name: 'Excel Advanced Analytics', visibility: 'public', yearsOfExp: 5, endorsements: 31 },
+  { id: toUUID('sk-4'), name: 'Business Intelligence Reporting', visibility: 'public', yearsOfExp: 3, endorsements: 22 },
+  { id: toUUID('sk-5'), name: 'Data Modeling & ETL', visibility: 'public', yearsOfExp: 3, endorsements: 18 },
+  { id: toUUID('sk-6'), name: 'Python for Data Science', visibility: 'private', yearsOfExp: 2, endorsements: 15 },
+  { id: toUUID('sk-7'), name: 'Process Mapping & Optimization', visibility: 'public', yearsOfExp: 3, endorsements: 19 },
+  { id: toUUID('sk-8'), name: 'Manual & Automated QA Testing', visibility: 'public', yearsOfExp: 1, endorsements: 12 },
+  { id: toUUID('sk-9'), name: 'Requirements Engineering', visibility: 'private', yearsOfExp: 3, endorsements: 16 },
+  { id: toUUID('sk-10'), name: 'Agile & Scrum Delivery', visibility: 'public', yearsOfExp: 3, endorsements: 14 }
 ];
 
 export const INITIAL_EDUCATION: Education[] = [

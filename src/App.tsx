@@ -70,7 +70,8 @@ import {
   INITIAL_DOCUMENTS,
   INITIAL_CALENDAR_EVENTS,
   decodePortfolioData,
-  encodePortfolioData
+  encodePortfolioData,
+  toUUID
 } from './types';
 
 // Tab Components
@@ -1053,10 +1054,7 @@ export default function App() {
   };
 
   const ensureUUID = (id?: string): string => {
-    if (id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-      return id;
-    }
-    return generateUUID();
+    return toUUID(id);
   };
 
   // Supabase Database restore & initial sync whenever currentUser logs in
@@ -1101,8 +1099,8 @@ export default function App() {
       // 2. Skills
       try {
         const { data: sData } = await supabase.from('skills').select('*').eq('user_id', userId);
-        if (sData && Array.isArray(sData) && sData.length > 0) {
-          setSkills(sData.map(s => ({
+        if (sData && Array.isArray(sData)) {
+          const mapped = sData.map(s => ({
             id: s.id,
             name: s.name,
             category: s.category || 'Technical',
@@ -1111,15 +1109,17 @@ export default function App() {
             endorsements: s.endorsements || 0,
             description: s.description || '',
             visibility: s.visibility || 'public'
-          })));
+          }));
+          setSkills(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Skills Load]", err); }
 
       // 3. Education
       try {
         const { data: eData } = await supabase.from('education').select('*').eq('user_id', userId);
-        if (eData && Array.isArray(eData) && eData.length > 0) {
-          setEducation(eData.map(e => ({
+        if (eData && Array.isArray(eData)) {
+          const mapped = eData.map(e => ({
             id: e.id,
             degree: e.degree,
             institution: e.institution,
@@ -1129,15 +1129,17 @@ export default function App() {
             grade: e.grade,
             percentage: e.percentage,
             description: e.description
-          })));
+          }));
+          setEducation(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Education Load]", err); }
 
       // 4. Certifications
       try {
         const { data: cData } = await supabase.from('certifications').select('*').eq('user_id', userId);
-        if (cData && Array.isArray(cData) && cData.length > 0) {
-          setCertifications(cData.map(c => ({
+        if (cData && Array.isArray(cData)) {
+          const mapped = cData.map(c => ({
             id: c.id,
             title: c.title,
             issuer: c.issuer,
@@ -1149,15 +1151,17 @@ export default function App() {
             fileUrl: c.file_url,
             storagePath: c.storage_path,
             visibility: c.visibility || 'public'
-          })));
+          }));
+          setCertifications(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Certifications Load]", err); }
 
       // 5. Experience
       try {
         const { data: expData } = await supabase.from('experience').select('*').eq('user_id', userId);
-        if (expData && Array.isArray(expData) && expData.length > 0) {
-          setExperience(expData.map(exp => ({
+        if (expData && Array.isArray(expData)) {
+          const mapped = expData.map(exp => ({
             id: exp.id,
             company: exp.company,
             role: exp.role,
@@ -1169,7 +1173,9 @@ export default function App() {
             description: exp.description || [],
             skillsUsed: exp.skills_used || [],
             links: exp.links || []
-          })));
+          }));
+          setExperience(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Experience Load]", err); }
 
@@ -1195,8 +1201,8 @@ export default function App() {
       // 7. Projects
       try {
         const { data: projData } = await supabase.from('projects').select('*').eq('user_id', userId);
-        if (projData && Array.isArray(projData) && projData.length > 0) {
-          setProjects(projData.map(p => ({
+        if (projData && Array.isArray(projData)) {
+          const mapped = projData.filter(p => p.category !== 'products').map(p => ({
             id: p.id,
             name: p.name,
             category: p.category,
@@ -1210,15 +1216,17 @@ export default function App() {
             imageUrl: p.image_url,
             isPublic: p.is_public !== false,
             date: p.date
-          })));
+          }));
+          setProjects(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_projects`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Projects Load]", err); }
 
       // 8. Products
       try {
         const { data: prodData } = await supabase.from('products').select('*').eq('user_id', userId);
-        if (prodData && Array.isArray(prodData) && prodData.length > 0) {
-          setProducts(prodData.map(p => ({
+        if (prodData && Array.isArray(prodData)) {
+          const mapped = prodData.map(p => ({
             id: p.id,
             name: p.name,
             category: p.category,
@@ -1232,15 +1240,17 @@ export default function App() {
             imageUrl: p.image_url,
             isPublic: p.is_public !== false,
             date: p.date
-          })));
+          }));
+          setProducts(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_products`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Products Load]", err); }
 
       // 9. Resumes
       try {
         const { data: resData } = await supabase.from('resumes').select('*').eq('user_id', userId);
-        if (resData && Array.isArray(resData) && resData.length > 0) {
-          setResumes(resData.map(r => ({
+        if (resData && Array.isArray(resData)) {
+          const mapped = resData.map(r => ({
             id: r.id,
             name: r.title || r.file_name,
             title: r.title,
@@ -1257,15 +1267,17 @@ export default function App() {
             isPublic: r.is_public !== false,
             uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
             category: 'SUPABASE'
-          })));
+          }));
+          setResumes(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Resumes Load]", err); }
 
       // 10. Documents (Vault)
       try {
         const { data: docData } = await supabase.from('documents').select('*').eq('user_id', userId);
-        if (docData && Array.isArray(docData) && docData.length > 0) {
-          setDocuments(docData.map(d => ({
+        if (docData && Array.isArray(docData)) {
+          const mapped = docData.map(d => ({
             id: d.id,
             name: d.file_name || d.title,
             title: d.title,
@@ -1281,15 +1293,17 @@ export default function App() {
             uploadDate: d.created_at ? d.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
             tags: d.tags || [],
             visibility: d.visibility || 'private'
-          })));
+          }));
+          setDocuments(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Documents Load]", err); }
 
       // 11. Notes
       try {
         const { data: nData } = await supabase.from('notes').select('*').eq('user_id', userId);
-        if (nData && Array.isArray(nData) && nData.length > 0) {
-          setNotes(nData.map(n => ({
+        if (nData && Array.isArray(nData)) {
+          const mapped = nData.map(n => ({
             id: n.id,
             title: n.title,
             content: n.content,
@@ -1297,44 +1311,50 @@ export default function App() {
             tags: n.tags || [],
             isPublic: n.is_public !== false,
             updatedAt: n.updated_at || new Date().toISOString()
-          })));
+          }));
+          setNotes(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Notes Load]", err); }
 
       // 12. Portfolio Links
       try {
         const { data: lData } = await supabase.from('portfolio_links').select('*').eq('user_id', userId);
-        if (lData && Array.isArray(lData) && lData.length > 0) {
-          setLinks(lData.map(l => ({
+        if (lData && Array.isArray(lData)) {
+          const mapped = lData.map(l => ({
             id: l.id,
             platform: l.platform,
             label: l.label,
             url: l.url,
             isPublic: l.is_public !== false
-          })));
+          }));
+          setLinks(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
 
       // 13. Career Timeline (Milestones)
       try {
         const { data: tmData } = await supabase.from('career_timeline').select('*').eq('user_id', userId);
-        if (tmData && Array.isArray(tmData) && tmData.length > 0) {
-          setMilestones(tmData.map(m => ({
+        if (tmData && Array.isArray(tmData)) {
+          const mapped = tmData.map(m => ({
             id: m.id,
             title: m.title,
             date: m.date,
             category: m.category,
             type: m.category,
             description: m.description
-          })));
+          }));
+          setMilestones(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Timeline Load]", err); }
 
       // 14. Contacts
       try {
         const { data: ctData } = await supabase.from('contacts').select('*').eq('user_id', userId);
-        if (ctData && Array.isArray(ctData) && ctData.length > 0) {
-          setContacts(ctData.map(ct => ({
+        if (ctData && Array.isArray(ctData)) {
+          const mapped = ctData.map(ct => ({
             id: ct.id,
             name: ct.name,
             email: ct.email,
@@ -1347,15 +1367,17 @@ export default function App() {
             notes: ct.notes,
             lastInteracted: ct.last_interacted,
             interactionLogs: ct.interaction_logs || []
-          })));
+          }));
+          setContacts(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Contacts Load]", err); }
 
       // 15. Calendar Events
       try {
         const { data: calData } = await supabase.from('calendar_events').select('*').eq('user_id', userId);
-        if (calData && Array.isArray(calData) && calData.length > 0) {
-          setCalendarEvents(calData.map(cal => ({
+        if (calData && Array.isArray(calData)) {
+          const mapped = calData.map(cal => ({
             id: cal.id,
             title: cal.title,
             date: cal.date,
@@ -1364,15 +1386,17 @@ export default function App() {
             type: cal.type,
             description: cal.description,
             isPublic: cal.is_public !== false
-          })));
+          }));
+          setCalendarEvents(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_calendar_events`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Calendar Events Load]", err); }
 
       // 16. Achievements
       try {
         const { data: aData } = await supabase.from('achievements').select('*').eq('user_id', userId);
-        if (aData && Array.isArray(aData) && aData.length > 0) {
-          setAchievements(aData.map(a => ({
+        if (aData && Array.isArray(aData)) {
+          const mapped = aData.map(a => ({
             id: a.id,
             title: a.title,
             issuer: a.issuer,
@@ -1380,15 +1404,17 @@ export default function App() {
             description: a.description,
             badgeUrl: a.badge_url,
             isPublic: a.is_public !== false
-          })));
+          }));
+          setAchievements(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Achievements Load]", err); }
 
       // 17. Testimonials
       try {
         const { data: tData } = await supabase.from('testimonials').select('*').eq('user_id', userId);
-        if (tData && Array.isArray(tData) && tData.length > 0) {
-          setTestimonials(tData.map(t => ({
+        if (tData && Array.isArray(tData)) {
+          const mapped = tData.map(t => ({
             id: t.id,
             name: t.name,
             company: t.company,
@@ -1397,7 +1423,9 @@ export default function App() {
             relationship: t.relationship,
             avatarColor: t.avatar_color,
             isPublic: t.is_public !== false
-          })));
+          }));
+          setTestimonials(mapped);
+          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_testimonials`, JSON.stringify(mapped));
         }
       } catch (err) { console.warn("[Supabase Testimonials Load]", err); }
     };
@@ -1527,12 +1555,25 @@ export default function App() {
   };
 
   const handleDeleteSkill = async (id: string) => {
-    setSkills(prev => prev.filter(s => s.id !== id));
+    const targetItem = skills.find(s => s.id === id);
+    const targetId = toUUID(id);
+    const updated = skills.filter(s => s.id !== id && s.id !== targetId);
+    setSkills(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(updated));
+    }
     triggerToast(`Purged technical coordinate.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('skills').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('skills').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('skills').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.name) {
+          await supabase.from('skills').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Skill Error]", err); }
     }
   };
@@ -1563,12 +1604,25 @@ export default function App() {
   };
 
   const handleDeleteEdu = async (id: string) => {
-    setEducation(prev => prev.filter(e => e.id !== id));
+    const targetItem = education.find(e => e.id === id);
+    const targetId = toUUID(id);
+    const updated = education.filter(e => e.id !== id && e.id !== targetId);
+    setEducation(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(updated));
+    }
     triggerToast(`Removed academic snapshot.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('education').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('education').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('education').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.degree && targetItem?.institution) {
+          await supabase.from('education').delete().eq('degree', targetItem.degree).eq('institution', targetItem.institution).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Edu Error]", err); }
     }
   };
@@ -1625,12 +1679,25 @@ export default function App() {
   };
 
   const handleDeleteCert = async (id: string) => {
-    setCertifications(prev => prev.filter(c => c.id !== id));
+    const targetItem = certifications.find(c => c.id === id);
+    const targetId = toUUID(id);
+    const updated = certifications.filter(c => c.id !== id && c.id !== targetId);
+    setCertifications(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(updated));
+    }
     triggerToast(`Wiped credential clearance.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('certifications').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('certifications').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('certifications').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.title) {
+          await supabase.from('certifications').delete().eq('title', targetItem.title).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Cert Error]", err); }
     }
   };
@@ -1689,12 +1756,25 @@ export default function App() {
   };
 
   const handleDeleteExp = async (id: string) => {
-    setExperience(prev => prev.filter(e => e.id !== id));
+    const targetItem = experience.find(e => e.id === id);
+    const targetId = toUUID(id);
+    const updated = experience.filter(e => e.id !== id && e.id !== targetId);
+    setExperience(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(updated));
+    }
     triggerToast(`Cleared historic experience milestone.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('experience').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('experience').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('experience').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.company && targetItem?.role) {
+          await supabase.from('experience').delete().eq('company', targetItem.company).eq('role', targetItem.role).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Exp Error]", err); }
     }
   };
@@ -1799,15 +1879,40 @@ export default function App() {
   };
 
   const handleDeleteProj = async (id: string) => {
-    setProjects(prev => prev.filter(p => p.id !== id));
-    setProducts(prev => prev.filter(p => p.id !== id));
-    setOthers(prev => prev.filter(p => p.id !== id));
+    const targetProj = projects.find(p => p.id === id);
+    const targetProd = products.find(p => p.id === id);
+    const targetOth = others.find(p => p.id === id);
+    const targetItem = targetProj || targetProd || targetOth;
+    const targetId = toUUID(id);
+
+    const updatedProj = projects.filter(p => p.id !== id && p.id !== targetId);
+    const updatedProd = products.filter(p => p.id !== id && p.id !== targetId);
+    const updatedOth = others.filter(p => p.id !== id && p.id !== targetId);
+
+    setProjects(updatedProj);
+    setProducts(updatedProd);
+    setOthers(updatedOth);
+
+    if (currentUser?.email) {
+      const email = currentUser.email.toLowerCase().trim();
+      safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProj));
+      safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProd));
+      safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOth));
+    }
     triggerToast(`Archived record.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('projects').delete().eq('id', id).eq('user_id', currentUser.id);
-        await supabase.from('products').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('projects').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('products').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('projects').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('products').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.name) {
+          await supabase.from('projects').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
+          await supabase.from('products').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Project/Product Error]", err); }
     }
   };
@@ -1895,12 +2000,25 @@ export default function App() {
   };
 
   const handleDeleteLink = async (id: string) => {
-    setLinks(prev => prev.filter(l => l.id !== id));
+    const targetItem = links.find(l => l.id === id);
+    const targetId = toUUID(id);
+    const updated = links.filter(l => l.id !== id && l.id !== targetId);
+    setLinks(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(updated));
+    }
     triggerToast(`Closed link coordinates.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('portfolio_links').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.url) {
+          await supabase.from('portfolio_links').delete().eq('url', targetItem.url).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Link Error]", err); }
     }
   };
@@ -1927,7 +2045,7 @@ export default function App() {
 
   // Resume Links Handlers
   const handleAddResumeLink = (newLk: Omit<PortfolioLink, 'id'>) => {
-    const link: PortfolioLink = { ...newLk, id: `reslk-${Date.now()}` };
+    const link: PortfolioLink = { ...newLk, id: generateUUID() };
     setResumeLinks(prev => [link, ...prev]);
     triggerToast(`Added resume link: ${newLk.label}`);
   };
@@ -1964,12 +2082,25 @@ export default function App() {
   };
 
   const handleDeleteMilestone = async (id: string) => {
-    setMilestones(prev => prev.filter(m => m.id !== id));
+    const targetItem = milestones.find(m => m.id === id);
+    const targetId = toUUID(id);
+    const updated = milestones.filter(m => m.id !== id && m.id !== targetId);
+    setMilestones(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(updated));
+    }
     triggerToast(`Purged timeline checkpoint.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('career_timeline').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('career_timeline').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('career_timeline').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.title) {
+          await supabase.from('career_timeline').delete().eq('title', targetItem.title).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Milestone Error]", err); }
     }
   };
@@ -2002,12 +2133,25 @@ export default function App() {
   };
 
   const handleDeleteContact = async (id: string) => {
-    setContacts(prev => prev.filter(c => c.id !== id));
+    const targetItem = contacts.find(c => c.id === id);
+    const targetId = toUUID(id);
+    const updated = contacts.filter(c => c.id !== id && c.id !== targetId);
+    setContacts(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(updated));
+    }
     triggerToast(`Transferred contact records off-grid.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('contacts').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('contacts').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('contacts').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.name) {
+          await supabase.from('contacts').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Contact Error]", err); }
     }
   };
@@ -2103,12 +2247,25 @@ export default function App() {
   };
 
   const handleDeleteAchievement = async (id: string) => {
-    setAchievements(prev => prev.filter(a => a.id !== id));
+    const targetItem = achievements.find(a => a.id === id);
+    const targetId = toUUID(id);
+    const updated = achievements.filter(a => a.id !== id && a.id !== targetId);
+    setAchievements(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(updated));
+    }
     triggerToast(`Purged award snapshot.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('achievements').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('achievements').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('achievements').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.title) {
+          await supabase.from('achievements').delete().eq('title', targetItem.title).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Achievement Error]", err); }
     }
   };
@@ -2138,12 +2295,25 @@ export default function App() {
   };
 
   const handleDeleteTestimonial = async (id: string) => {
-    setTestimonials(prev => prev.filter(t => t.id !== id));
+    const targetItem = testimonials.find(t => t.id === id);
+    const targetId = toUUID(id);
+    const updated = testimonials.filter(t => t.id !== id && t.id !== targetId);
+    setTestimonials(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_testimonials`, JSON.stringify(updated));
+    }
     triggerToast(`Removed endorsement quote.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('testimonials').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('testimonials').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('testimonials').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (targetItem?.name) {
+          await supabase.from('testimonials').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Testimonial Error]", err); }
     }
   };
@@ -2182,12 +2352,25 @@ export default function App() {
   const handleDeleteDocument = async (id: string) => {
     const docToDelete = documents.find(d => d.id === id);
     const docName = docToDelete ? docToDelete.name : "document";
-    setDocuments(prev => prev.filter(d => d.id !== id));
+    const targetId = toUUID(id);
+    const updated = documents.filter(d => d.id !== id && d.id !== targetId);
+    setDocuments(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(updated));
+    }
     triggerToast(`Removed "${docName}" from document vault.`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('documents').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('documents').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('documents').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (docToDelete?.name) {
+          await supabase.from('documents').delete().eq('file_name', docToDelete.name).eq('user_id', currentUser.id);
+          await supabase.from('documents').delete().eq('title', docToDelete.name).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Document Error]", err); }
     }
   };
@@ -2267,57 +2450,113 @@ export default function App() {
   const handleDeleteCalendarEvent = async (id: string) => {
     const evtToDelete = calendarEvents.find(e => e.id === id);
     const titleVal = evtToDelete ? evtToDelete.title : "event";
-    setCalendarEvents(prev => prev.filter(e => e.id !== id));
+    const targetId = toUUID(id);
+    const updated = calendarEvents.filter(e => e.id !== id && e.id !== targetId);
+    setCalendarEvents(updated);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_calendar_events`, JSON.stringify(updated));
+    }
     triggerToast(`Deleted scheduled event: "${titleVal}"`);
 
     if (currentUser?.id) {
       try {
-        await supabase.from('calendar_events').delete().eq('id', id).eq('user_id', currentUser.id);
+        await supabase.from('calendar_events').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('calendar_events').delete().eq('id', id).eq('user_id', currentUser.id);
+        }
+        if (evtToDelete?.title) {
+          await supabase.from('calendar_events').delete().eq('title', evtToDelete.title).eq('user_id', currentUser.id);
+        }
       } catch (err) { console.warn("[Supabase Delete Calendar Event Error]", err); }
     }
   };
 
   // Resumes update handler
   const handleUpdateResumes = async (newResumes: ResumeItem[]) => {
+    const deletedResumes = resumes.filter(oldR => !newResumes.some(newR => newR.id === oldR.id));
     setResumes(newResumes);
-    if (currentUser?.id && newResumes.length > 0) {
-      for (const r of newResumes) {
-        const targetId = ensureUUID(r.id);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(newResumes));
+    }
+
+    if (currentUser?.id) {
+      for (const del of deletedResumes) {
+        const targetId = toUUID(del.id);
         try {
-          await supabase.from('resumes').upsert({
-            id: targetId,
-            user_id: currentUser.id,
-            title: r.name || r.title || 'Resume',
-            file_name: r.fileName,
-            file_url: r.fileUrl || r.fileDataUrl || r.linkUrl,
-            storage_path: r.storagePath || '',
-            file_size: r.size || r.fileSize || '',
-            file_type: r.type || r.fileType || 'Resume',
-            is_primary: r.isPrimary || false,
-            is_public: r.visibility === 'public' || r.isPublic !== false
-          });
-        } catch (err) { console.warn("[Supabase Resume Upsert Error]", err); }
+          await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          if (del.id && del.id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(del.id)) {
+            await supabase.from('resumes').delete().eq('id', del.id).eq('user_id', currentUser.id);
+          }
+          if (del.fileName || del.name) {
+            const fn = del.fileName || del.name;
+            await supabase.from('resumes').delete().eq('file_name', fn).eq('user_id', currentUser.id);
+            await supabase.from('resumes').delete().eq('title', fn).eq('user_id', currentUser.id);
+          }
+        } catch (err) { console.warn("[Supabase Delete Resume Error]", err); }
+      }
+
+      if (newResumes.length > 0) {
+        for (const r of newResumes) {
+          const targetId = ensureUUID(r.id);
+          try {
+            await supabase.from('resumes').upsert({
+              id: targetId,
+              user_id: currentUser.id,
+              title: r.name || r.title || 'Resume',
+              file_name: r.fileName,
+              file_url: r.fileUrl || r.fileDataUrl || r.linkUrl,
+              storage_path: r.storagePath || '',
+              file_size: r.size || r.fileSize || '',
+              file_type: r.type || r.fileType || 'Resume',
+              is_primary: r.isPrimary || false,
+              is_public: r.visibility === 'public' || r.isPublic !== false
+            });
+          } catch (err) { console.warn("[Supabase Resume Upsert Error]", err); }
+        }
       }
     }
   };
 
   // Notes update handler
   const handleUpdateNotes = async (newNotes: NotepadNote[]) => {
+    const deletedNotes = notes.filter(oldN => !newNotes.some(newN => newN.id === oldN.id));
     setNotes(newNotes);
-    if (currentUser?.id && newNotes.length > 0) {
-      for (const n of newNotes) {
-        const targetId = ensureUUID(n.id);
+
+    if (currentUser?.email) {
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(newNotes));
+    }
+
+    if (currentUser?.id) {
+      for (const del of deletedNotes) {
+        const targetId = toUUID(del.id);
         try {
-          await supabase.from('notes').upsert({
-            id: targetId,
-            user_id: currentUser.id,
-            title: n.title || 'Untitled Document',
-            content: n.content || '',
-            tags: n.category ? [n.category] : [],
-            is_public: n.isPublic !== false,
-            updated_at: n.updatedAt || new Date().toISOString()
-          });
-        } catch (err) { console.warn("[Supabase Note Upsert Error]", err); }
+          await supabase.from('notes').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          if (del.id && del.id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(del.id)) {
+            await supabase.from('notes').delete().eq('id', del.id).eq('user_id', currentUser.id);
+          }
+          if (del.title) {
+            await supabase.from('notes').delete().eq('title', del.title).eq('user_id', currentUser.id);
+          }
+        } catch (err) { console.warn("[Supabase Delete Note Error]", err); }
+      }
+
+      if (newNotes.length > 0) {
+        for (const n of newNotes) {
+          const targetId = ensureUUID(n.id);
+          try {
+            await supabase.from('notes').upsert({
+              id: targetId,
+              user_id: currentUser.id,
+              title: n.title || 'Untitled Document',
+              content: n.content || '',
+              tags: n.category ? [n.category] : [],
+              is_public: n.isPublic !== false,
+              updated_at: n.updatedAt || new Date().toISOString()
+            });
+          } catch (err) { console.warn("[Supabase Note Upsert Error]", err); }
+        }
       }
     }
   };
