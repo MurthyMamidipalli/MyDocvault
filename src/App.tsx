@@ -1918,23 +1918,80 @@ export default function App() {
   // Current Job
   const handleUpdateCurrentJob = async (newJob: CurrentJob) => {
     setCurrentJob(newJob);
+    const email = currentUser?.email?.toLowerCase().trim();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(newJob));
+    }
+    triggerToast("Updated current job position.");
+
     if (currentUser?.id) {
       try {
-        await supabase.from('current_jobs').upsert({
+        const companyName = newJob.company || newJob.employer || 'Current Employer';
+        const roleName = newJob.role || 'Current Role';
+        const joinDate = newJob.joiningDate || newJob.startDate || '';
+        const empType = newJob.employmentType || 'Full-Time';
+
+        const payload = {
           user_id: currentUser.id,
-          company: newJob.company,
-          role: newJob.role,
-          department: newJob.department,
-          employee_id: newJob.employeeId,
-          joining_date: newJob.joiningDate,
-          location: newJob.location,
-          employment_type: newJob.employmentType,
-          salary: newJob.salary,
-          manager: newJob.manager,
-          description: newJob.description,
+          company: companyName,
+          role: roleName,
+          department: newJob.department || '',
+          employee_id: newJob.employeeId || '',
+          joining_date: joinDate,
+          location: newJob.location || newJob.locationType || '',
+          employment_type: empType,
+          salary: newJob.salary || '',
+          manager: newJob.manager || '',
+          description: newJob.description || '',
           updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id' });
-      } catch (err) { console.warn("[Supabase Current Job Update Error]", err); }
+        };
+
+        const { data: existing } = await supabase
+          .from('current_jobs')
+          .select('id')
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+
+        if (existing && existing.id) {
+          const { error } = await supabase.from('current_jobs').update(payload).eq('id', existing.id);
+          if (error) console.error("[Supabase Current Job Update Error]", error);
+        } else {
+          const { error } = await supabase.from('current_jobs').insert({
+            id: generateUUID(),
+            ...payload
+          });
+          if (error) console.error("[Supabase Current Job Insert Error]", error);
+        }
+      } catch (err) { console.warn("[Supabase Current Job Exception]", err); }
+    }
+  };
+
+  // Milestones / Career Timeline
+  const handleAddMilestone = async (newMil: Omit<TimelineMilestone, 'id'>) => {
+    const id = generateUUID();
+    const mil: TimelineMilestone = { ...newMil, id };
+    const updated = [mil, ...milestones];
+    setMilestones(updated);
+    const email = currentUser?.email?.toLowerCase().trim();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_milestones`, JSON.stringify(updated));
+    }
+    triggerToast(`Published career milestone checkpoint.`);
+
+    if (currentUser?.id) {
+      try {
+        const { error } = await supabase.from('career_timeline').insert({
+          id,
+          user_id: currentUser.id,
+          title: newMil.title || 'Career Milestone',
+          date: newMil.date || new Date().toISOString().substring(0, 7),
+          category: newMil.category || newMil.type || 'career',
+          intensity: newMil.intensity || 'medium',
+          description: newMil.description || '',
+          is_public: true
+        });
+        if (error) console.error("[Supabase Add Milestone Error]", error);
+      } catch (err) { console.warn("[Supabase Add Milestone Exception]", err); }
     }
   };
 
