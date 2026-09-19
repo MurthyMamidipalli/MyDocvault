@@ -1500,7 +1500,7 @@ export default function App() {
           location: newProfile.location,
           avatar_url: newProfile.avatarUrl,
           public_profile: newProfile.publicProfile !== false,
-          share_slug: newProfile.name ? newProfile.name.toLowerCase().replace(/\s+/g, '-') : 'user',
+          share_slug: newProfile.shareSlug || (newProfile.name ? newProfile.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'user'),
           updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
       } catch (err) { console.warn("[Supabase Profile Update Error]", err); }
@@ -2698,7 +2698,7 @@ export default function App() {
 
     // 2. debounce to avoid excessive REST request flooding on fast inputs
     const timer = setTimeout(() => {
-      const shareSlug = profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-') : 'ramachandra-murthy';
+      const shareSlug = profile.shareSlug || (profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'ramachandra-murthy');
       
       // CRITICAL SECURITY ENHANCEMENT: Filter out anything that the user selected as "private"
       // so that private items are STRICTLY excluded from the public serialized payload.
@@ -3156,13 +3156,16 @@ export default function App() {
           const publicProfileObj: PersonalProfile = {
             ...EMPTY_PROFILE,
             name: pRow.name || `${pRow.first_name || ''} ${pRow.last_name || ''}`.trim() || 'User Profile',
+            firstName: pRow.first_name || '',
+            lastName: pRow.last_name || '',
             headline: pRow.headline || '',
             bio: pRow.bio || '',
             email: pRow.email || '',
             phone: pRow.phone || '',
             location: pRow.location || '',
             avatarUrl: pRow.avatar_url || '',
-            publicProfile: true
+            publicProfile: true,
+            shareSlug: pRow.share_slug || slug
           };
 
           const hasCustomSkills = sData && sData.length > 0;

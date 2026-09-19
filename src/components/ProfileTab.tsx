@@ -100,6 +100,7 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
     const cleanSlug = newVal.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const updated = { ...formData, shareSlug: cleanSlug };
     setFormData(updated);
+    onUpdateProfile(updated);
     if (cleanSlug.length >= 2) {
       await checkUsernameAvailability(cleanSlug);
     } else {

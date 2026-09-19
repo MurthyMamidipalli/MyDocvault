@@ -316,13 +316,23 @@ export default function PublicPortfolioView({
               <div className={`w-24 h-24 rounded-full bg-slate-900 border-4 ${
                 themeColor === 'cyan' ? 'border-cyan-400/20' : themeColor === 'purple' ? 'border-purple-400/20' : 'border-emerald-400/20'
               } flex items-center justify-center font-bold text-3xl text-white select-none ring-4 ${getThemeGlowRing()}`}>
-                {profile.name ? (() => {
-                  const parts = profile.name.trim().split(/\s+/).filter(Boolean);
-                  if (parts.length >= 2) {
-                    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                {(() => {
+                  if (profile.firstName && profile.lastName) {
+                    const f = profile.firstName.trim()[0];
+                    const l = profile.lastName.trim()[0];
+                    if (f && l) return (f + l).toUpperCase();
                   }
-                  return parts[0].slice(0, 2).toUpperCase();
-                })() : "AM"}
+                  if (profile.name) {
+                    const parts = profile.name.trim().split(/\s+/).filter(Boolean);
+                    if (parts.length >= 2) {
+                      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                    }
+                    if (parts.length === 1 && parts[0].length >= 2) {
+                      return parts[0].slice(0, 2).toUpperCase();
+                    }
+                  }
+                  return "RM";
+                })()}
               </div>
             )}
           </div>
