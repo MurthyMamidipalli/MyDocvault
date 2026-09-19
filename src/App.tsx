@@ -170,6 +170,7 @@ export default function App() {
     links: PortfolioLink[];
     documents?: VaultDocument[];
     calendarEvents?: CalendarEvent[];
+    currentJob?: CurrentJob;
   } | null>(null);
   const [loadingRemoteShare, setLoadingRemoteShare] = useState<boolean>(true);
 
@@ -2406,18 +2407,27 @@ export default function App() {
   };
 
   const getFullShareUrl = () => {
-    const shareSlug = profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-') : 'ramachandra-murthy';
-    return `${window.location.origin}/#/portfolio/${shareSlug}`;
+    const shareSlug = profile.shareSlug || (profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'ramachandra-murthy');
+    const origin = (import.meta as any).env?.VITE_PUBLIC_URL || window.location.origin;
+    return `${origin}/${shareSlug}`;
   };
 
   // Check if current view is a public share URL (either by path, hash, or query parameter)
-  const isPublicShareView = window.location.pathname.startsWith('/portfolio/') ||
-                            window.location.hash.startsWith('#/portfolio/') ||
-                            window.location.pathname.startsWith('/share/') || 
-                            window.location.hash.startsWith('#/share/') || 
-                            window.location.pathname.startsWith('/public/') || 
-                            window.location.hash.startsWith('#/public/') || 
-                            window.location.search.includes('share=');
+  const isPublicShareView = (() => {
+    const path = window.location.pathname.replace(/\/+$/, '').toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (hash.startsWith('#/portfolio/') || hash.startsWith('#/share/') || hash.startsWith('#/public/')) return true;
+    if (path.startsWith('/portfolio/') || path.startsWith('/share/') || path.startsWith('/public/')) return true;
+    if (window.location.search.includes('share=')) return true;
+
+    const firstSegment = path.substring(1).split('/')[0];
+    if (firstSegment && 
+        !VALID_APP_TABS.includes(firstSegment) && 
+        !['api', 'assets', 'vite', 'index.html', 'favicon.ico'].includes(firstSegment)) {
+      return true;
+    }
+    return false;
+  })();
 
   // Automated public cloud synchronization effect
   useEffect(() => {
@@ -2608,6 +2618,11 @@ export default function App() {
     } else if (currentPathname.startsWith('/profile/')) {
       const parts = currentPathname.split('?');
       rawSlug = parts[0].replace('/profile/', '');
+    } else if (currentPathname.length > 1) {
+      const seg = currentPathname.slice(1).split('/')[0].split('?')[0].trim();
+      if (seg && !VALID_APP_TABS.includes(seg.toLowerCase()) && !['api', 'assets', 'vite', 'index.html', 'favicon.ico'].includes(seg.toLowerCase())) {
+        rawSlug = seg;
+      }
     }
     rawSlug = rawSlug.split('/')[0].trim().toLowerCase();
     let slug = rawSlug;
@@ -2859,7 +2874,8 @@ export default function App() {
             { data: aData },
             { data: tData },
             { data: lData },
-            { data: calData }
+            { data: calData },
+            { data: docData }
           ] = await Promise.all([
             supabase.from('skills').select('*').eq('user_id', uId),
             supabase.from('education').select('*').eq('user_id', uId),
@@ -2870,7 +2886,8 @@ export default function App() {
             supabase.from('achievements').select('*').eq('user_id', uId),
             supabase.from('testimonials').select('*').eq('user_id', uId),
             supabase.from('portfolio_links').select('*').eq('user_id', uId),
-            supabase.from('calendar_events').select('*').eq('user_id', uId)
+            supabase.from('calendar_events').select('*').eq('user_id', uId),
+            supabase.from('documents').select('*').eq('user_id', uId).eq('visibility', 'public')
           ]);
 
           const publicProfileObj: PersonalProfile = {
@@ -2904,7 +2921,21 @@ export default function App() {
             achievements: (aData && aData.length > 0) ? aData.map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, isPublic: a.is_public !== false })) : (isDemo ? INITIAL_ACHIEVEMENTS : []),
             testimonials: (tData && tData.length > 0) ? tData.map((t: any) => ({ id: t.id, name: t.name, company: t.company, role: t.role, text: t.text, relationship: t.relationship, avatarColor: t.avatar_color })) : (isDemo ? INITIAL_TESTIMONIALS : []),
             links: (lData && lData.length > 0) ? lData.map((l: any) => ({ id: l.id, platform: l.platform, label: l.label, url: l.url, isPublic: l.is_public !== false })) : (isDemo ? INITIAL_LINKS : []),
-            calendarEvents: (calData && calData.length > 0) ? calData.map((cal: any) => ({ id: cal.id, title: cal.title, date: cal.date, startTime: cal.start_time, endTime: cal.end_time, type: cal.type, isPublic: cal.is_public !== false })) : (isDemo ? INITIAL_CALENDAR_EVENTS : [])
+            calendarEvents: (calData && calData.length > 0) ? calData.map((cal: any) => ({ id: cal.id, title: cal.title, date: cal.date, startTime: cal.start_time, endTime: cal.end_time, type: cal.type, isPublic: cal.is_public !== false })) : (isDemo ? INITIAL_CALENDAR_EVENTS : []),
+            documents: (docData && docData.length > 0) ? docData.map((d: any) => ({
+              id: d.id,
+              name: d.file_name || d.title,
+              title: d.title,
+              category: d.category,
+              description: d.description,
+              fileType: d.file_type,
+              size: d.file_size,
+              fileUrl: d.file_url,
+              storagePath: d.storage_path,
+              expiryDate: d.expiry_date,
+              tags: d.tags,
+              visibility: d.visibility || 'public'
+            })) : []
           };
 
           setRemoteShareData(publicSharePayload);
@@ -3076,6 +3107,7 @@ export default function App() {
         links={remoteShareData.links}
         documents={remoteShareData.documents || documents}
         calendarEvents={remoteShareData.calendarEvents || []}
+        currentJob={remoteShareData.currentJob || currentJob}
         onGoToConsole={() => {
           window.history.replaceState(null, '', window.location.pathname + '#overview');
           setActiveTab('overview');

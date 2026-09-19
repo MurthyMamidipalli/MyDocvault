@@ -36,7 +36,8 @@ import {
   PortfolioLink,
   CalendarEvent,
   ResumeItem,
-  VaultDocument
+  VaultDocument,
+  CurrentJob
 } from '../types';
 
 interface PublicPortfolioViewProps {
@@ -52,6 +53,7 @@ interface PublicPortfolioViewProps {
   calendarEvents: CalendarEvent[];
   resumes?: ResumeItem[];
   documents?: VaultDocument[];
+  currentJob?: CurrentJob;
   onGoToConsole?: () => void;
 }
 
@@ -68,6 +70,7 @@ export default function PublicPortfolioView({
   calendarEvents,
   resumes = [],
   documents = [],
+  currentJob,
   onGoToConsole
 }: PublicPortfolioViewProps) {
   const [themeColor] = useState<'emerald' | 'cyan' | 'purple'>(() => {
@@ -206,28 +209,40 @@ export default function PublicPortfolioView({
         }`} />
       </div>
 
-      {/* Header action panel to go back to customizer console */}
+      {/* Header action panel with MyDocVault branding */}
       <div className="border-b border-slate-900/60 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40 select-none">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <button 
-            type="button"
-            onClick={() => {
-              window.history.pushState(null, '', window.location.origin + window.location.pathname);
-              if (onGoToConsole) {
-                onGoToConsole();
-              } else {
-                window.location.hash = '#overview';
-              }
-            }}
-            className="flex items-center gap-2 text-xs font-semibold text-gray-400 hover:text-white transition cursor-pointer select-none bg-slate-900 border border-slate-800 py-1.5 px-3.5 rounded-xl active:scale-95"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            <span>App Console</span>
-          </button>
-          
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full animate-pulse ${getThemeBg()}`} />
-            <span className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Live Portfolio Hub</span>
+          <div className="flex items-center gap-2.5">
+            <div className="bg-emerald-500/10 text-emerald-400 p-1.5 rounded-xl border border-emerald-500/25">
+              <Sparkles className="w-4 h-4 animate-pulse" />
+            </div>
+            <div>
+              <h1 className="font-sans font-bold text-xs tracking-tight text-white leading-none">MYDOCVAULT</h1>
+              <span className="text-[9px] text-gray-400 font-mono tracking-wider font-semibold">Public Profile</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button 
+              type="button"
+              onClick={() => {
+                window.history.pushState(null, '', window.location.origin + window.location.pathname);
+                if (onGoToConsole) {
+                  onGoToConsole();
+                } else {
+                  window.location.hash = '#overview';
+                }
+              }}
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-white transition cursor-pointer select-none bg-slate-900 border border-slate-800 py-1.5 px-3 rounded-xl active:scale-95"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Console</span>
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full animate-pulse ${getThemeBg()}`} />
+              <span className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider hidden sm:inline">Verified Profile</span>
+            </div>
           </div>
         </div>
       </div>
@@ -523,6 +538,33 @@ export default function PublicPortfolioView({
           {/* Right Column blocks (Timeline and Tenures, Projects, Products, Others, Testimonials) */}
           <div className="space-y-8 lg:col-span-2">
             
+            {/* Current Job / Employment Card */}
+            {currentJob && (currentJob.role || currentJob.employer || currentJob.company) && currentJob.isPublic !== false && (
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                    <Briefcase className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                    Current Employment
+                  </h3>
+                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
+                    {currentJob.employmentType || 'Active Role'}
+                  </span>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                    <h4 className="text-white font-bold text-sm">{currentJob.role}</h4>
+                    {(currentJob.joiningDate || currentJob.startDate) && (
+                      <span className="text-[10px] font-mono text-gray-500">Joined {currentJob.joiningDate || currentJob.startDate}</span>
+                    )}
+                  </div>
+                  <p className="text-xs text-emerald-400 font-semibold">{currentJob.employer || currentJob.company} {currentJob.department ? `• ${currentJob.department}` : ''}</p>
+                  {currentJob.location && <p className="text-[11px] text-gray-400 font-mono">📍 {currentJob.location}</p>}
+                  {currentJob.description && <p className="text-xs text-gray-300 font-sans leading-relaxed pt-1">{currentJob.description}</p>}
+                </div>
+              </div>
+            )}
+
             {/* Enterprise tenure timeline */}
             {cleanExperience.length > 0 && (
               <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-6">
@@ -937,10 +979,10 @@ export default function PublicPortfolioView({
 
       {/* Standalone signature footer */}
       <footer className="border-t border-slate-900/60 bg-[#06070a] py-8 text-center text-[10px] font-mono text-gray-500 mt-12 z-10 select-none">
-        <p>This is a verified portfolio produced by and secure container credentials hosted on the live document vault.</p>
+        <p>This is an official public profile and document vault hosted on MyDocVault Platform.</p>
         <p className="mt-1 flex items-center justify-center gap-1 text-gray-600">
           <span>Powered by</span> 
-          <span className="text-gray-400 font-bold">MyDocVault Platform</span> 
+          <span className="text-gray-400 font-bold">MyDocVault</span> 
           <span>© 2026. All rights reserved.</span>
         </p>
       </footer>
