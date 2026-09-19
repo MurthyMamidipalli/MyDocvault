@@ -15,7 +15,7 @@ import {
   Check,
   ExternalLink
 } from 'lucide-react';
-import { PersonalProfile } from '../types';
+import { PersonalProfile, getAvatarInitials } from '../types';
 
 interface ProfileTabProps {
   profile: PersonalProfile;
@@ -222,17 +222,7 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
               />
             ) : (
               <div className="w-full h-full rounded-full bg-slate-950 text-emerald-400 flex items-center justify-center font-bold text-3xl select-none">
-                {(() => {
-                  const currentName = formData.name || '';
-                  if (currentName) {
-                    const parts = currentName.trim().split(/\s+/).filter(Boolean);
-                    if (parts.length >= 2) {
-                      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-                    }
-                    return currentName.slice(0, 2).toUpperCase();
-                  }
-                  return 'US';
-                })()}
+                {getAvatarInitials(formData)}
               </div>
             )}
           </div>

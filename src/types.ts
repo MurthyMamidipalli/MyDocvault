@@ -799,4 +799,55 @@ export const INITIAL_CALENDAR_EVENTS: CalendarEvent[] = [
   }
 ];
 
+export function getAvatarInitials(profile: { name?: string; firstName?: string; lastName?: string; email?: string } | null | undefined): string {
+  if (!profile) return 'DV';
+
+  // 1. Primary: Use profile.name (Display Name) if provided
+  const name = (profile.name || '').trim();
+  if (name) {
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    if (parts.length === 1) {
+      if (parts[0].length >= 2) {
+        return parts[0].slice(0, 2).toUpperCase();
+      }
+      return parts[0].toUpperCase();
+    }
+  }
+
+  // 2. Secondary: Combine firstName & lastName
+  const fn = (profile.firstName || '').trim();
+  const ln = (profile.lastName || '').trim();
+  if (fn && ln) {
+    const fChar = fn[0];
+    const lChar = ln[0];
+    if (fChar && lChar) return (fChar + lChar).toUpperCase();
+  }
+  if (fn) {
+    const parts = fn.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    if (parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+    return parts[0].toUpperCase();
+  }
+  if (ln) {
+    if (ln.length >= 2) return ln.slice(0, 2).toUpperCase();
+    return ln.toUpperCase();
+  }
+
+  // 3. Tertiary: Email handle
+  const email = (profile.email || '').trim();
+  if (email && email.includes('@')) {
+    const handle = email.split('@')[0].replace(/[^a-zA-Z]/g, '');
+    if (handle.length >= 2) {
+      return handle.slice(0, 2).toUpperCase();
+    }
+    if (handle.length === 1) {
+      return handle.toUpperCase();
+    }
+  }
+
+  return 'DV';
+}
 

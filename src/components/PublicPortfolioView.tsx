@@ -37,7 +37,8 @@ import {
   CalendarEvent,
   ResumeItem,
   VaultDocument,
-  CurrentJob
+  CurrentJob,
+  getAvatarInitials
 } from '../types';
 
 interface PublicPortfolioViewProps {
@@ -316,37 +317,7 @@ export default function PublicPortfolioView({
               <div className={`w-24 h-24 rounded-full bg-slate-900 border-4 ${
                 themeColor === 'cyan' ? 'border-cyan-400/20' : themeColor === 'purple' ? 'border-purple-400/20' : 'border-emerald-400/20'
               } flex items-center justify-center font-bold text-3xl text-white select-none ring-4 ${getThemeGlowRing()}`}>
-                {(() => {
-                  const fn = (profile.firstName || '').trim();
-                  const ln = (profile.lastName || '').trim();
-                  if (fn && ln) {
-                    return (fn[0] + ln[0]).toUpperCase();
-                  }
-
-                  const name = (profile.name || '').trim();
-                  if (name) {
-                    const parts = name.split(/\s+/).filter(Boolean);
-                    if (parts.length >= 2) {
-                      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-                    }
-                    if (parts.length === 1 && parts[0].length >= 2) {
-                      return parts[0].slice(0, 2).toUpperCase();
-                    }
-                    if (parts.length === 1 && parts[0].length === 1) {
-                      return parts[0].toUpperCase();
-                    }
-                  }
-
-                  const email = (profile.email || '').trim();
-                  if (email && email.includes('@')) {
-                    const handle = email.split('@')[0].replace(/[^a-zA-Z]/g, '');
-                    if (handle.length >= 2) {
-                      return handle.slice(0, 2).toUpperCase();
-                    }
-                  }
-
-                  return "DV";
-                })()}
+                {getAvatarInitials(profile)}
               </div>
             )}
           </div>

@@ -55,6 +55,7 @@ import {
   ResumeItem,
   EMPTY_PROFILE,
   EMPTY_CURRENT_JOB,
+  getAvatarInitials,
   INITIAL_PROFILE, 
   INITIAL_SKILLS, 
   INITIAL_EDUCATION, 
@@ -3650,20 +3651,7 @@ export default function App() {
                 </p>
               </div>
               <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 font-bold flex items-center justify-center text-emerald-400 select-none shrink-0 text-xs">
-                {(() => {
-                  const currentName = profile.name || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim();
-                  if (currentName) {
-                    const parts = currentName.trim().split(/\s+/);
-                    if (parts.length >= 2) {
-                      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-                    }
-                    return currentName.slice(0, 2).toUpperCase();
-                  }
-                  if (currentUser?.email) {
-                    return currentUser.email.slice(0, 2).toUpperCase();
-                  }
-                  return 'US';
-                })()}
+                {getAvatarInitials(profile)}
               </div>
             </div>
           </div>
