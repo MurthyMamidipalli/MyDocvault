@@ -2895,7 +2895,9 @@ export default function App() {
             { data: tData },
             { data: lData },
             { data: calData },
-            { data: docData }
+            { data: docData },
+            { data: resData },
+            { data: cjData }
           ] = await Promise.all([
             supabase.from('skills').select('*').eq('user_id', uId),
             supabase.from('education').select('*').eq('user_id', uId),
@@ -2907,7 +2909,9 @@ export default function App() {
             supabase.from('testimonials').select('*').eq('user_id', uId),
             supabase.from('portfolio_links').select('*').eq('user_id', uId),
             supabase.from('calendar_events').select('*').eq('user_id', uId),
-            supabase.from('documents').select('*').eq('user_id', uId).eq('visibility', 'public')
+            supabase.from('documents').select('*').eq('user_id', uId).eq('visibility', 'public'),
+            supabase.from('resumes').select('*').eq('user_id', uId),
+            supabase.from('current_jobs').select('*').eq('user_id', uId).maybeSingle()
           ]);
 
           const publicProfileObj: PersonalProfile = {
@@ -2949,13 +2953,36 @@ export default function App() {
               category: d.category,
               description: d.description,
               fileType: d.file_type,
-              size: d.file_size,
+              size: d.file_size ? `${Math.round(d.file_size / 1024)} KB` : 'Document',
               fileUrl: d.file_url,
               storagePath: d.storage_path,
               expiryDate: d.expiry_date,
               tags: d.tags,
               visibility: d.visibility || 'public'
-            })) : []
+            })) : [],
+            resumes: (resData && resData.length > 0) ? resData.filter((r: any) => r.is_public !== false).map((r: any) => ({
+              id: r.id,
+              name: r.title || r.file_name,
+              uploadDate: r.created_at ? r.created_at.substring(0, 10) : 'Verified',
+              fileDataUrl: r.file_url,
+              visibility: 'public',
+              type: 'Resume'
+            })) : [],
+            currentJob: cjData ? {
+              employer: cjData.company,
+              company: cjData.company,
+              role: cjData.role,
+              department: cjData.department,
+              joiningDate: cjData.joining_date,
+              startDate: cjData.joining_date,
+              location: cjData.location,
+              employmentType: cjData.employment_type,
+              description: cjData.description,
+              isPublic: true,
+              currentProjects: [],
+              dailyStandupText: '',
+              weeklyGoals: []
+            } : undefined
           };
 
           setRemoteShareData(publicSharePayload);
