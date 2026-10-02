@@ -169,12 +169,10 @@ export default function PublicPortfolioView({
   const cleanSkills = deduplicateByUniqueKey(skills || [], sk => sk.name || '');
   const cleanExperience = deduplicateByUniqueKey(experience || [], exp => `${exp.role || ''}-${exp.company || ''}`);
   const cleanCerts = deduplicateByUniqueKey(certifications || [], c => c.title || '');
-  const cleanProjects = deduplicateByUniqueKey(projects || [], proj => `${proj.type || 'project'}-${proj.name || ''}`);
   const cleanEducation = deduplicateByUniqueKey(education || [], edu => `${edu.degree || ''}-${edu.institution || ''}`);
   const cleanAchievements = deduplicateByUniqueKey(achievements || [], ach => ach.title || '');
-  const cleanTestimonials = deduplicateByUniqueKey(testimonials || [], rec => `${rec.name || ''}-${rec.company || ''}`);
+  const cleanTestimonials = deduplicateByUniqueKey(testimonials || [], rec => (rec.name || '').toLowerCase().trim());
   const cleanLinks = deduplicateByUniqueKey(links || [], lk => (lk.url || lk.label || ''));
-  const cleanCalendarEvents = deduplicateByUniqueKey(calendarEvents || [], evt => `${evt.title || ''}-${evt.date || ''}`);
   const cleanResumes = deduplicateByUniqueKey(resumes || [], res => res.name || '');
   const cleanDocuments = deduplicateByUniqueKey(documents || [], doc => doc.name || doc.title || '');
 
@@ -184,10 +182,6 @@ export default function PublicPortfolioView({
   const publicCerts = cleanCerts.filter(c => c.visibility !== 'private');
   // Filter portfolio links to public ones
   const publicLinks = cleanLinks.filter(lk => lk.isPublic !== false);
-  // Filter projects/products to public ones
-  const publicProjects = cleanProjects.filter(proj => proj.isPublic !== false);
-  // Filter calendar events to public ones
-  const publicCalendarEvents = cleanCalendarEvents.filter(evt => evt.isPublic !== false);
   // Filter achievements to public ones
   const publicAchievements = cleanAchievements.filter(ach => ach.isPublic !== false);
   // Filter public resumes
@@ -195,10 +189,30 @@ export default function PublicPortfolioView({
   // Filter public documents
   const publicDocuments = cleanDocuments.filter(doc => doc.visibility === 'public');
 
-  // Categorize Projects, Products, and Others (Reports)
-  const projectsList = publicProjects.filter(p => (p.type === 'project' || (!p.type && (p.category as any) !== 'products' && (p.category as any) !== 'product' && (p.category as any) !== 'others' && (p.category as any) !== 'other' && !p.docType)));
-  const productsList = publicProjects.filter(p => (p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product'));
-  const othersList = publicProjects.filter(p => (p.type === 'other' || (p.category as any) === 'others' || (p.category as any) === 'other' || !!p.docType));
+  // Categorize Projects, Products, and Others (Reports) cleanly without duplicate entries
+  const allPublicItems = (projects || []).filter(p => p && p.isPublic !== false);
+
+  // 1. Products: items explicitly typed or categorized as product
+  const rawProducts = allPublicItems.filter(p => 
+    p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product'
+  );
+  const productsList = deduplicateByUniqueKey(rawProducts, p => (p.name || '').toLowerCase().trim());
+  const productNames = new Set(productsList.map(p => (p.name || '').toLowerCase().trim()));
+
+  // 2. Others: items explicitly typed or categorized as other / docType / report
+  const rawOthers = allPublicItems.filter(p => 
+    !productNames.has((p.name || '').toLowerCase().trim()) &&
+    (p.type === 'other' || (p.category as any) === 'others' || (p.category as any) === 'other' || !!p.docType)
+  );
+  const othersList = deduplicateByUniqueKey(rawOthers, p => (p.name || '').toLowerCase().trim());
+  const otherNames = new Set(othersList.map(p => (p.name || '').toLowerCase().trim()));
+
+  // 3. Projects: remaining items not already in products or others
+  const rawProjects = allPublicItems.filter(p => 
+    !productNames.has((p.name || '').toLowerCase().trim()) &&
+    !otherNames.has((p.name || '').toLowerCase().trim())
+  );
+  const projectsList = deduplicateByUniqueKey(rawProjects, p => (p.name || '').toLowerCase().trim());
 
   return (
     <div className="min-h-screen bg-[#07080b] text-gray-305 flex flex-col font-sans selection:bg-emerald-500/20 antialiased" id="public-live-portfolio">
@@ -910,61 +924,7 @@ export default function PublicPortfolioView({
               </div>
             )}
 
-            {/* Public Availability & Schedule */}
-            {publicCalendarEvents && publicCalendarEvents.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-6 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                    <Calendar className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                    Public Schedule & Availability
-                  </h3>
-                  <span className="text-[9px] bg-emerald-500/15 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                    Live Updates
-                  </span>
-                </div>
 
-                <div className="space-y-4">
-                  {publicCalendarEvents.map(evt => (
-                    <div key={evt.id} className="bg-slate-950/40 p-4 rounded-xl border border-slate-900 space-y-2.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider border ${
-                          evt.type === 'interview' 
-                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/15'
-                            : evt.type === 'class' 
-                              ? 'bg-blue-500/10 text-blue-400 border-blue-500/15'
-                              : evt.type === 'work' 
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/15'
-                                : 'bg-purple-500/10 text-purple-400 border-purple-500/15'
-                        }`}>
-                          {evt.type}
-                        </span>
-                        <span className="text-[10px] text-gray-550 font-mono font-medium">{evt.date}</span>
-                      </div>
-
-                      <h4 className="text-white font-bold text-xs leading-snug">{evt.title}</h4>
-                      {evt.description && (
-                        <p className="text-gray-400 text-xs font-sans leading-relaxed">{evt.description}</p>
-                      )}
-
-                      <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400 font-mono pt-1">
-                        {(evt.startTime || evt.endTime) && (
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-gray-500" />
-                            <span>{evt.startTime || '00:00'} - {evt.endTime || '23:59'}</span>
-                          </div>
-                        )}
-                        {evt.location && (
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                            <span>{evt.location}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
           </div>
 
