@@ -33,7 +33,8 @@ import {
   Sparkles,
   StickyNote,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  CreditCard
 } from 'lucide-react';
 
 import { 
@@ -94,6 +95,7 @@ import DocumentVaultTab from './components/DocumentVaultTab';
 import SettingsTab from './components/SettingsTab';
 import NotepadTab from './components/NotepadTab';
 import CalendarTab from './components/CalendarTab';
+import DigitalVisitingCardTab from './components/DigitalVisitingCardTab';
 import PublicPortfolioView from './components/PublicPortfolioView';
 import AuthPage from './components/AuthPage';
 import { heavyStorage } from './lib/heavyStorage';
@@ -568,7 +570,7 @@ export default function App() {
   const VALID_APP_TABS = [
     'overview', 'profile', 'skills', 'education', 'certifications', 'experience',
     'current-job', 'projects', 'resume', 'portfolios', 'timeline', 'contacts',
-    'calendar', 'achievements', 'testimonials', 'vault', 'notepad', 'settings'
+    'calendar', 'achievements', 'testimonials', 'vault', 'notepad', 'digital-visiting-card', 'settings'
   ];
 
   // Active navigation sidebar link with persistence
@@ -3904,7 +3906,8 @@ export default function App() {
     { id: 'achievements', label: 'Achievements & Awards', icon: Star },
     { id: 'testimonials', label: 'Testimonials', icon: MessageSquare },
     { id: 'vault', label: 'Document Vault', icon: FolderLock },
-    { id: 'notepad', label: 'Note Pad', icon: StickyNote }
+    { id: 'notepad', label: 'Note Pad', icon: StickyNote },
+    { id: 'digital-visiting-card', label: 'Digital Visiting Card', icon: CreditCard }
   ];
 
   const getActiveTabBreadcrumb = () => {
@@ -4285,6 +4288,14 @@ export default function App() {
               triggerToast={triggerToast}
               notes={notes}
               onUpdateNotes={handleUpdateNotes}
+            />
+          )}
+
+          {activeTab === 'digital-visiting-card' && (
+            <DigitalVisitingCardTab
+              profile={profile}
+              currentJob={currentJob}
+              shareUrl={getFullShareUrl()}
             />
           )}
 
