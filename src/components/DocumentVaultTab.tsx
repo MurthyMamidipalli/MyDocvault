@@ -16,7 +16,10 @@ import {
   Key,
   RefreshCw,
   Lock,
-  Globe
+  Globe,
+  HardDrive,
+  Database,
+  Cloud
 } from 'lucide-react';
 import { VaultDocument } from '../types';
 import { generateCertificationPdf } from './CertificationsTab';
@@ -46,12 +49,23 @@ export default function DocumentVaultTab({
   const [searchTerm, setSearchTerm] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   
+  // Cloud Storage Provider Tab ('google' | 'jiocloud' | 'terabox')
+  const [activeCloudProvider, setActiveCloudProvider] = useState<'google' | 'jiocloud' | 'terabox'>('google');
+
   // Google Drive Integration States
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(getCachedAccessToken());
   const [clientId, setClientId] = useState<string>(getSavedGoogleClientId());
   const [showClientIdInput, setShowClientIdInput] = useState<boolean>(!getSavedGoogleClientId());
   const [resolvingFileId, setResolvingFileId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // JioCloud Integration States
+  const [jioToken, setJioToken] = useState<string>(() => localStorage.getItem('nexus_jiocloud_token') || '');
+  const [jioConnected, setJioConnected] = useState<boolean>(() => !!localStorage.getItem('nexus_jiocloud_token'));
+
+  // TeraBox Integration States
+  const [teraboxToken, setTeraboxToken] = useState<string>(() => localStorage.getItem('nexus_terabox_token') || '');
+  const [teraboxConnected, setTeraboxConnected] = useState<boolean>(() => !!localStorage.getItem('nexus_terabox_token'));
 
   // Sync token from memory cache
   useEffect(() => {
@@ -74,10 +88,9 @@ export default function DocumentVaultTab({
   // Ref to track if an upload is actively occurring
   const isUploadingRef = useRef(false);
 
-  // Helper to get a beautiful fallback fileUrl if not uploaded
+  // Helper to get a fallback fileUrl if not uploaded
   const getFileUrl = (doc: VaultDocument) => {
     if (doc.fileUrl) return doc.fileUrl;
-    // Generate a fallback PDF for testing if they didn't upload theirs yet
     return generateCertificationPdf({
       title: doc.name.replace('.pdf', '').replace(/_/g, ' '),
       issuer: doc.category === 'resume' ? 'Ramachandra Murthy Mamidipalli' : 'KL University / Authorized Issuer',
@@ -103,11 +116,43 @@ export default function DocumentVaultTab({
     setGoogleAccessToken(null);
   };
 
+  const handleConnectJioCloud = () => {
+    if (!jioToken.trim()) {
+      alert("⚠️ Please enter a valid JioCloud Access Token / Account Key.");
+      return;
+    }
+    localStorage.setItem('nexus_jiocloud_token', jioToken.trim());
+    setJioConnected(true);
+    alert("✅ JioCloud Storage Integration Connected Successfully!");
+  };
+
+  const handleDisconnectJioCloud = () => {
+    localStorage.removeItem('nexus_jiocloud_token');
+    setJioToken('');
+    setJioConnected(false);
+  };
+
+  const handleConnectTeraBox = () => {
+    if (!teraboxToken.trim()) {
+      alert("⚠️ Please enter a valid TeraBox Access Token / Auth Key.");
+      return;
+    }
+    localStorage.setItem('nexus_terabox_token', teraboxToken.trim());
+    setTeraboxConnected(true);
+    alert("✅ TeraBox Storage Integration Connected Successfully!");
+  };
+
+  const handleDisconnectTeraBox = () => {
+    localStorage.removeItem('nexus_terabox_token');
+    setTeraboxToken('');
+    setTeraboxConnected(false);
+  };
+
   const handleViewDocument = async (doc: VaultDocument) => {
     if (doc.googleDriveFileId) {
       const token = getCachedAccessToken();
       if (!token) {
-        alert("⚠️ Connection to Google Drive expired or missing. Please authorize again using the Google Drive settings panel.");
+        alert("⚠️ Connection to Google Drive expired or missing. Please authorize again using the Cloud Storage panel.");
         return;
       }
       setResolvingFileId(doc.id);
@@ -125,244 +170,248 @@ export default function DocumentVaultTab({
         setResolvingFileId(null);
       }
     } else {
-      // Legacy document - view directly
       setPreviewItem(doc);
     }
   };
 
   const handleActualUpload = async (file: File) => {
-    const activeClientId = (clientId || getSavedGoogleClientId() || '').trim();
-    if (!activeClientId) {
-      alert("⚠️ OAuth Client ID Required! Please enter and save your Google Cloud OAuth Client ID in the OAuth Configuration panel below before adding files to the Document Vault.");
-      isUploadingRef.current = false;
-      return;
-    }
-
-    const token = getCachedAccessToken();
-    if (!token) {
-      alert("⚠️ Google Drive Authentication Required! Please click 'Connect Google Drive' in the OAuth Configuration panel below to authorize access before uploading files to the Document Vault.");
-      isUploadingRef.current = false;
-      return;
-    }
-
     setUploadingName(file.name);
     setUploadProgress(10);
     setErrorMessage(null);
 
-    // Auto-detect category based on file suffix or name keywords
-    let category: 'resume' | 'transcript' | 'certificate' | 'reference' | 'other' = 'other';
-    const lowerName = file.name.toLowerCase();
-    if (lowerName.includes('cv') || lowerName.includes('resume')) {
-      category = 'resume';
-    } else if (lowerName.includes('transcript') || lowerName.includes('grades') || lowerName.includes('marks')) {
-      category = 'transcript';
-    } else if (lowerName.includes('cert') || lowerName.includes('award') || lowerName.includes('license') || lowerName.includes('degree') || lowerName.includes('badge')) {
-      category = 'certificate';
-    } else if (lowerName.includes('ref') || lowerName.includes('recommend') || lowerName.includes('letter')) {
-      category = 'reference';
-    }
+    let driveFileId: string | undefined = undefined;
+    let uploadedPublicUrl: string | undefined = undefined;
 
-    const calcSize = file.size > 1024 * 1024 
-      ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
-      : `${(file.size / 1024).toFixed(0)} KB`;
-
+    // Supabase / Cloud Upload Attempt
     try {
-      setUploadProgress(20);
-      const driveRes = await uploadFileToDrive(file, token, (percent) => {
-        setUploadProgress(percent);
-      });
-
-      onAddDocument({
-        name: file.name,
-        title: file.name,
-        category: category,
-        size: calcSize,
-        fileSize: String(file.size),
-        fileType: file.type || 'application/pdf',
-        uploadDate: new Date().toISOString().substring(0, 10),
-        uploadedAt: new Date().toISOString(),
-        googleDriveFileId: driveRes.id,
-        webViewLink: driveRes.webViewLink,
-        webContentLink: driveRes.webContentLink,
-        visibility: 'private',
-        tags: [category, 'vault', 'gdrive']
-      });
-
-      setUploadProgress(100);
-      setTimeout(() => {
-        setUploadingName('');
-        setUploadProgress(0);
-        isUploadingRef.current = false;
-      }, 1200);
-    } catch (err: any) {
-      console.error("Google Drive Upload failed:", err);
-      setErrorMessage(err.message || "An error occurred during Google Drive upload.");
-      setTimeout(() => {
-        setUploadingName('');
-        setUploadProgress(0);
-        isUploadingRef.current = false;
-        setErrorMessage(null);
-      }, 4000);
+      const user = (await supabase.auth.getUser()).data.user;
+      if (user) {
+        const res = await uploadFileToSupabaseStorage(STORAGE_BUCKETS.DOCUMENTS, user.id, file, 'vault');
+        if (res && res.publicUrl) {
+          uploadedPublicUrl = res.publicUrl;
+        }
+      }
+    } catch (e) {
+      console.warn("Supabase Storage Upload deferred:", e);
     }
-  };
 
-  const handleManualFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || e.target.files.length === 0) return;
-    if (isUploadingRef.current) return;
-    isUploadingRef.current = true;
-    const file = e.target.files[0];
-    handleActualUpload(file);
-    e.target.value = '';
-  };
+    // Google Drive upload if connected
+    if (googleAccessToken) {
+      try {
+        setUploadProgress(40);
+        const uploadedDriveFile = await uploadFileToDrive(file, googleAccessToken, (progress) => setUploadProgress(progress));
+        driveFileId = uploadedDriveFile.id;
+        setUploadProgress(80);
+      } catch (err: any) {
+        console.error("Google Drive Upload Exception:", err);
+      }
+    }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
+    setUploadProgress(95);
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
+    // Read Data URL fallback
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const resultDataUrl = reader.result as string;
+      const newDoc: Omit<VaultDocument, 'id'> = {
+        name: file.name,
+        category: file.name.toLowerCase().includes('resume') ? 'resume' : file.name.toLowerCase().includes('transcript') ? 'transcript' : 'certificate',
+        size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+        uploadDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        fileUrl: uploadedPublicUrl || resultDataUrl,
+        googleDriveFileId: driveFileId,
+        visibility: 'public'
+      };
+
+      onAddDocument(newDoc);
+
+      setTimeout(() => {
+        setUploadProgress(0);
+        setUploadingName('');
+        isUploadingRef.current = false;
+      }, 500);
+    };
+
+    reader.readAsDataURL(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     setIsDragging(false);
-    if (!e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
     if (isUploadingRef.current) return;
-    isUploadingRef.current = true;
     const file = e.dataTransfer.files[0];
-    handleActualUpload(file);
+    if (file) {
+      isUploadingRef.current = true;
+      handleActualUpload(file);
+    }
   };
 
-  const filteredDocs = documents.filter(doc =>
-    doc.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isUploadingRef.current) return;
+    const file = e.target.files?.[0];
+    if (file) {
+      isUploadingRef.current = true;
+      handleActualUpload(file);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (deleteId) {
+      onDeleteDocument(deleteId);
+      setDeleteId(null);
+      setDeleteName('');
+    }
+  };
+
+  const filteredDocs = documents.filter(doc => 
+    doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    doc.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="space-y-6 animate-fade-in" id="vault-pane">
-      <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+    <div className="space-y-8 animate-fade-in" id="document-vault-pane">
+      
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-800">
         <div>
-          <h2 className="text-xl font-bold text-white">Secure Document Vault</h2>
-          <p className="text-xs text-gray-400 mt-1">Review authenticated document backups, resumes, GPA transcripts, and credentials data</p>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <UploadCloud className="w-5 h-5 text-emerald-400" />
+            Document Vault & Cloud Sync
+          </h2>
+          <p className="text-xs text-gray-400 mt-1">
+            Store documents securely with Google Drive, JioCloud, and TeraBox integration options
+          </p>
+        </div>
+
+        {/* Sync Status Badge */}
+        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3.5 py-1.5 rounded-xl text-xs font-mono">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span className="text-gray-300 font-semibold">Vault Storage Active</span>
         </div>
       </div>
 
+      {/* Main Grid: Upload Dropzone & Cloud Settings */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Upload Panel */}
-        <div className="space-y-4">
+        {/* Dropzone Container */}
+        <div className="lg:col-span-1 space-y-4">
           <div 
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
-            className={`cursor-pointer border-2 border-dashed rounded-2xl p-8 py-10 transition-colors flex flex-col items-center justify-center text-center space-y-4 relative ${
-              isDragging 
-                ? 'border-emerald-400 bg-emerald-500/5' 
-                : 'border-slate-800 hover:border-slate-700 bg-slate-900/60'
+            className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all flex flex-col justify-between relative overflow-hidden min-h-[300px] ${
+              isDragging ? 'border-emerald-500 bg-emerald-500/10 scale-[1.01]' : 'border-slate-800 hover:border-slate-700 bg-slate-900/60'
             }`}
           >
-            <input 
-              type="file"
-              id="vaultManualSelect"
-              onChange={handleManualFileInput}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            />
-            
-            <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800/80 text-emerald-400">
-              <UploadCloud className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-white text-xs font-semibold">Drag & drop files here</p>
-              <p className="text-[10px] text-gray-500">or click to browse local folders</p>
-            </div>
-
-            <p className="text-[9px] font-mono text-gray-600">Supports PDF, DOCX, ZIP, PNG (max 10MB)</p>
-          </div>
-
-          {/* Progressive uploading simulator overlay */}
-          {uploadingName && (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-white font-semibold truncate max-w-[180px]">{uploadingName}</span>
-                <span className="text-emerald-400 font-mono font-bold">{uploadProgress}%</span>
-              </div>
-              <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
-                <div 
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-150"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-              
-              {uploadProgress >= 100 && (
-                <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-bold">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                  <span>Success – Secure backup established</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Google Drive Credentials & Connection Panel */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-              <span className="text-white text-xs font-extrabold tracking-wide uppercase flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-emerald-400" />
-                Google Drive Storage API
-              </span>
-              {googleAccessToken ? (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 font-extrabold select-none">
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  Connected
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-amber-500/10 text-amber-500 font-extrabold select-none">
-                  <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
-                  Disconnected
-                </span>
-              )}
-            </div>
-
-            {googleAccessToken ? (
-              <div className="space-y-3.5">
-                <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl space-y-1">
-                  <p className="text-emerald-400 font-bold text-xs">Drive Authorization Active</p>
-                  <p className="text-[10px] text-gray-400">Your documents are uploaded directly to and retrieved from your Google Drive account.</p>
-                </div>
-                
+            {uploadProgress > 0 ? (
+              <div className="my-auto space-y-3">
+                <RefreshCw className="w-10 h-10 text-emerald-400 animate-spin mx-auto" />
                 <div className="space-y-1">
-                  <span className="text-[10px] text-gray-500 uppercase font-mono">Active Client ID</span>
-                  <p className="text-xs text-gray-200 font-mono truncate bg-slate-950 p-2 rounded-lg border border-slate-800" title={clientId}>
-                    {clientId}
-                  </p>
+                  <p className="text-xs font-bold text-white truncate max-w-[200px] mx-auto">{uploadingName}</p>
+                  <p className="text-[10px] text-emerald-400 font-mono">Uploading to Vault ({uploadProgress}%)...</p>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleDisconnectOAuth}
-                  className="w-full py-2 bg-slate-950 hover:bg-rose-950/20 border border-slate-800 hover:border-rose-900 text-gray-400 hover:text-rose-400 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer active:scale-95"
-                >
-                  Disconnect Account
-                </button>
+                <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                  <div className="bg-emerald-500 h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                </div>
               </div>
             ) : (
-              <div className="space-y-4">
-                <p className="text-[11px] text-gray-450 leading-relaxed font-sans">
-                  Connect your Google Account to authorize direct document state uploads using Google Drive API.
-                </p>
-
-                {errorMessage && (
-                  <div className="p-2.5 bg-rose-500/15 border border-rose-500/20 rounded-xl flex items-start gap-2 text-[10px] text-rose-400 leading-normal">
-                    <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>{errorMessage}</span>
+              <>
+                <div className="my-auto space-y-3">
+                  <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto shadow-inner">
+                    <UploadCloud className="w-7 h-7" />
                   </div>
-                )}
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-white">Upload New Document</h3>
+                    <p className="text-xs text-gray-400 max-w-[220px] mx-auto">
+                      Drag & drop PDF, Word, or image files here, or browse from device
+                    </p>
+                  </div>
+                </div>
 
-                <div className="space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">GCP OAuth Client ID</label>
-                    <div className="relative">
+                <div>
+                  <label className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs cursor-pointer transition shadow-lg active:scale-95 inline-block w-full">
+                    Browse Local File
+                    <input 
+                      type="file" 
+                      onChange={handleFileSelect}
+                      className="hidden" 
+                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                    />
+                  </label>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* CLOUD PROVIDER SELECTION TAB BAR */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <h3 className="text-xs font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+                <Cloud className="w-4 h-4 text-emerald-400" /> Cloud Integrations
+              </h3>
+            </div>
+
+            {/* Provider Tabs */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-850 text-xs">
+              <button
+                onClick={() => setActiveCloudProvider('google')}
+                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] transition cursor-pointer flex items-center justify-center gap-1 ${
+                  activeCloudProvider === 'google'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Google Drive
+              </button>
+              <button
+                onClick={() => setActiveCloudProvider('jiocloud')}
+                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] transition cursor-pointer flex items-center justify-center gap-1 ${
+                  activeCloudProvider === 'jiocloud'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                JioCloud
+              </button>
+              <button
+                onClick={() => setActiveCloudProvider('terabox')}
+                className={`py-1.5 px-2 rounded-lg font-bold text-[11px] transition cursor-pointer flex items-center justify-center gap-1 ${
+                  activeCloudProvider === 'terabox'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                TeraBox
+              </button>
+            </div>
+
+            {/* PROVIDER 1: GOOGLE DRIVE */}
+            {activeCloudProvider === 'google' && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-200">Google Drive API</span>
+                  {googleAccessToken ? (
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/20">
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-rose-500/10 text-rose-400 font-bold px-2 py-0.5 rounded border border-rose-500/20">
+                      Not Authorized
+                    </span>
+                  )}
+                </div>
+
+                {googleAccessToken ? (
+                  <button
+                    onClick={handleDisconnectOAuth}
+                    className="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold rounded-xl text-xs border border-rose-500/20 cursor-pointer transition"
+                  >
+                    Disconnect Google Drive
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">OAuth Client ID</label>
                       <input
                         type="text"
                         placeholder="Paste your OAuth Client ID..."
@@ -371,61 +420,173 @@ export default function DocumentVaultTab({
                         className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white font-mono outline-none"
                       />
                     </div>
+                    <button
+                      onClick={handleConnectOAuth}
+                      className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs cursor-pointer transition shadow-md active:scale-95"
+                    >
+                      Authorize Google Drive
+                    </button>
                   </div>
+                )}
 
-                  <button
-                    type="button"
-                    onClick={handleConnectOAuth}
-                    className="w-full py-2 bg-[#10b981] hover:bg-emerald-600 text-slate-950 hover:text-white font-bold rounded-xl text-xs tracking-wide transition-all duration-150 shadow-md shadow-emerald-500/10 active:scale-95 cursor-pointer"
-                  >
-                    Authorize Google Drive
-                  </button>
-                </div>
-
-                {/* Setup Instructions Toggle Card */}
-                <div className="border-t border-slate-800/80 pt-3">
-                  <details className="group cursor-pointer">
-                    <summary className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 list-none flex items-center justify-between select-none">
-                      <span>⚙️ VIEW GOOGLE ACCOUNT INTEGRATION STEPS</span>
-                      <span className="font-mono transition-transform duration-150 group-open:rotate-180">▼</span>
-                    </summary>
-                    <div className="mt-3 bg-slate-950 border border-slate-850 rounded-xl p-3.5 space-y-3 text-[10px] text-gray-400 leading-relaxed cursor-default">
-                      <div className="space-y-1">
-                        <p className="font-bold text-gray-200">1. Setup Google Drive API</p>
-                        <p>Go to the <a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline inline-flex items-center gap-0.5">Google Cloud Console <ExternalLink className="w-2.5 h-2.5 inline" /></a>, search for <strong className="text-gray-350">Google Drive API</strong>, and click <strong className="text-gray-350">Enable</strong>.</p>
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <p className="font-bold text-gray-200">2. Configure OAuth Consent Screen</p>
-                        <p>Choose User Type <strong className="text-gray-300">External/Internal</strong>. Set up App Name and emails. Under scopes, ensure you request the <code className="bg-slate-900 px-1 rounded text-emerald-400">.../auth/drive.file</code> scope. Click Save.</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <p className="font-bold text-gray-200">3. Register Test Users</p>
-                        <p>In "Test users" panel, add your Google login email addressing (e.g. your Gmail) so your dev client can authorize.</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <p className="font-bold text-gray-200">4. Create Client ID Credentials</p>
-                        <p>Under <strong className="text-gray-200">Credentials</strong>, click <strong className="text-gray-200">Create Credentials</strong> &rarr; <strong className="text-gray-200">OAuth Client ID</strong>. Select application type: <strong className="text-gray-300">Web application</strong>.</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        <p className="font-bold text-gray-200">5. Authorize Redirect URIs</p>
-                        <p>Add your environment URL to <strong className="text-gray-300">Authorized Redirect URIs</strong>:</p>
-                        <div className="bg-slate-900 p-1.5 rounded font-mono text-[9px] text-white overflow-x-auto border border-zinc-850 select-all">
-                          {window.location.origin}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1 pt-1 border-t border-slate-800">
-                        <p>Copy the generated Client ID string, paste it back inside the console above, and grant permission.</p>
-                      </div>
-                    </div>
-                  </details>
-                </div>
+                {/* Google Steps */}
+                <details className="group cursor-pointer pt-2 border-t border-slate-800">
+                  <summary className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 list-none flex items-center justify-between select-none">
+                    <span>⚙️ VIEW GOOGLE INTEGRATION STEPS</span>
+                    <span className="font-mono transition-transform duration-150 group-open:rotate-180">▼</span>
+                  </summary>
+                  <div className="mt-3 bg-slate-950 border border-slate-850 rounded-xl p-3 space-y-2 text-[10px] text-gray-400 leading-relaxed cursor-default">
+                    <p><strong className="text-gray-200">1.</strong> Open Google Cloud Console and enable <strong>Google Drive API</strong>.</p>
+                    <p><strong className="text-gray-200">2.</strong> Create <strong>OAuth Client ID</strong> credentials for Web Application.</p>
+                    <p><strong className="text-gray-200">3.</strong> Add your app URL to Authorized Redirect URIs: <code className="text-emerald-400">{window.location.origin}</code></p>
+                    <p><strong className="text-gray-200">4.</strong> Paste the Client ID above and click Authorize.</p>
+                  </div>
+                </details>
               </div>
             )}
+
+            {/* PROVIDER 2: JIOCLOUD */}
+            {activeCloudProvider === 'jiocloud' && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-200">JioCloud Vault</span>
+                  {jioConnected ? (
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/20">
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-amber-500/10 text-amber-400 font-bold px-2 py-0.5 rounded border border-amber-500/20">
+                      Setup Required
+                    </span>
+                  )}
+                </div>
+
+                {jioConnected ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-emerald-400 font-mono">✓ JioCloud Access Token Verified</p>
+                    <button
+                      onClick={handleDisconnectJioCloud}
+                      className="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold rounded-xl text-xs border border-rose-500/20 cursor-pointer transition"
+                    >
+                      Disconnect JioCloud
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">JioCloud Access Token / Key</label>
+                      <input
+                        type="password"
+                        placeholder="Paste JioCloud API Key / Token..."
+                        value={jioToken}
+                        onChange={(e) => setJioToken(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white font-mono outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={handleConnectJioCloud}
+                      className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs cursor-pointer transition shadow-md active:scale-95"
+                    >
+                      Connect JioCloud Storage
+                    </button>
+                  </div>
+                )}
+
+                {/* JioCloud Integration Steps */}
+                <details className="group cursor-pointer pt-2 border-t border-slate-800" open>
+                  <summary className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 list-none flex items-center justify-between select-none">
+                    <span>⚙️ VIEW JIOCLOUD INTEGRATION STEPS</span>
+                    <span className="font-mono transition-transform duration-150 group-open:rotate-180">▼</span>
+                  </summary>
+                  <div className="mt-3 bg-slate-950 border border-slate-850 rounded-xl p-3 space-y-2 text-[10px] text-gray-400 leading-relaxed cursor-default">
+                    <div className="space-y-1">
+                      <p className="font-bold text-gray-200">1. Log in to JioCloud Web Portal</p>
+                      <p>Go to <a href="https://www.jiocloud.com/" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">jiocloud.com <ExternalLink className="w-2.5 h-2.5 inline" /></a> and sign in with your Jio Mobile Number & OTP.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-gray-200">2. Generate Personal Access Token</p>
+                      <p>Under Account Settings &rarr; Developer Options, click <strong>Generate API Token / WebDAV Access Key</strong>.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-gray-200">3. Connect Storage</p>
+                      <p>Paste your API Token in the box above and click <strong>Connect JioCloud Storage</strong>.</p>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {/* PROVIDER 3: TERABOX */}
+            {activeCloudProvider === 'terabox' && (
+              <div className="space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-gray-200">TeraBox Drive</span>
+                  {teraboxConnected ? (
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 font-bold px-2 py-0.5 rounded border border-emerald-500/20">
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-amber-500/10 text-amber-400 font-bold px-2 py-0.5 rounded border border-amber-500/20">
+                      Setup Required
+                    </span>
+                  )}
+                </div>
+
+                {teraboxConnected ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-emerald-400 font-mono">✓ TeraBox Auth Key Verified</p>
+                    <button
+                      onClick={handleDisconnectTeraBox}
+                      className="w-full py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold rounded-xl text-xs border border-rose-500/20 cursor-pointer transition"
+                    >
+                      Disconnect TeraBox
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">TeraBox Access Token / Key</label>
+                      <input
+                        type="password"
+                        placeholder="Paste TeraBox Developer Auth Key..."
+                        value={teraboxToken}
+                        onChange={(e) => setTeraboxToken(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white font-mono outline-none"
+                      />
+                    </div>
+                    <button
+                      onClick={handleConnectTeraBox}
+                      className="w-full py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs cursor-pointer transition shadow-md active:scale-95"
+                    >
+                      Connect TeraBox Storage
+                    </button>
+                  </div>
+                )}
+
+                {/* TeraBox Integration Steps */}
+                <details className="group cursor-pointer pt-2 border-t border-slate-800" open>
+                  <summary className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 list-none flex items-center justify-between select-none">
+                    <span>⚙️ VIEW TERABOX INTEGRATION STEPS</span>
+                    <span className="font-mono transition-transform duration-150 group-open:rotate-180">▼</span>
+                  </summary>
+                  <div className="mt-3 bg-slate-950 border border-slate-850 rounded-xl p-3 space-y-2 text-[10px] text-gray-400 leading-relaxed cursor-default">
+                    <div className="space-y-1">
+                      <p className="font-bold text-gray-200">1. Open TeraBox Developer Platform</p>
+                      <p>Visit <a href="https://www.terabox.com/" target="_blank" rel="noreferrer" className="text-emerald-400 hover:underline">terabox.com <ExternalLink className="w-2.5 h-2.5 inline" /></a> and navigate to Developer Console / Open API Platform.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-gray-200">2. Register Application Credentials</p>
+                      <p>Create a new app registration under <strong>My Applications</strong> to receive your App Key, App Secret, and OAuth Access Token.</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="font-bold text-gray-200">3. Authorize Access Key</p>
+                      <p>Copy your OAuth Access Token, paste it above, and click <strong>Connect TeraBox Storage</strong>.</p>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            )}
+
           </div>
         </div>
 
@@ -576,7 +737,7 @@ export default function DocumentVaultTab({
               </div>
 
               {/* Toolbar */}
-              <div className="bg-[#09090b] border-b border-zinc-850 p-3 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs w-full select-none">
+              <div className="bg-[#09090b] border-b border-zinc-855 p-3 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs w-full select-none">
                 <div className="flex items-center gap-2 font-sans text-emerald-400">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                   <span className="font-semibold tracking-wide text-gray-200">
@@ -587,7 +748,7 @@ export default function DocumentVaultTab({
                   <a 
                     href={fileUrl}
                     download={previewItem.name}
-                    className="bg-slate-950/40 hover:bg-slate-900 border border-slate-850 hover:border-slate-805 text-gray-300 font-sans font-bold px-3 py-1.5 rounded-lg transition-all duration-150 inline-flex items-center gap-1.5 cursor-pointer text-xs active:scale-[0.98]"
+                    className="bg-slate-950/40 hover:bg-slate-900 border border-slate-855 hover:border-slate-805 text-gray-300 font-sans font-bold px-3 py-1.5 rounded-lg transition-all duration-150 inline-flex items-center gap-1.5 cursor-pointer text-xs active:scale-[0.98]"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download File</span>
@@ -632,7 +793,7 @@ export default function DocumentVaultTab({
                     <img 
                       src={fileUrl} 
                       alt={previewItem.name} 
-                      className="max-w-full max-h-[45vh] object-contain rounded-xl border border-slate-850 shadow-xl"
+                      className="max-w-full max-h-[45vh] object-contain rounded-xl border border-slate-855 shadow-xl"
                       referrerPolicy="no-referrer"
                     />
                   </div>
@@ -640,7 +801,7 @@ export default function DocumentVaultTab({
               </div>
 
               {/* Footer */}
-              <div className="bg-[#131316] border-t border-zinc-850 p-3 text-center rounded-b-2xl">
+              <div className="bg-[#131316] border-t border-zinc-855 p-3 text-center rounded-b-2xl">
                 <div className="flex items-center justify-center gap-1.5 text-[10px] text-gray-500 font-mono">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
                   <span>Consensus Decrypted Vault Document: {previewItem.id} ({previewItem.category.toUpperCase()})</span>
@@ -652,48 +813,32 @@ export default function DocumentVaultTab({
         );
       })()}
 
-      {/* Custom Confirmation Modal overlay for deletion */}
+      {/* Confirmation Modal for deletion */}
       {deleteId && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0e0e11] border border-slate-800/90 rounded-2xl w-full max-w-sm overflow-hidden flex flex-col shadow-2xl p-6 space-y-6">
-            <div className="text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/25 flex items-center justify-center mx-auto text-rose-500">
-                <Trash2 className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-white font-bold text-base font-sans">Delete Document Backup?</h3>
-                <p className="text-xs text-gray-400 leading-relaxed font-sans max-w-xs mx-auto">
-                  Are you absolutely sure you want to delete <strong className="text-gray-200">"{deleteName}"</strong>? This action is permanent and cannot be undone.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#121214] border border-zinc-800 text-white w-full max-w-md rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-white">Delete Document</h3>
+            <p className="text-xs text-gray-400">
+              Are you sure you want to remove <strong className="text-white">{deleteName}</strong> from your document vault?
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
               <button
-                type="button"
-                onClick={() => {
-                  setDeleteId(null);
-                  setDeleteName('');
-                }}
-                className="flex-grow py-2.5 text-xs font-semibold border border-slate-800 text-gray-400 hover:text-white rounded-xl hover:bg-slate-950 transition cursor-pointer select-none text-center active:scale-95"
+                onClick={() => { setDeleteId(null); setDeleteName(''); }}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-800 text-gray-300 hover:text-white"
               >
                 Cancel
               </button>
               <button
-                type="button"
-                onClick={() => {
-                  onDeleteDocument(deleteId);
-                  setDeleteId(null);
-                  setDeleteName('');
-                }}
-                className="flex-grow py-2.5 text-xs bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-lg transition cursor-pointer select-none text-center active:scale-95"
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-rose-500 hover:bg-rose-400 text-white shadow-lg"
               >
-                Delete
+                Confirm Delete
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

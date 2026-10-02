@@ -70,10 +70,11 @@ export default function TimelineTab({
     ...currentJobMilestones
   ];
 
-  // Distinct list by YYYY-MM date + title to prevent duplicates
+  // Distinct list by YYYY-MM date + normalized title to prevent duplicate timeline items
   const seenKeys = new Set<string>();
   const uniqMilestones = combined.filter(m => {
-    const key = `${m.date}-${m.title}`.toLowerCase().trim();
+    const cleanTitle = m.title.toLowerCase().replace(/\(current job engagement\)/gi, '').replace(/\s+/g, ' ').trim();
+    const key = `${(m.date || '').substring(0, 7)}-${cleanTitle}`;
     if (seenKeys.has(key)) return false;
     seenKeys.add(key);
     return true;

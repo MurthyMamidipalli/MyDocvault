@@ -3169,6 +3169,8 @@ export default function App() {
       const deduplicatedLinks = deduplicatePayloadArray(publicLinksOnly, lk => lk.url || '');
       const deduplicatedPlatformEvents = deduplicatePayloadArray(publicCalendarOnly, evt => `${evt.title || ''}-${evt.date || ''}`);
 
+      const deduplicatedResumes = deduplicatePayloadArray(resumes.filter(r => r.visibility !== 'private'), r => r.name || r.fileName || '');
+
       const payload = {
         p: profile,
         s: deduplicatedSkills,
@@ -3179,6 +3181,7 @@ export default function App() {
         a: deduplicatedAchievements,
         t: deduplicatedTestimonials,
         l: deduplicatedLinks,
+        res: deduplicatedResumes,
         cal: deduplicatedPlatformEvents
       };
       
@@ -3303,6 +3306,7 @@ export default function App() {
     let sharedAchievements: Achievement[] = isDemo ? INITIAL_ACHIEVEMENTS : [];
     let sharedTestimonials: Testimonial[] = isDemo ? INITIAL_TESTIMONIALS : [];
     let sharedLinks: PortfolioLink[] = isDemo ? INITIAL_LINKS : [];
+    let sharedResumes: ResumeItem[] = [];
     let sharedCalendarEvents: CalendarEvent[] = isDemo ? INITIAL_CALENDAR_EVENTS : [];
 
     // Find if any registered user matches this slug
@@ -3376,6 +3380,7 @@ export default function App() {
       const locT = getLocalData('testimonials');
       const locL = getLocalData('links');
       const locResL = getLocalData('resume_links');
+      const locRes = getLocalData('resumes') || getLocalData('vault_resumes');
       const locCal = getLocalData('calendar_events');
 
       sharedProfile = locP !== null ? { ...locP, publicProfile: locP.publicProfile !== false } : (isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, publicProfile: true });
@@ -3389,6 +3394,7 @@ export default function App() {
       sharedAchievements = locA !== null ? locA : (isDemo ? INITIAL_ACHIEVEMENTS : []);
       sharedTestimonials = locT !== null ? locT : (isDemo ? INITIAL_TESTIMONIALS : []);
       sharedLinks = (locL !== null || locResL !== null) ? [...(locL || []), ...(locResL || [])] : (isDemo ? INITIAL_LINKS : []);
+      sharedResumes = locRes !== null ? locRes : [];
       sharedCalendarEvents = locCal !== null ? locCal : (isDemo ? INITIAL_CALENDAR_EVENTS : []);
     } else {
       // Direct offline read-only local storage fallback
@@ -3428,6 +3434,7 @@ export default function App() {
         achievements: sharedAchievements,
         testimonials: sharedTestimonials,
         links: sharedLinks,
+        resumes: sharedResumes,
         calendarEvents: sharedCalendarEvents
       });
     }
