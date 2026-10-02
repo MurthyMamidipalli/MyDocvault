@@ -134,42 +134,52 @@ export default function DigitalVisitingCardTab({
         link.click();
         setDownloading(false);
       } else {
-        // --- BACK SIDE ---
-        // Brand Header
+        // --- BACK SIDE (Centered Layout) ---
+        // Brand Header Top
         ctx.fillStyle = '#10b981';
-        ctx.font = 'bold 24px sans-serif';
-        ctx.fillText('MyDocVault', 45, 65);
+        ctx.font = 'bold 22px sans-serif';
+        ctx.fillText('MyDocVault', 45, 50);
 
         ctx.fillStyle = '#94a3b8';
-        ctx.font = '13px sans-serif';
-        ctx.fillText('Personal Document Saver', 45, 90);
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Personal Document Saver', 45, 70);
 
-        // Headline Instruction
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px sans-serif';
-        ctx.fillText('Scan to view my public profile', 45, 160);
-
-        ctx.fillStyle = '#64748b';
-        ctx.font = '12px monospace';
-        const displayUrl = targetShareUrl.length > 40 ? targetShareUrl.substring(0, 37) + '...' : targetShareUrl;
-        ctx.fillText(displayUrl, 45, 190);
-
-        // Subtext
+        // Public Profile Badge
         ctx.fillStyle = '#10b981';
-        ctx.font = '500 12px sans-serif';
-        ctx.fillText('✓ Direct Public Profile Access', 45, 360);
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('PUBLIC PROFILE', 560, 50);
+
+        // Centered QR Code & Texts
+        ctx.textAlign = 'center';
 
         // Load QR image onto canvas
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-          // White background box for QR Code
+          // White background box for QR Code dead-centered (Canvas width 700 -> X=265, size=170)
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.roundRect(440, 100, 215, 215, 16);
+          ctx.roundRect(265, 95, 170, 170, 16);
           ctx.fill();
 
-          ctx.drawImage(img, 452, 112, 191, 191);
+          ctx.drawImage(img, 275, 105, 150, 150);
+
+          // Headline Instruction Centered Below QR
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText('Scan to view my public profile', 350, 300);
+
+          ctx.fillStyle = '#64748b';
+          ctx.font = '12px monospace';
+          const displayUrl = targetShareUrl.length > 45 ? targetShareUrl.substring(0, 42) + '...' : targetShareUrl;
+          ctx.fillText(displayUrl, 350, 330);
+
+          // Subtext
+          ctx.fillStyle = '#10b981';
+          ctx.font = '500 12px sans-serif';
+          ctx.fillText('✓ Direct Public Profile Access', 350, 385);
+
+          ctx.textAlign = 'left'; // reset alignment
 
           const link = document.createElement('a');
           link.download = `visiting-card-back.png`;
@@ -178,6 +188,15 @@ export default function DigitalVisitingCardTab({
           setDownloading(false);
         };
         img.onerror = () => {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 18px sans-serif';
+          ctx.fillText('Scan to view my public profile', 350, 300);
+
+          ctx.fillStyle = '#10b981';
+          ctx.font = '500 12px sans-serif';
+          ctx.fillText('✓ Direct Public Profile Access', 350, 385);
+          ctx.textAlign = 'left';
+
           const link = document.createElement('a');
           link.download = `visiting-card-back.png`;
           link.href = canvas.toDataURL('image/png');
@@ -257,7 +276,7 @@ export default function DigitalVisitingCardTab({
       {/* 3D Flip Card Container */}
       <div className="flex justify-center items-center py-4">
         <div 
-          className="w-full max-w-lg h-[320px] md:h-[340px] relative perspective-1000 select-none cursor-pointer"
+          className="w-full max-w-lg h-[340px] md:h-[360px] relative perspective-1000 select-none cursor-pointer"
           onClick={() => setIsFlipped(!isFlipped)}
           title="Click to flip card"
         >
@@ -347,19 +366,19 @@ export default function DigitalVisitingCardTab({
               </div>
             </div>
 
-            {/* BACK SIDE */}
+            {/* BACK SIDE (Centered QR Code Layout) */}
             <div 
-              className="absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-emerald-500/30 p-6 md:p-8 flex flex-col justify-between overflow-hidden shadow-2xl backface-hidden"
+              className="absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-emerald-500/30 p-5 md:p-6 flex flex-col justify-between overflow-hidden shadow-2xl backface-hidden"
               style={{ 
                 backfaceVisibility: 'hidden',
                 transform: 'rotateY(180deg)'
               }}
             >
               {/* Card Ambient Background Accent */}
-              <div className="absolute top-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
               {/* Branding Header */}
-              <div className="flex items-center justify-between relative z-10">
+              <div className="flex items-center justify-between relative z-10 shrink-0">
                 <div className="flex items-center gap-2">
                   <div className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-xl border border-emerald-500/20">
                     <Sparkles className="w-4 h-4" />
@@ -369,20 +388,26 @@ export default function DigitalVisitingCardTab({
                     <span className="text-[9px] text-gray-400 font-mono">Personal Document Saver</span>
                   </div>
                 </div>
-                <div className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                <div className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full font-medium">
                   PUBLIC PROFILE
                 </div>
               </div>
 
-              {/* QR Code & Scan Prompt */}
-              <div className="flex items-center justify-between gap-4 my-auto relative z-10">
-                <div className="space-y-2 flex-1">
-                  <h4 className="text-sm md:text-base font-bold text-white tracking-tight leading-snug">
+              {/* CENTERED QR Code & Scan Prompt */}
+              <div className="flex flex-col items-center justify-center text-center my-auto relative z-10 py-1 space-y-2.5">
+                {/* QR Code Graphic Frame (Dead Center) */}
+                <div className="bg-white p-2.5 rounded-2xl shadow-2xl border-2 border-emerald-400/40 flex items-center justify-center shrink-0">
+                  <img 
+                    src={qrApiUrl} 
+                    alt="MyDocVault QR Code"
+                    className="w-24 h-24 md:w-28 md:h-28 object-contain"
+                  />
+                </div>
+
+                <div className="space-y-1 max-w-xs">
+                  <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
                     Scan to view my public profile
                   </h4>
-                  <p className="text-xs text-emerald-400 font-medium">
-                    Scans directly to MyDocVault public profile
-                  </p>
                   
                   {/* Public Link Box */}
                   <div 
@@ -390,10 +415,10 @@ export default function DigitalVisitingCardTab({
                       e.stopPropagation();
                       handleCopyLink();
                     }}
-                    className="flex items-center gap-1.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-emerald-500/40 p-2 rounded-xl text-[10px] font-mono text-gray-300 transition cursor-pointer group mt-2"
+                    className="flex items-center gap-1.5 bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-emerald-500/40 px-3 py-1.5 rounded-xl text-[10px] font-mono text-gray-300 transition cursor-pointer group mx-auto"
                   >
                     <ExternalLink className="w-3 h-3 text-emerald-400 shrink-0" />
-                    <span className="truncate flex-1">{targetShareUrl}</span>
+                    <span className="truncate max-w-[200px]">{targetShareUrl}</span>
                     {copied ? (
                       <Check className="w-3 h-3 text-emerald-400 shrink-0" />
                     ) : (
@@ -403,19 +428,10 @@ export default function DigitalVisitingCardTab({
                     )}
                   </div>
                 </div>
-
-                {/* QR Code Graphic Frame */}
-                <div className="bg-white p-2.5 rounded-2xl shadow-xl shrink-0 border-2 border-emerald-400/30 flex items-center justify-center">
-                  <img 
-                    src={qrApiUrl} 
-                    alt="MyDocVault QR Code"
-                    className="w-24 h-24 md:w-28 md:h-28 object-contain"
-                  />
-                </div>
               </div>
 
               {/* Footer Note */}
-              <div className="flex items-center justify-between text-[10px] text-gray-400 pt-2 border-t border-slate-800/80 relative z-10">
+              <div className="flex items-center justify-between text-[10px] text-gray-400 pt-2 border-t border-slate-800/80 relative z-10 shrink-0">
                 <span>✓ Secure Public Link</span>
                 <span className="font-mono text-emerald-400 flex items-center gap-1">
                   <RotateCw className="w-2.5 h-2.5" /> Click to flip
