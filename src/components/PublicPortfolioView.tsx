@@ -171,7 +171,26 @@ export default function PublicPortfolioView({
   const cleanCerts = deduplicateByUniqueKey(certifications || [], c => c.title || '');
   const cleanEducation = deduplicateByUniqueKey(education || [], edu => `${edu.degree || ''}-${edu.institution || ''}`);
   const cleanAchievements = deduplicateByUniqueKey(achievements || [], ach => ach.title || '');
-  const cleanTestimonials = deduplicateByUniqueKey(testimonials || [], rec => (rec.name || '').toLowerCase().trim());
+  // Strict Testimonials / Peer Endorsements deduplication by text & name
+  const cleanTestimonials = (() => {
+    const seenTexts = new Set<string>();
+    const seenNames = new Set<string>();
+    const result: Testimonial[] = [];
+    for (const rec of (testimonials || [])) {
+      if (!rec) continue;
+      const textKey = (rec.text || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const nameKey = (rec.name || '').toLowerCase().trim();
+      
+      if (textKey && seenTexts.has(textKey)) continue;
+      if (nameKey && nameKey !== 'anonymous' && nameKey !== 'user' && seenNames.has(nameKey)) continue;
+      
+      if (textKey) seenTexts.add(textKey);
+      if (nameKey && nameKey !== 'anonymous' && nameKey !== 'user') seenNames.add(nameKey);
+      result.push(rec);
+    }
+    return result;
+  })();
+
   const cleanLinks = deduplicateByUniqueKey(links || [], lk => (lk.url || lk.label || ''));
   const cleanResumes = deduplicateByUniqueKey(resumes || [], res => res.name || '');
   const cleanDocuments = deduplicateByUniqueKey(documents || [], doc => doc.name || doc.title || '');
@@ -192,27 +211,28 @@ export default function PublicPortfolioView({
   // Categorize Projects, Products, and Others (Reports) cleanly without duplicate entries
   const allPublicItems = (projects || []).filter(p => p && p.isPublic !== false);
 
-  // 1. Products: items explicitly typed or categorized as product
+  // 1. Projects: type === 'project' OR category === 'projects' OR default project
+  const rawProjects = allPublicItems.filter(p => 
+    p.type === 'project' || (p.category as any) === 'projects' || (!p.type && (p.category as any) !== 'products' && (p.category as any) !== 'product' && (p.category as any) !== 'others' && (p.category as any) !== 'other' && !p.docType)
+  );
+  const projectsList = deduplicateByUniqueKey(rawProjects, p => (p.name || '').toLowerCase().trim());
+  const projectNames = new Set(projectsList.map(p => (p.name || '').toLowerCase().trim()));
+
+  // 2. Products: type === 'product' OR category === 'products' OR category === 'product'
   const rawProducts = allPublicItems.filter(p => 
-    p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product'
+    !projectNames.has((p.name || '').toLowerCase().trim()) &&
+    (p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product')
   );
   const productsList = deduplicateByUniqueKey(rawProducts, p => (p.name || '').toLowerCase().trim());
   const productNames = new Set(productsList.map(p => (p.name || '').toLowerCase().trim()));
 
-  // 2. Others: items explicitly typed or categorized as other / docType / report
+  // 3. Others: type === 'other' OR category === 'others' OR category === 'other' OR docType
   const rawOthers = allPublicItems.filter(p => 
+    !projectNames.has((p.name || '').toLowerCase().trim()) &&
     !productNames.has((p.name || '').toLowerCase().trim()) &&
     (p.type === 'other' || (p.category as any) === 'others' || (p.category as any) === 'other' || !!p.docType)
   );
   const othersList = deduplicateByUniqueKey(rawOthers, p => (p.name || '').toLowerCase().trim());
-  const otherNames = new Set(othersList.map(p => (p.name || '').toLowerCase().trim()));
-
-  // 3. Projects: remaining items not already in products or others
-  const rawProjects = allPublicItems.filter(p => 
-    !productNames.has((p.name || '').toLowerCase().trim()) &&
-    !otherNames.has((p.name || '').toLowerCase().trim())
-  );
-  const projectsList = deduplicateByUniqueKey(rawProjects, p => (p.name || '').toLowerCase().trim());
 
   return (
     <div className="min-h-screen bg-[#07080b] text-gray-305 flex flex-col font-sans selection:bg-emerald-500/20 antialiased" id="public-live-portfolio">
@@ -657,6 +677,57 @@ export default function PublicPortfolioView({
                       )}
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* Resume / CV Category */}
+            {publicResumes.length > 0 && (
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-4">
+                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                  <FileText className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                  Resumes & Curriculum Vitae
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {publicResumes.map(res => {
+                    const pdfUrl = res.fileUrl || res.fileDataUrl || res.linkUrl;
+                    return (
+                      <div key={res.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-3 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="bg-slate-950 text-emerald-400 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
+                              {res.type || res.category || 'Resume'}
+                            </span>
+                            {res.uploadDate && <span className="text-[10px] font-mono text-gray-400">{res.uploadDate}</span>}
+                          </div>
+                          <h4 className="text-white font-bold text-[13px] tracking-tight">{res.name || res.title || res.fileName}</h4>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
+                          {pdfUrl && (
+                            <>
+                              <a
+                                href={pdfUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>View PDF</span>
+                              </a>
+                              <a
+                                href={pdfUrl}
+                                download={res.fileName || `${res.name || 'resume'}.pdf`}
+                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Download</span>
+                              </a>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

@@ -9,11 +9,12 @@ import {
   Briefcase, 
   Sparkles, 
   QrCode, 
-  ExternalLink,
   ShieldCheck,
-  Check
+  Check,
+  Building2,
+  Image as ImageIcon
 } from 'lucide-react';
-import { PersonalProfile, CurrentJob } from '../types';
+import { PersonalProfile, CurrentJob, getAvatarInitials } from '../types';
 
 interface DigitalVisitingCardTabProps {
   profile: PersonalProfile;
@@ -28,25 +29,25 @@ export default function DigitalVisitingCardTab({
 }: DigitalVisitingCardTabProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [logoOption, setLogoOption] = useState<'avatar' | 'badge' | 'custom'>('avatar');
+  const [customLogoUrl, setCustomLogoUrl] = useState<string>('');
 
   // Extract user details dynamically from existing profile data
   const displayName = profile.name || [profile.firstName, profile.lastName].filter(Boolean).join(' ') || '';
   const emailId = profile.email || '';
   const mobileNumber = profile.phone || '';
   const designation = profile.headline || currentJob?.role || '';
+  const avatarUrl = profile.avatarUrl || '';
 
   // Use existing MyDocVault public share URL
   const targetShareUrl = shareUrl || (typeof window !== 'undefined' ? window.location.origin : '');
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(targetShareUrl)}&color=0f172a&bgboundary=0`;
 
-  const handleCopyLink = () => {
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(targetShareUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+  const activeLogo = logoOption === 'custom' && customLogoUrl 
+    ? customLogoUrl 
+    : logoOption === 'avatar' && avatarUrl 
+      ? avatarUrl 
+      : '';
 
   const handleDownloadCard = () => {
     setDownloading(true);
@@ -112,7 +113,7 @@ export default function DigitalVisitingCardTab({
         ctx.font = 'bold 11px sans-serif';
         ctx.fillText('EMAIL ID', 45, 205);
         ctx.fillStyle = emailId ? '#f8fafc' : '#64748b';
-        ctx.font = '500 16px sans-serif';
+        ctx.font = '500 15px sans-serif';
         ctx.fillText(emailId || 'Email Not Provided', 45, 230);
 
         // Contact Section: Mobile Number
@@ -134,7 +135,7 @@ export default function DigitalVisitingCardTab({
         link.click();
         setDownloading(false);
       } else {
-        // --- BACK SIDE (Centered Layout) ---
+        // --- BACK SIDE (Centered Layout without public share link text) ---
         // Brand Header Top
         ctx.fillStyle = '#10b981';
         ctx.font = 'bold 22px sans-serif';
@@ -156,30 +157,25 @@ export default function DigitalVisitingCardTab({
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-          // White background box for QR Code dead-centered (Canvas width 700 -> X=265, size=170)
+          // White background box for QR Code dead-centered
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.roundRect(265, 95, 170, 170, 16);
+          ctx.roundRect(260, 105, 180, 180, 16);
           ctx.fill();
 
-          ctx.drawImage(img, 275, 105, 150, 150);
+          ctx.drawImage(img, 270, 115, 160, 160);
 
           // Headline Instruction Centered Below QR
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 18px sans-serif';
-          ctx.fillText('Scan to view my public profile', 350, 300);
-
-          ctx.fillStyle = '#64748b';
-          ctx.font = '12px monospace';
-          const displayUrl = targetShareUrl.length > 45 ? targetShareUrl.substring(0, 42) + '...' : targetShareUrl;
-          ctx.fillText(displayUrl, 350, 330);
+          ctx.fillText('Scan to view my public profile', 350, 325);
 
           // Subtext
           ctx.fillStyle = '#10b981';
           ctx.font = '500 12px sans-serif';
           ctx.fillText('✓ Direct Public Profile Access', 350, 385);
 
-          ctx.textAlign = 'left'; // reset alignment
+          ctx.textAlign = 'left';
 
           const link = document.createElement('a');
           link.download = `visiting-card-back.png`;
@@ -190,7 +186,7 @@ export default function DigitalVisitingCardTab({
         img.onerror = () => {
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 18px sans-serif';
-          ctx.fillText('Scan to view my public profile', 350, 300);
+          ctx.fillText('Scan to view my public profile', 350, 325);
 
           ctx.fillStyle = '#10b981';
           ctx.font = '500 12px sans-serif';
@@ -249,29 +245,80 @@ export default function DigitalVisitingCardTab({
         </div>
       </div>
 
-      {/* Side selector buttons */}
-      <div className="flex justify-center gap-2">
-        <button
-          onClick={() => setIsFlipped(false)}
-          className={`px-4 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-            !isFlipped 
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold' 
-              : 'text-gray-400 hover:text-gray-200 border border-transparent'
-          }`}
-        >
-          Front Side
-        </button>
-        <button
-          onClick={() => setIsFlipped(true)}
-          className={`px-4 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-            isFlipped 
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold' 
-              : 'text-gray-400 hover:text-gray-200 border border-transparent'
-          }`}
-        >
-          Back Side (QR Code)
-        </button>
+      {/* Controls & Logo Selection Panel */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+        {/* Side selector buttons */}
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => setIsFlipped(false)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+              !isFlipped 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold' 
+                : 'text-gray-400 hover:text-gray-200 border border-transparent'
+            }`}
+          >
+            Front Side
+          </button>
+          <button
+            onClick={() => setIsFlipped(true)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+              isFlipped 
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold' 
+                : 'text-gray-400 hover:text-gray-200 border border-transparent'
+            }`}
+          >
+            Back Side (QR Code)
+          </button>
+        </div>
+
+        {/* Logo / Badge Option Picker */}
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-gray-400 font-mono text-[11px] font-semibold">Card Logo / Avatar:</span>
+          <button
+            onClick={() => setLogoOption('avatar')}
+            className={`px-3 py-1 rounded-lg border text-xs transition cursor-pointer ${
+              logoOption === 'avatar'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-bold'
+                : 'bg-slate-950 text-gray-400 border-slate-800 hover:text-white'
+            }`}
+          >
+            Profile Photo
+          </button>
+          <button
+            onClick={() => setLogoOption('badge')}
+            className={`px-3 py-1 rounded-lg border text-xs transition cursor-pointer ${
+              logoOption === 'badge'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-bold'
+                : 'bg-slate-950 text-gray-400 border-slate-800 hover:text-white'
+            }`}
+          >
+            MyDocVault Badge
+          </button>
+          <button
+            onClick={() => setLogoOption('custom')}
+            className={`px-3 py-1 rounded-lg border text-xs transition cursor-pointer ${
+              logoOption === 'custom'
+                ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 font-bold'
+                : 'bg-slate-950 text-gray-400 border-slate-800 hover:text-white'
+            }`}
+          >
+            Custom Logo URL
+          </button>
+        </div>
       </div>
+
+      {logoOption === 'custom' && (
+        <div className="max-w-md mx-auto space-y-1.5 animate-fade-in">
+          <label className="text-[11px] font-mono text-gray-400">Custom Logo Image URL</label>
+          <input
+            type="url"
+            placeholder="https://example.com/logo.png"
+            value={customLogoUrl}
+            onChange={(e) => setCustomLogoUrl(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500"
+          />
+        </div>
+      )}
 
       {/* 3D Flip Card Container */}
       <div className="flex justify-center items-center py-4">
@@ -299,7 +346,7 @@ export default function DigitalVisitingCardTab({
               <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
 
-              {/* Top Header Row */}
+              {/* Top Header Row with Selected Logo / Avatar */}
               <div className="flex items-center justify-between relative z-10">
                 <div className="flex items-center gap-2">
                   <div className="p-1 bg-emerald-500/20 text-emerald-400 rounded-lg">
@@ -309,9 +356,26 @@ export default function DigitalVisitingCardTab({
                     DIGITAL VISITING CARD
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-gray-500 text-xs font-mono">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="text-[10px] text-gray-400 font-sans font-semibold">MyDocVault</span>
+
+                {/* Logo / Avatar Display */}
+                <div className="flex items-center gap-2">
+                  {activeLogo ? (
+                    <img 
+                      src={activeLogo} 
+                      alt="Card Logo" 
+                      className="w-8 h-8 rounded-full object-cover border border-emerald-500/40 shadow-md bg-slate-950"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : logoOption === 'avatar' && displayName ? (
+                    <div className="w-8 h-8 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-xs">
+                      {getAvatarInitials(profile)}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-gray-500 text-xs font-mono">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-[10px] text-gray-400 font-sans font-semibold">MyDocVault</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -331,15 +395,15 @@ export default function DigitalVisitingCardTab({
                 </p>
               </div>
 
-              {/* Contact Information (Email ID & Mobile Number) */}
+              {/* Contact Information (Full Email ID & Mobile Number) */}
               <div className="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-3 relative z-10">
                 
-                {/* Email ID */}
-                <div className="space-y-0.5">
+                {/* Email ID (Fully Visible, No Truncation) */}
+                <div className="space-y-0.5 sm:col-span-1">
                   <span className="text-[9px] font-mono tracking-wider text-gray-500 uppercase flex items-center gap-1">
                     <Mail className="w-3 h-3 text-emerald-400/70" /> Email ID
                   </span>
-                  <p className="text-xs text-gray-200 font-mono truncate">
+                  <p className="text-[11px] md:text-xs text-gray-200 font-mono break-all font-medium leading-tight">
                     {emailId || (
                       <span className="text-gray-500 italic font-sans text-xs">Not Provided</span>
                     )}
@@ -347,11 +411,11 @@ export default function DigitalVisitingCardTab({
                 </div>
 
                 {/* Mobile Number */}
-                <div className="space-y-0.5">
+                <div className="space-y-0.5 sm:col-span-1">
                   <span className="text-[9px] font-mono tracking-wider text-gray-500 uppercase flex items-center gap-1">
                     <Phone className="w-3 h-3 text-emerald-400/70" /> Mobile Number
                   </span>
-                  <p className="text-xs text-gray-200 font-mono truncate">
+                  <p className="text-xs text-gray-200 font-mono break-all font-medium">
                     {mobileNumber || (
                       <span className="text-gray-500 italic font-sans text-xs">Not Provided</span>
                     )}
@@ -366,9 +430,9 @@ export default function DigitalVisitingCardTab({
               </div>
             </div>
 
-            {/* BACK SIDE (Centered QR Code Layout) */}
+            {/* BACK SIDE (Clean Centered QR Code Layout - Public Share Link Removed) */}
             <div 
-              className="absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-emerald-500/30 p-5 md:p-6 flex flex-col justify-between overflow-hidden shadow-2xl backface-hidden"
+              className="absolute inset-0 w-full h-full rounded-3xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-emerald-500/30 p-6 flex flex-col justify-between overflow-hidden shadow-2xl backface-hidden"
               style={{ 
                 backfaceVisibility: 'hidden',
                 transform: 'rotateY(180deg)'
@@ -393,46 +457,30 @@ export default function DigitalVisitingCardTab({
                 </div>
               </div>
 
-              {/* CENTERED QR Code & Scan Prompt */}
-              <div className="flex flex-col items-center justify-center text-center my-auto relative z-10 py-1 space-y-2.5">
+              {/* CENTERED QR Code & Scan Prompt (Public Share Link Removed) */}
+              <div className="flex flex-col items-center justify-center text-center my-auto relative z-10 py-2 space-y-3">
                 {/* QR Code Graphic Frame (Dead Center) */}
-                <div className="bg-white p-2.5 rounded-2xl shadow-2xl border-2 border-emerald-400/40 flex items-center justify-center shrink-0">
+                <div className="bg-white p-3 rounded-2xl shadow-2xl border-2 border-emerald-400/40 flex items-center justify-center shrink-0">
                   <img 
                     src={qrApiUrl} 
                     alt="MyDocVault QR Code"
-                    className="w-24 h-24 md:w-28 md:h-28 object-contain"
+                    className="w-28 h-28 md:w-32 md:h-32 object-contain"
                   />
                 </div>
 
-                <div className="space-y-1 max-w-xs">
+                <div className="space-y-1">
                   <h4 className="text-xs md:text-sm font-bold text-white tracking-tight">
                     Scan to view my public profile
                   </h4>
-                  
-                  {/* Public Link Box */}
-                  <div 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyLink();
-                    }}
-                    className="flex items-center gap-1.5 bg-slate-950/90 hover:bg-slate-950 border border-slate-800 hover:border-emerald-500/40 px-3 py-1.5 rounded-xl text-[10px] font-mono text-gray-300 transition cursor-pointer group mx-auto"
-                  >
-                    <ExternalLink className="w-3 h-3 text-emerald-400 shrink-0" />
-                    <span className="truncate max-w-[200px]">{targetShareUrl}</span>
-                    {copied ? (
-                      <Check className="w-3 h-3 text-emerald-400 shrink-0" />
-                    ) : (
-                      <span className="text-[9px] text-gray-500 group-hover:text-emerald-400 shrink-0 font-sans">
-                        Copy
-                      </span>
-                    )}
-                  </div>
+                  <p className="text-[11px] text-emerald-400 font-medium">
+                    Scans directly to MyDocVault public profile
+                  </p>
                 </div>
               </div>
 
               {/* Footer Note */}
               <div className="flex items-center justify-between text-[10px] text-gray-400 pt-2 border-t border-slate-800/80 relative z-10 shrink-0">
-                <span>✓ Secure Public Link</span>
+                <span>✓ Secure Public QR Code</span>
                 <span className="font-mono text-emerald-400 flex items-center gap-1">
                   <RotateCw className="w-2.5 h-2.5" /> Click to flip
                 </span>
@@ -450,9 +498,9 @@ export default function DigitalVisitingCardTab({
           <ShieldCheck className="w-4 h-4 text-emerald-400" /> Visiting Card Features & Security
         </h4>
         <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-          <li>Displays Name, Email, Mobile, and Current Designation directly from your profile data.</li>
-          <li>QR Code encodes your existing MyDocVault public share URL without requiring login to view public info.</li>
-          <li>Updating your MyDocVault profile automatically updates your visiting card details in real time.</li>
+          <li>Displays Name, Email (fully visible), Mobile, and Current Designation directly from your profile data.</li>
+          <li>Choose between your Profile Photo, Custom Logo URL, or MyDocVault Badge.</li>
+          <li>QR Code encodes your existing MyDocVault public share URL without exposing raw URLs on the back card.</li>
         </ul>
       </div>
 

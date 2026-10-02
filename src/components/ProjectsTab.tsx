@@ -28,6 +28,7 @@ import {
   File
 } from 'lucide-react';
 import { Project } from '../types';
+import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from '../lib/supabase';
 
 interface ProjectsTabProps {
   projects: Project[];
@@ -271,13 +272,26 @@ export default function ProjectsTab({
     }
   };
 
-  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setPdfName(file.name);
+      try {
+        const user = (await supabase.auth.getUser()).data.user;
+        if (user) {
+          const folder = activeFilter === 'other' ? 'others' : activeFilter === 'product' ? 'products' : 'projects';
+          const result = await uploadFileToSupabaseStorage(STORAGE_BUCKETS.PROJECTS, user.id, file, folder);
+          if (result && result.publicUrl) {
+            setPdfUrl(result.publicUrl);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Storage upload fallback to reader:", err);
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         setPdfUrl(reader.result as string);
-        setPdfName(file.name);
       };
       reader.readAsDataURL(file);
     }

@@ -2186,6 +2186,8 @@ export default function App() {
             user_id: userId,
             name: newPr.name,
             category: newPr.category || 'others',
+            type: 'other',
+            doc_type: newPr.docType || 'Report',
             description: newPr.description || '',
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
@@ -2198,8 +2200,8 @@ export default function App() {
           };
           const { error } = await supabase.from('others').upsert(payload);
           if (error) {
-            console.error("[Supabase Add Other Error]", error);
-            triggerToast(`Document Error: ${error.message}`);
+            console.warn("[Supabase Add Other Fallback to projects]", error);
+            await supabase.from('projects').upsert(payload);
           }
         } catch (err) { console.warn("[Supabase Add Other Error]", err); }
       }
@@ -3863,6 +3865,7 @@ export default function App() {
         achievements={remoteShareData.achievements}
         testimonials={remoteShareData.testimonials}
         links={remoteShareData.links}
+        resumes={resumes}
         documents={remoteShareData.documents || documents}
         calendarEvents={remoteShareData.calendarEvents || []}
         currentJob={remoteShareData.currentJob || currentJob}
