@@ -480,8 +480,9 @@ export default function PublicPortfolioView({
                 </h3>
                 <div className="space-y-3 pt-1">
                   {publicCerts.map(cert => {
-                    const certUrl = cert.fileUrl || (cert.credentialUrl && cert.credentialUrl.startsWith('data:') ? cert.credentialUrl : '') || generateCertificationPdf(cert, profile.name);
+                    const certUrl = cert.fileUrl || (cert.credentialUrl && cert.credentialUrl.startsWith('data:') ? cert.credentialUrl : '');
                     const certName = cert.fileName || `${cert.title.replace(/\s+/g, '_')}_Certificate.pdf`;
+                    const hasFile = !!certUrl;
                     return (
                       <div key={cert.id} className="bg-slate-950/45 p-3.5 rounded-xl border border-slate-900 space-y-2 hover:bg-slate-900/30 transition flex flex-col justify-between">
                         <div className="space-y-0.5">
@@ -489,33 +490,39 @@ export default function PublicPortfolioView({
                           <p className="text-[10px] text-gray-500 font-mono">{cert.issuer} • {cert.dateIssued}</p>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
-                          <button
-                            onClick={() => openPdfInNewTab(certUrl, certName)}
-                            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>View Certificate</span>
-                          </button>
-                          <button
-                            onClick={() => downloadFileUrl(certUrl, certName)}
-                            className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
-                          >
-                            <Download className="w-3 h-3" />
-                            <span>Download</span>
-                          </button>
-                          {cert.credentialUrl && cert.credentialUrl.startsWith('http') && (
-                            <a 
-                              href={cert.credentialUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gray-400 hover:text-emerald-400 font-semibold flex items-center gap-1 ml-auto"
-                            >
-                              <span>Verify</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
+                        {(hasFile || (cert.credentialUrl && cert.credentialUrl.startsWith('http'))) && (
+                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
+                            {hasFile && (
+                              <>
+                                <button
+                                  onClick={() => openPdfInNewTab(certUrl, certName)}
+                                  className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View Certificate</span>
+                                </button>
+                                <button
+                                  onClick={() => downloadFileUrl(certUrl, certName)}
+                                  className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Download</span>
+                                </button>
+                              </>
+                            )}
+                            {cert.credentialUrl && cert.credentialUrl.startsWith('http') && (
+                              <a 
+                                href={cert.credentialUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-gray-400 hover:text-emerald-400 font-semibold flex items-center gap-1 ml-auto"
+                              >
+                                <span>Verify</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
