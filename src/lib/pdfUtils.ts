@@ -109,6 +109,8 @@ ET`;
   }
 }
 
+const blobUrlCache = new Map<string, string>();
+
 /**
  * Convert a base64 data URL or raw URL to a Blob Object URL (`blob:http...`).
  */
@@ -123,6 +125,10 @@ export function dataUrlToBlobUrl(dataUrl: string, fallbackTitle?: string): strin
 
   if (!dataUrl.startsWith('data:')) {
     return dataUrl;
+  }
+
+  if (blobUrlCache.has(dataUrl)) {
+    return blobUrlCache.get(dataUrl)!;
   }
 
   try {
@@ -141,7 +147,9 @@ export function dataUrlToBlobUrl(dataUrl: string, fallbackTitle?: string): strin
     }
 
     const blob = new Blob([bytes], { type: mimeType });
-    return URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    blobUrlCache.set(dataUrl, url);
+    return url;
   } catch (err) {
     console.error("[pdfUtils] Failed to convert data URL to Blob URL:", err);
     return dataUrl;

@@ -1207,17 +1207,28 @@ export default function App() {
       try {
         const { data: eData } = await supabase.from('education').select('*').eq('user_id', userId);
         if (eData && Array.isArray(eData)) {
-          const mapped = eData.map(e => ({
-            id: e.id,
-            degree: e.degree,
-            institution: e.institution,
-            fieldOfStudy: e.field_of_study,
-            startYear: e.start_year,
-            endYear: e.end_year,
-            grade: e.grade,
-            percentage: e.percentage,
-            description: e.description
-          }));
+          const mapped = eData.map(e => {
+            let extraMeta: any = {};
+            if (e.description && typeof e.description === 'string' && e.description.startsWith('{')) {
+              try { extraMeta = JSON.parse(e.description); } catch (err) {}
+            }
+            return {
+              id: e.id,
+              degree: e.degree,
+              institution: e.institution,
+              fieldOfStudy: e.field_of_study || e.fieldOfStudy || '',
+              startYear: e.start_year || e.startYear || '',
+              endYear: e.end_year || e.endYear || '',
+              grade: e.grade || '',
+              percentage: e.percentage || '',
+              description: e.description || '',
+              enrollmentId: e.enrollment_id || e.enrollmentId || e.enrollment_number || extraMeta.enrollmentId || '',
+              startDate: e.start_date || e.startDate || extraMeta.startDate || '',
+              endDate: e.end_date || e.endDate || extraMeta.endDate || '',
+              isCurrentlyPursuing: e.is_currently_pursuing ?? e.isCurrentlyPursuing ?? extraMeta.isCurrentlyPursuing ?? (e.end_year === 'Present' || e.end_date === 'Present'),
+              activities: e.activities || extraMeta.activities || (e.description && !e.description.startsWith('{') ? e.description : '')
+            };
+          });
           setEducation(mapped);
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(mapped));
         }
@@ -1929,24 +1940,52 @@ export default function App() {
   const handleAddEdu = async (newEd: Omit<Education, 'id'>) => {
     const id = generateUUID();
     const eduItem: Education = { ...newEd, id };
-    setEducation(prev => [eduItem, ...prev]);
+    setEducation(prev => {
+      const updated = [eduItem, ...prev];
+      if (currentUser?.email) {
+        const email = currentUser.email.toLowerCase().trim();
+        safeLocalStorageSetItem(`${email}_education`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_education`, updated).catch(e => {});
+      }
+      return updated;
+    });
     triggerToast(`Appended academic credential: ${newEd.degree}`);
 
     if (currentUser?.id) {
+      const descPayload = JSON.stringify({
+        activities: newEd.activities || '',
+        enrollmentId: newEd.enrollmentId || '',
+        startDate: newEd.startDate || '',
+        endDate: newEd.endDate || '',
+        isCurrentlyPursuing: !!newEd.isCurrentlyPursuing
+      });
+      const payload: any = {
+        id,
+        user_id: currentUser.id,
+        degree: newEd.degree,
+        institution: newEd.institution,
+        field_of_study: newEd.fieldOfStudy,
+        start_year: newEd.startYear,
+        end_year: newEd.endYear,
+        grade: newEd.grade,
+        percentage: newEd.percentage,
+        description: descPayload,
+        enrollment_id: newEd.enrollmentId || '',
+        start_date: newEd.startDate || '',
+        end_date: newEd.endDate || '',
+        is_currently_pursuing: !!newEd.isCurrentlyPursuing,
+        activities: newEd.activities || ''
+      };
       try {
-        await supabase.from('education').insert({
-          id,
-          user_id: currentUser.id,
-          degree: newEd.degree,
-          institution: newEd.institution,
-          field_of_study: newEd.fieldOfStudy,
-          start_year: newEd.startYear,
-          end_year: newEd.endYear,
-          grade: newEd.grade,
-          percentage: newEd.percentage,
-          description: newEd.description
-        });
-      } catch (err) { console.warn("[Supabase Add Edu Error]", err); }
+        await supabase.from('education').insert(payload);
+      } catch (err) {
+        delete payload.enrollment_id;
+        delete payload.start_date;
+        delete payload.end_date;
+        delete payload.is_currently_pursuing;
+        delete payload.activities;
+        try { await supabase.from('education').insert(payload); } catch (e) { console.warn("[Supabase Add Edu Error]", e); }
+      }
     }
   };
 
@@ -1958,6 +1997,7 @@ export default function App() {
 
     if (currentUser?.email) {
       safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(updated));
+      heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_education`, updated).catch(e => {});
     }
     triggerToast(`Removed academic snapshot.`);
 
@@ -1977,24 +2017,52 @@ export default function App() {
   const handleUpdateEdu = async (updatedEd: Education) => {
     const targetId = ensureUUID(updatedEd.id);
     const item = { ...updatedEd, id: targetId };
-    setEducation(prev => prev.map(e => e.id === updatedEd.id ? item : e));
+    setEducation(prev => {
+      const updated = prev.map(e => (e.id === updatedEd.id || e.id === targetId || (e.degree === updatedEd.degree && e.institution === updatedEd.institution)) ? item : e);
+      if (currentUser?.email) {
+        const email = currentUser.email.toLowerCase().trim();
+        safeLocalStorageSetItem(`${email}_education`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_education`, updated).catch(e => {});
+      }
+      return updated;
+    });
     triggerToast(`Updated academic credential: ${updatedEd.degree}`);
 
     if (currentUser?.id) {
+      const descPayload = JSON.stringify({
+        activities: updatedEd.activities || '',
+        enrollmentId: updatedEd.enrollmentId || '',
+        startDate: updatedEd.startDate || '',
+        endDate: updatedEd.endDate || '',
+        isCurrentlyPursuing: !!updatedEd.isCurrentlyPursuing
+      });
+      const payload: any = {
+        id: targetId,
+        user_id: currentUser.id,
+        degree: updatedEd.degree,
+        institution: updatedEd.institution,
+        field_of_study: updatedEd.fieldOfStudy,
+        start_year: updatedEd.startYear,
+        end_year: updatedEd.endYear,
+        grade: updatedEd.grade,
+        percentage: updatedEd.percentage,
+        description: descPayload,
+        enrollment_id: updatedEd.enrollmentId || '',
+        start_date: updatedEd.startDate || '',
+        end_date: updatedEd.endDate || '',
+        is_currently_pursuing: !!updatedEd.isCurrentlyPursuing,
+        activities: updatedEd.activities || ''
+      };
       try {
-        await supabase.from('education').upsert({
-          id: targetId,
-          user_id: currentUser.id,
-          degree: updatedEd.degree,
-          institution: updatedEd.institution,
-          field_of_study: updatedEd.fieldOfStudy,
-          start_year: updatedEd.startYear,
-          end_year: updatedEd.endYear,
-          grade: updatedEd.grade,
-          percentage: updatedEd.percentage,
-          description: updatedEd.description
-        });
-      } catch (err) { console.warn("[Supabase Update Edu Error]", err); }
+        await supabase.from('education').upsert(payload);
+      } catch (err) {
+        delete payload.enrollment_id;
+        delete payload.start_date;
+        delete payload.end_date;
+        delete payload.is_currently_pursuing;
+        delete payload.activities;
+        try { await supabase.from('education').upsert(payload); } catch (e) { console.warn("[Supabase Update Edu Error]", e); }
+      }
     }
   };
 
@@ -2063,13 +2131,15 @@ export default function App() {
     const targetId = ensureUUID(updatedCert.id);
     const dVal = updatedCert.dateIssued || updatedCert.issueDate || '';
     const item = { ...updatedCert, id: targetId, dateIssued: dVal, issueDate: dVal };
-    const updatedCerts = certifications.map(c => (c.id === updatedCert.id || c.id === targetId) ? item : c);
-    setCertifications(updatedCerts);
-    if (currentUser?.email) {
-      const email = currentUser.email.toLowerCase().trim();
-      safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
-      heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
-    }
+    setCertifications(prev => {
+      const updatedCerts = prev.map(c => (c.id === updatedCert.id || c.id === targetId || (c.title && updatedCert.title && c.title.toLowerCase().trim() === updatedCert.title.toLowerCase().trim())) ? item : c);
+      if (currentUser?.email) {
+        const email = currentUser.email.toLowerCase().trim();
+        safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
+        heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
+      }
+      return updatedCerts;
+    });
     triggerToast(`Updated file attachment for: ${updatedCert.title}`);
 
     if (currentUser?.id) {

@@ -928,23 +928,23 @@ export default function CertificationsTab({
             {/* Document Content View Area */}
             <div className="space-y-4">
               
-              {/* RENDER ORIGINAL UPLOAD_FILE MODE */}
-              {previewItem.fileUrl && previewItem.fileUrl.startsWith('data:') ? (
+              {/* RENDER ORIGINAL UPLOAD_FILE OR GENERATED PDF RECORD */}
+              {(previewItem.fileUrl || previewItem.title) ? (
                 <div className="space-y-3">
                   <div className="border border-slate-850 bg-[#0c0c0e] rounded-2xl relative shadow-inner overflow-hidden flex flex-col justify-center items-center w-full" style={{ minHeight: '550px' }}>
                     
-                    {/* Render different container base on PDF vs Image */}
-                    {previewItem.fileUrl.startsWith('data:application/pdf') || previewItem.fileName?.toLowerCase().endsWith('.pdf') ? (
+                    {/* Render container based on PDF vs Image */}
+                    {(!previewItem.fileUrl || previewItem.fileUrl.startsWith('data:application/pdf') || previewItem.fileName?.toLowerCase().endsWith('.pdf') || previewItem.type === 'study') ? (
                       <div className="w-full h-full p-4 flex flex-col space-y-3" style={{ minHeight: '520px' }}>
                         <iframe 
-                          src={dataUrlToBlobUrl(previewItem.fileUrl)} 
-                          title={previewItem.fileName || 'Document PDF'} 
+                          src={dataUrlToBlobUrl(previewItem.fileUrl || '', previewItem.title || 'Certificate Record')} 
+                          title={previewItem.fileName || previewItem.title || 'Document PDF'} 
                           className="w-full h-[480px] rounded-xl border border-slate-800 bg-[#18181b]" 
                         />
                         <div className="flex items-center justify-between text-xs text-gray-400 px-1">
                           <span>Interactive Certificate PDF View</span>
                           <button 
-                            onClick={() => openPdfInNewTab(previewItem.fileUrl!, previewItem.fileName || 'certificate.pdf')}
+                            onClick={() => openPdfInNewTab(previewItem.fileUrl || '', previewItem.fileName || previewItem.title || 'certificate.pdf')}
                             className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-bold px-4 py-2 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-md active:scale-[0.98]"
                           >
                             <ExternalLink className="w-4 h-4" />
@@ -964,7 +964,7 @@ export default function CertificationsTab({
                     )}
                   </div>
                   <div className="text-center font-mono text-[10px] text-gray-500">
-                    File Reference: <span className="text-gray-400">{previewItem.fileName}</span> (Stored Securely in Base64 Memory Container)
+                    File Reference: <span className="text-gray-400">{previewItem.fileName || previewItem.title}</span> {previewItem.fileUrl ? '(Attached Document File)' : '(Interactive PDF Vault Record)'}
                   </div>
                 </div>
               ) : (
