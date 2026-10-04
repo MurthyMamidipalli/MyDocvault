@@ -40,6 +40,7 @@ import {
   CurrentJob,
   getAvatarInitials
 } from '../types';
+import { openPdfInNewTab, downloadFileUrl } from '../lib/pdfUtils';
 
 interface PublicPortfolioViewProps {
   profile: PersonalProfile;
@@ -656,23 +657,20 @@ export default function PublicPortfolioView({
 
                       {exp.pdfUrl && (
                         <div className="flex flex-wrap items-center gap-2 pt-2.5 mt-2 border-t border-slate-900/40 font-mono text-[10px]">
-                          <a
-                            href={exp.pdfUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20"
+                          <button
+                            onClick={() => openPdfInNewTab(exp.pdfUrl!, exp.pdfName || `${exp.role}.pdf`)}
+                            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
                           >
                             <Eye className="w-3 h-3" />
                             <span>View PDF</span>
-                          </a>
-                          <a
-                            href={exp.pdfUrl}
-                            download={exp.pdfName || `${exp.role}.pdf`}
-                            className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800"
+                          </button>
+                          <button
+                            onClick={() => downloadFileUrl(exp.pdfUrl!, exp.pdfName || `${exp.role}.pdf`)}
+                            className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
                           >
                             <Download className="w-3 h-3" />
                             <span>Download</span>
-                          </a>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -705,23 +703,20 @@ export default function PublicPortfolioView({
                         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
                           {pdfUrl && (
                             <>
-                              <a
-                                href={pdfUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20"
+                              <button
+                                onClick={() => openPdfInNewTab(pdfUrl, res.fileName || `${res.name || 'resume'}.pdf`)}
+                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
                               >
                                 <Eye className="w-3 h-3" />
                                 <span>View PDF</span>
-                              </a>
-                              <a
-                                href={pdfUrl}
-                                download={res.fileName || `${res.name || 'resume'}.pdf`}
-                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800"
+                              </button>
+                              <button
+                                onClick={() => downloadFileUrl(pdfUrl, res.fileName || `${res.name || 'resume'}.pdf`)}
+                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
                               >
                                 <Download className="w-3 h-3" />
                                 <span>Download</span>
-                              </a>
+                              </button>
                             </>
                           )}
                         </div>
@@ -772,23 +767,20 @@ export default function PublicPortfolioView({
                         <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
                           {proj.pdfUrl && (
                             <>
-                              <a 
-                                href={proj.pdfUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20"
+                              <button 
+                                onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
                               >
                                 <Eye className="w-3 h-3" />
                                 <span>View PDF</span>
-                              </a>
-                              <a 
-                                href={proj.pdfUrl} 
-                                download={proj.pdfName || `${proj.name}.pdf`} 
-                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800"
+                              </button>
+                              <button 
+                                onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
                               >
                                 <Download className="w-3 h-3" />
                                 <span>Download</span>
-                              </a>
+                              </button>
                             </>
                           )}
                           {proj.liveUrl && (
@@ -847,23 +839,20 @@ export default function PublicPortfolioView({
                         <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
                           {proj.pdfUrl && (
                             <>
-                              <a 
-                                href={proj.pdfUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20"
+                              <button 
+                                onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
                               >
                                 <Eye className="w-3 h-3" />
                                 <span>View PDF</span>
-                              </a>
-                              <a 
-                                href={proj.pdfUrl} 
-                                download={proj.pdfName || `${proj.name}.pdf`} 
-                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800"
+                              </button>
+                              <button 
+                                onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
                               >
                                 <Download className="w-3 h-3" />
                                 <span>Download</span>
-                              </a>
+                              </button>
                             </>
                           )}
                           {proj.liveUrl && (
@@ -905,23 +894,20 @@ export default function PublicPortfolioView({
                       <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-900/60 font-mono text-[10px]">
                         {proj.pdfUrl && (
                           <>
-                            <a 
-                              href={proj.pdfUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20"
+                            <button 
+                              onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
                             >
                               <Eye className="w-3 h-3" />
                               <span>View PDF</span>
-                            </a>
-                            <a 
-                              href={proj.pdfUrl} 
-                              download={proj.pdfName || `${proj.name}.pdf`} 
-                              className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800"
+                            </button>
+                            <button 
+                              onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                              className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
                             >
                               <Download className="w-3 h-3" />
                               <span>Download</span>
-                            </a>
+                            </button>
                           </>
                         )}
                         {proj.liveUrl && (

@@ -30,6 +30,7 @@ import {
   ResumeItem
 } from '../types';
 import { heavyStorage } from '../lib/heavyStorage';
+import { openPdfInNewTab, downloadFileUrl, dataUrlToBlobUrl } from '../lib/pdfUtils';
 
 interface ResumeTabProps {
   profile: PersonalProfile;
@@ -367,25 +368,22 @@ export default function ResumeTab({
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2.5">
-                        <a 
-                          href={viewingResume.fileDataUrl}
-                          download={viewingResume.fileName || viewingResume.name}
+                        <button 
+                          onClick={() => downloadFileUrl(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
                           className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 select-none"
                           style={{ backgroundColor: '#10b981', color: '#020617' }}
                         >
                           <Download className="w-3.5 h-3.5 text-slate-950" />
                           <span>Download File ({viewingResume.size})</span>
-                        </a>
+                        </button>
                         {isPdf && (
-                          <a 
-                            href={viewingResume.fileDataUrl}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button 
+                            onClick={() => openPdfInNewTab(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
                             className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer select-none"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
                             <span>Open PDF</span>
-                          </a>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -401,35 +399,21 @@ export default function ResumeTab({
                           />
                         </div>
                       ) : isPdf ? (
-                        <div className="w-full py-16 px-6 flex flex-col justify-center items-center text-center space-y-5 bg-[#09090b] rounded-2xl border border-zinc-800/80 max-w-xl mx-auto my-4">
-                          <div className="p-4 bg-emerald-500/10 rounded-full text-emerald-400 border border-emerald-500/15 shadow-inner">
-                            <FileText className="w-12 h-12" />
-                          </div>
-                          <div className="space-y-2">
-                            <h4 className="text-white font-extrabold text-sm sm:text-base font-sans">Uploaded PDF Resume</h4>
-                            <p className="text-xs text-gray-400 leading-relaxed font-sans max-w-sm">
-                              Browser policies restrict previewing raw Base64 PDFs directly inside iFrame sandboxes. Open in a secure external tab or download the file directly to view.
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap gap-3 justify-center">
-                            <a 
-                              href={viewingResume.fileDataUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="bg-[#10b981] text-slate-950 hover:bg-[#059669] font-sans font-extrabold px-5 py-2.5 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-lg shadow-[#10b981]/20 active:scale-[0.98]"
-                              style={{ backgroundColor: '#10b981', color: '#020617' }}
+                        <div className="w-full h-full p-2 flex flex-col space-y-3" style={{ minHeight: '500px' }}>
+                          <iframe 
+                            src={dataUrlToBlobUrl(viewingResume.fileDataUrl!)} 
+                            title={viewingResume.name} 
+                            className="w-full h-[480px] rounded-xl border border-zinc-800 bg-[#18181b]" 
+                          />
+                          <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+                            <span>Interactive PDF Resume View</span>
+                            <button 
+                              onClick={() => openPdfInNewTab(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
+                              className="text-emerald-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
                             >
-                              <ExternalLink className="w-4 h-4 text-slate-950" />
-                              <span>Open PDF in New Tab</span>
-                            </a>
-                            <a 
-                              href={viewingResume.fileDataUrl}
-                              download={viewingResume.fileName || viewingResume.name}
-                              className="bg-slate-900 border border-slate-800 text-white hover:bg-slate-850 font-sans font-semibold px-5 py-2.5 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs active:scale-[0.98]"
-                            >
-                              <Download className="w-4 h-4" />
-                              <span>Download PDF File</span>
-                            </a>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              <span>Open Native Browser Tab</span>
+                            </button>
                           </div>
                         </div>
                       ) : (

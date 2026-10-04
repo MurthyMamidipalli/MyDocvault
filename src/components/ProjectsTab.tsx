@@ -28,6 +28,7 @@ import {
   File
 } from 'lucide-react';
 import { Project } from '../types';
+import { openPdfInNewTab, downloadFileUrl } from '../lib/pdfUtils';
 import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from '../lib/supabase';
 
 interface ProjectsTabProps {
@@ -718,27 +719,22 @@ export default function ProjectsTab({
                   {/* Separate View PDF and Download PDF Buttons */}
                   {item.pdfUrl && (
                     <>
-                      <a 
-                        href={item.pdfUrl} 
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button 
+                        onClick={() => openPdfInNewTab(item.pdfUrl!, item.pdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
                         title="View PDF in new tab"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>View PDF</span>
-                      </a>
-                      <a 
-                        href={item.pdfUrl} 
-                        download={item.pdfName || `${item.name.replace(/\s+/g, '_')}.pdf`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      </button>
+                      <button 
+                        onClick={() => downloadFileUrl(item.pdfUrl!, item.pdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
                         title={item.pdfName || "Download file"}
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Download</span>
-                      </a>
+                      </button>
                     </>
                   )}
 

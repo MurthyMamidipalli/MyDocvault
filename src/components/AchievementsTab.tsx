@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Award, Trash2, Pencil, Calendar, Eye, Lock, Paperclip, FileText, Download, X } from 'lucide-react';
 import { Achievement } from '../types';
+import { openPdfInNewTab, downloadFileUrl } from '../lib/pdfUtils';
 
 interface AchievementsTabProps {
   achievements: Achievement[];
@@ -304,12 +305,12 @@ export default function AchievementsTab({
                 </div>
                 {ach.fileUrl && (
                   <div className="flex items-center gap-2 shrink-0">
-                    <a href={ach.fileUrl} target="_blank" rel="noopener noreferrer" className="text-emerald-400 hover:underline flex items-center gap-0.5 text-[10px]">
+                    <button onClick={() => openPdfInNewTab(ach.fileUrl!, ach.fileName || 'achievement.pdf')} className="text-emerald-400 hover:underline flex items-center gap-0.5 text-[10px] cursor-pointer">
                       <Eye className="w-3 h-3" /> View
-                    </a>
-                    <a href={ach.fileUrl} download={ach.fileName} className="text-gray-300 hover:text-white flex items-center gap-0.5 text-[10px]">
+                    </button>
+                    <button onClick={() => downloadFileUrl(ach.fileUrl!, ach.fileName || 'achievement.pdf')} className="text-gray-300 hover:text-white flex items-center gap-0.5 text-[10px] cursor-pointer">
                       <Download className="w-3 h-3" /> Save
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>

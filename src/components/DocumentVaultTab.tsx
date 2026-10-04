@@ -32,6 +32,7 @@ import {
   uploadFileToDrive, 
   downloadFileFromDrive 
 } from '../lib/googleDrive';
+import { openPdfInNewTab, downloadFileUrl, dataUrlToBlobUrl } from '../lib/pdfUtils';
 
 interface DocumentVaultTabProps {
   documents: VaultDocument[];
@@ -745,48 +746,42 @@ export default function DocumentVaultTab({
                   </span>
                 </div>
                 <div className="flex items-center gap-2.5 select-none">
-                  <a 
-                    href={fileUrl}
-                    download={previewItem.name}
-                    className="bg-slate-950/40 hover:bg-slate-900 border border-slate-855 hover:border-slate-805 text-gray-300 font-sans font-bold px-3 py-1.5 rounded-lg transition-all duration-150 inline-flex items-center gap-1.5 cursor-pointer text-xs active:scale-[0.98]"
+                  <button 
+                    onClick={() => downloadFileUrl(fileUrl, previewItem.name)}
+                    className="bg-slate-950/40 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-gray-300 font-sans font-bold px-3 py-1.5 rounded-lg transition-all duration-150 inline-flex items-center gap-1.5 cursor-pointer text-xs active:scale-[0.98]"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download File</span>
-                  </a>
-                  <a 
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
+                  </button>
+                  <button 
+                    onClick={() => openPdfInNewTab(fileUrl, previewItem.name)}
                     className="bg-[#10b981] text-slate-950 hover:bg-[#059669] hover:text-white font-sans font-bold px-3 py-1.5 rounded-lg transition-all duration-150 inline-flex items-center gap-1.5 cursor-pointer text-xs shadow-md shadow-[#10b981]/25 active:scale-[0.98]"
                   >
                     <ExternalLink className="w-4 h-4" />
                     <span>Open in New Tab</span>
-                  </a>
+                  </button>
                 </div>
               </div>
 
               {/* View Container */}
               <div className="flex-1 overflow-auto bg-[#0a0a0d] flex items-center justify-center p-4 min-h-[420px]">
                 {isPdf ? (
-                  <div className="w-full py-16 px-6 flex flex-col justify-center items-center text-center space-y-5 bg-[#09090b] rounded-2xl border border-zinc-800">
-                    <div className="p-4 bg-[#10b981]/10 rounded-full text-emerald-400 border border-emerald-500/20 shadow-inner">
-                      <FileText className="w-12 h-12" />
+                  <div className="w-full h-full flex flex-col space-y-3">
+                    <iframe 
+                      src={dataUrlToBlobUrl(fileUrl)} 
+                      title={previewItem.name} 
+                      className="w-full h-[520px] rounded-xl border border-zinc-800 bg-[#18181b]" 
+                    />
+                    <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+                      <span>Interactive PDF Document View</span>
+                      <button 
+                        onClick={() => openPdfInNewTab(fileUrl, previewItem.name)}
+                        className="text-emerald-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Open Native Browser Tab</span>
+                      </button>
                     </div>
-                    <div className="space-y-1.5 max-w-sm">
-                      <h4 className="text-white font-bold text-sm sm:text-base font-sans">{previewItem.name}</h4>
-                      <p className="text-xs text-gray-400 leading-relaxed font-sans">
-                        Base64 Decrypted PDF Document storage. Direct in-app preview has been disabled. Please open the document in a secure external browser tab.
-                      </p>
-                    </div>
-                    <a 
-                      href={fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-bold px-5 py-2.5 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-lg shadow-[#10b981]/20 active:scale-[0.98]"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      <span>Open PDF in New Tab</span>
-                    </a>
                   </div>
                 ) : (
                   <div className="max-w-full max-h-[50vh] overflow-auto flex items-center justify-center">

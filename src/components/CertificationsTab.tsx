@@ -19,6 +19,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { Certification } from '../types';
+import { openPdfInNewTab, downloadFileUrl, dataUrlToBlobUrl } from '../lib/pdfUtils';
 
 interface CertificationsTabProps {
   certifications: Certification[];
@@ -951,28 +952,21 @@ export default function CertificationsTab({
                     
                     {/* Render different container base on PDF vs Image */}
                     {previewItem.fileUrl.startsWith('data:application/pdf') || previewItem.fileName?.toLowerCase().endsWith('.pdf') ? (
-                      <div className="w-full flex flex-col justify-center items-center text-slate-300 bg-[#0c0c0e] p-8 space-y-6" style={{ minHeight: '450px' }}>
-                        <div className="p-5 bg-emerald-500/10 rounded-full text-emerald-400 border border-emerald-500/20 shadow-inner">
-                          <FileText className="w-12 h-12" />
-                        </div>
-                        <div className="space-y-2 text-center max-w-md">
-                          <h4 className="text-white font-bold text-base sm:text-lg font-sans">
-                            {previewItem.fileName || "document.pdf"}
-                          </h4>
-                          <p className="text-xs text-gray-400 leading-relaxed font-sans">
-                            Base64 Encrypted PDF Document Vault. To maintain high-fidelity styling and security, direct in-app preview is disabled. Please open the document in a secure external browser tab.
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <a 
-                            href={previewItem.fileUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-bold px-6 py-3 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-lg shadow-[#10b981]/20 active:scale-[0.98]"
+                      <div className="w-full h-full p-4 flex flex-col space-y-3" style={{ minHeight: '520px' }}>
+                        <iframe 
+                          src={dataUrlToBlobUrl(previewItem.fileUrl)} 
+                          title={previewItem.fileName || 'Document PDF'} 
+                          className="w-full h-[480px] rounded-xl border border-slate-800 bg-[#18181b]" 
+                        />
+                        <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+                          <span>Interactive Certificate PDF View</span>
+                          <button 
+                            onClick={() => openPdfInNewTab(previewItem.fileUrl!, previewItem.fileName || 'certificate.pdf')}
+                            className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-bold px-4 py-2 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-md active:scale-[0.98]"
                           >
                             <ExternalLink className="w-4 h-4" />
                             <span>Open PDF in New Tab</span>
-                          </a>
+                          </button>
                         </div>
                       </div>
                     ) : (
