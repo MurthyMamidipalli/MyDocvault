@@ -480,7 +480,7 @@ export default function PublicPortfolioView({
                 </h3>
                 <div className="space-y-3 pt-1">
                   {publicCerts.map(cert => {
-                    const certUrl = cert.fileUrl || (cert.credentialUrl && cert.credentialUrl.startsWith('data:') ? cert.credentialUrl : '') || generateCertificationPdf(cert);
+                    const certUrl = cert.fileUrl || (cert.credentialUrl && cert.credentialUrl.startsWith('data:') ? cert.credentialUrl : '') || generateCertificationPdf(cert, profile.name);
                     const certName = cert.fileName || `${cert.title.replace(/\s+/g, '_')}_Certificate.pdf`;
                     return (
                       <div key={cert.id} className="bg-slate-950/45 p-3.5 rounded-xl border border-slate-900 space-y-2 hover:bg-slate-900/30 transition flex flex-col justify-between">

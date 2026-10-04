@@ -481,7 +481,7 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                       type="text" 
                       value={formData.shareSlug || ''}
                       onChange={e => handleUsernameChange(e.target.value)}
-                      placeholder="e.g. ram or ramachandra-murthy"
+                      placeholder="e.g. alex-smith or username"
                       className="w-full bg-transparent px-3.5 py-2.5 text-white text-sm outline-none font-mono"
                     />
                   </div>

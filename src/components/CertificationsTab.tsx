@@ -32,15 +32,17 @@ interface CertificationsTabProps {
 export function generateCertificationPdf(cert: {
   title: string;
   issuer: string;
-  dateIssued: string;
+  dateIssued?: string;
+  issueDate?: string;
   credentialId?: string;
   type?: 'study' | 'course' | 'grades';
-}): string {
-  const title = cert.title || 'Certification';
-  const issuer = cert.issuer || 'Issuer';
-  const date = cert.dateIssued || '2024-06-19';
-  const idValue = cert.credentialId || 'KL-CR-V01-09';
-  const type = cert.type || 'study';
+}, recipientName?: string): string {
+  const title = cert.title || 'Professional Certification';
+  const issuer = cert.issuer || 'Official Issuing Organization';
+  const date = cert.dateIssued || cert.issueDate || new Date().toISOString().substring(0, 10);
+  const idValue = cert.credentialId || `CERT-${Math.floor(Math.random() * 900000) + 100000}`;
+  const type = cert.type || 'course';
+  const student = (recipientName && recipientName.trim()) ? recipientName.trim() : 'VERIFIED CANDIDATE';
 
   const escapePdfText = (t: string) => {
     return t.replace(/\\/g, '\\\\')
@@ -48,10 +50,11 @@ export function generateCertificationPdf(cert: {
             .replace(/\)/g, '\\)');
   };
 
-  const escTitle = escapePdfText(title);
-  const escIssuer = escapePdfText(issuer);
+  const escTitle = escapePdfText(title.toUpperCase());
+  const escIssuer = escapePdfText(issuer.toUpperCase());
   const escDate = escapePdfText(date);
   const escId = escapePdfText(idValue);
+  const escStudent = escapePdfText(student.toUpperCase());
 
   let drawStream = '';
   let textStream = '';
@@ -64,108 +67,88 @@ export function generateCertificationPdf(cert: {
 0.1 0.1 0.1 rg
 /F1 15 Tf
 1 0 0 1 54 710 Tm
-(KONERU LAKSHMAIAH EDUCATION FOUNDATION) Tj
+(${escIssuer}) Tj
 /F3 9 Tf
 1 0 0 1 54 690 Tm
-(Deemed to be University  Estd u/s 3 of UGC Act 1956  NAAC 'A++' Grade Campus) Tj
+(OFFICIAL ACADEMIC & PROFESSIONAL CREDENTIAL RECORD) Tj
 /F1 12 Tf
 1 0 0 1 54 645 Tm
 (CONSOLIDATED CUMULATIVE MEMORANDUM OF GRADES) Tj
 /F3 9.5 Tf
 1 0 0 1 54 610 Tm
-(Student Name: MAMIDIPALLI RAMACHANDRA MURTHY) Tj
+(Candidate Name: ${escStudent}) Tj
 0 -14 Td
-(Registration No: 190030999) Tj
+(Verification Token ID: ${escId}) Tj
 0 -14 Td
-(Program Course: Bachelor of Technology \\(B.Tech.\\)) Tj
-0 -14 Td
-(Discipline Major: Computer Science and Engineering) Tj
+(Credential Subject: ${escTitle}) Tj
 /F1 10.5 Tf
 1 0 0 1 54 520 Tm
-(ACADEMIC PERFORMANCE LOG \\(185 TOTAL CREDITS COMPLETED\\)) Tj
+(PERFORMANCE EVALUATION & CREDIT LOG) Tj
 /F3 9 Tf
 1 0 0 1 54 495 Tm
-(Course Code / Subject Name                                   Credits    Grade) Tj
+(Subject / Assessment Module                                   Credits    Grade) Tj
 0 -18 Td
-(19CS1101  Problem Solving through Coding             4        O  \\(10.0\\)) Tj
+(CS101  Advanced Specialization & Domain Core              4        O  \\(10.0\\)) Tj
 0 -14 Td
-(19MA2101  Discrete Mathematics & Matrix Algebra      4        A+ \\(9.00\\)) Tj
+(CS201  System Architecture & Design Patterns              4        A+ \\(9.00\\)) Tj
 0 -14 Td
-(19CS2101  Data Structures and Algorithms in C++      4        O  \\(10.0\\)) Tj
+(CS301  Data Structures & High Performance Code            4        O  \\(10.0\\)) Tj
 0 -14 Td
-(19CS2102  Relational Database Systems \\(RDBMS\\)        4        A+ \\(9.00\\)) Tj
-0 -14 Td
-(19CS3101  Design & Analysis of Algorithms            4        O  \\(10.0\\)) Tj
-0 -14 Td
-(19CS3114  Machine Learning & Analytics               4        O  \\(10.0\\)) Tj
-0 -14 Td
-(19CS4201  Major Capstone Design Project              6        O  \\(10.0\\)) Tj
+(CS401  Applied Machine Learning & Analytics                4        O  \\(10.0\\)) Tj
 /F1 11 Tf
 1 0 0 1 54 285 Tm
-(GRADED RESULTS: CGPA 8.80 \\(FIRST CLASS WITH DISTINCTION\\)) Tj
+(GRADED RESULTS: DISTINCTION IN CERTIFICATION ASSESSMENT) Tj
 /F3 9 Tf
 1 0 0 1 54 240 Tm
-(Date Checked: ${escDate}) Tj
+(Date Issued: ${escDate}) Tj
 0 -12 Td
 (Verification Key: ${escId}) Tj
 0 -12 Td
 (Security Status: SECURE SYSTEM INTEGRATED DATABASE RECORD) Tj
 /F2 10 Tf
 1 0 0 1 54 160 Tm
-(Signed official registrar of examinations,) Tj
+(Authorized Certification Authority,) Tj
 /F1 10 Tf
 0 -16 Td
-(Prof. Dr. Venkat Prasad) Tj
-/F3 8 Tf
-0 -12 Td
-(Controller of Examinations, CLEF Deemed University) Tj
+(Office of Academic Standards & Credentials) Tj
 ET`;
     drawStream += "0.7 0.7 0.7 RG\n1 w\n54 505 m 558 505 l S\n54 300 m 558 300 l S\n";
   } else if (type === 'study') {
     textStream = `BT
 0.1 0.1 0.1 rg
 /F1 19 Tf
-1 0 0 1 110 710 Tm
-(KL Deemed University) Tj
+1 0 0 1 54 710 Tm
+(${escIssuer}) Tj
 /F3 8 Tf
-1 0 0 1 110 690 Tm
-(ESTABLISHED UNDER SECTION 3 OF THE UNIVERSITY GRANTS COMMISSION ACT, 1956) Tj
+1 0 0 1 54 690 Tm
+(OFFICIAL ACADEMIC & INSTITUTIONAL DIPLOMA CREDENTIAL) Tj
 /F2 12 Tf
-1 0 0 1 180 620 Tm
-(By decree of the Academic Senate, be it known that) Tj
+1 0 0 1 54 620 Tm
+(By authority of the Senate & Academic Directives, be it known that) Tj
 /F1 16 Tf
-1 0 0 1 125 570 Tm
-(RAMACHANDRA MURTHY MAMIDIPALLI) Tj
+1 0 0 1 54 570 Tm
+(${escStudent}) Tj
 /F3 11 Tf
-1 0 0 1 70 530 Tm
-(having successfully completed the prescribed curriculum courses and satisfied all) Tj
+1 0 0 1 54 530 Tm
+(having successfully completed all directives and course requirements is hereby certified) Tj
 0 -15 Td
-(academic directives is hereby certified and designated as a graduate of the program) Tj
+(and awarded official qualification for) Tj
 /F1 14 Tf
-1 0 0 1 120 460 Tm
-(${escTitle.toUpperCase()}) Tj
-/F3 11 Tf
-1 0 0 1 140 420 Tm
-(with computer science and engineering specialization) Tj
+1 0 0 1 54 460 Tm
+(${escTitle}) Tj
 /F3 10 Tf
 1 0 0 1 54 340 Tm
 (Issuer: ${escIssuer}) Tj
 0 -14 Td
 (Date Registered: ${escDate}) Tj
 0 -14 Td
-(Credential Registry Reference Code: ${escId}) Tj
+(Credential Reference Code: ${escId}) Tj
 /F2 10 Tf
 1 0 0 1 54 220 Tm
 (In witness whereof we append our electronic signatures,) Tj
 /F1 10 Tf
 1 0 0 1 54 160 Tm
-(s/d Registrar, Academic Office) Tj
-0 -12 Td
-(Academic Registrar, CLEF) Tj
-1 0 0 1 380 160 Tm
-(s/d Vice-Chancellor) Tj
-0 -12 Td
-(General Administration Senate) Tj
+(Registrar, Academic Office) Tj
 ET`;
     drawStream += "0.85 0.65 0.1 RG\n3 w\n260 210 80 50 re S\n";
   } else {
@@ -173,24 +156,24 @@ ET`;
 0.1 0.1 0.1 rg
 /F1 18 Tf
 1 0 0 1 54 710 Tm
-(${escIssuer.toUpperCase()}) Tj
+(${escIssuer}) Tj
 /F3 9 Tf
 1 0 0 1 54 690 Tm
 (GLOBAL EDUCATION & PROFESSIONAL CERTIFICATIONS PLATFORM) Tj
 /F1 22 Tf
-1 0 0 1 120 600 Tm
+1 0 0 1 54 600 Tm
 (CERTIFICATE OF COMPLETION) Tj
 /F3 11 Tf
-1 0 0 1 150 560 Tm
+1 0 0 1 54 560 Tm
 (This is proudly awarded to candidate) Tj
 /F1 16 Tf
-1 0 0 1 130 510 Tm
-(RAMACHANDRA MURTHY MAMIDIPALLI) Tj
+1 0 0 1 54 510 Tm
+(${escStudent}) Tj
 /F3 11 Tf
-1 0 0 1 100 460 Tm
-(for completing all online class modules, hands-on labs, and key assessments for) Tj
+1 0 0 1 54 460 Tm
+(for completing all curriculum modules, practical labs, and key assessments for) Tj
 /F1 13 Tf
-1 0 0 1 110 410 Tm
+1 0 0 1 54 410 Tm
 (${escTitle}) Tj
 /F3 10 Tf
 1 0 0 1 54 310 Tm
@@ -206,9 +189,9 @@ ET`;
 (Course Syllabus Director & Principal Instructor,) Tj
 /F1 11 Tf
 0 -16 Td
-(Dr. Andrew Ng, Chief Scholar Emeritus) Tj
+(Office of Professional Education) Tj
 ET`;
-    drawStream += "0.1 0.6 0.4 RG\n2 w\n100 535 m 512 535 l S\n";
+    drawStream += "0.1 0.6 0.4 RG\n2 w\n54 535 m 558 535 l S\n";
   }
 
   const streamContent = drawStream + '\n' + textStream;
@@ -1035,7 +1018,7 @@ export default function CertificationsTab({
 
                         {/* Student Details Info Grid */}
                         <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-[11px] font-mono text-slate-700 bg-white p-3 rounded border border-slate-200/60 shadow-sm">
-                          <div><span className="text-slate-400">Student Name:</span> <strong className="text-slate-950">MAMIDIPALLI RAMACHANDRA MURTHY</strong></div>
+                          <div><span className="text-slate-400">Student Name:</span> <strong className="text-slate-950">VERIFIED CANDIDATE</strong></div>
                           <div><span className="text-slate-400">Roll/Reg No:</span> <strong className="text-emerald-800">190030999</strong></div>
                           <div><span className="text-slate-400">Program:</span> <strong className="text-slate-950">Bachelor of Technology (B.Tech.)</strong></div>
                           <div><span className="text-slate-400">Discipline:</span> <strong className="text-slate-950">Computer Science and Engineering</strong></div>
@@ -1206,7 +1189,7 @@ export default function CertificationsTab({
                               {previewItem.title.toUpperCase()}
                             </span>
                             <h2 className="text-lg md:text-xl font-bold font-sans text-amber-950 tracking-normal pt-2 uppercase">
-                              RAMACHANDRA MURTHY MAMIDIPALLI
+                              {previewItem.issuer || 'OFFICIAL ISSUING ORGANIZATION'}
                             </h2>
                             <p className="text-xs text-amber-800 italic mt-1 font-serif">
                               has successfully completed all prescribed program coursework and met all conditions set by the university, and is hereby awarded this official
@@ -1289,7 +1272,7 @@ export default function CertificationsTab({
                           </p>
 
                           <p className="text-xl font-bold text-white uppercase tracking-wide font-sans underline decoration-emerald-500 decoration-2 underline-offset-4">
-                            RAMACHANDRA MURTHY MAMIDIPALLI
+                            VERIFIED CANDIDATE
                           </p>
 
                           <p className="text-xs text-gray-500 max-w-sm mx-auto">
@@ -1460,7 +1443,7 @@ STATUS       : VERIFIED & TRUSTED BY UNIVERSITY SENATE
 
 RECIPIENT USER PORTFOLIO REGISTER:
 -----------------------------------------------------
-Candidate Full Name :  RAMACHANDRA MURTHY MAMIDIPALLI
+Candidate Full Name :  VERIFIED CANDIDATE
 Curriculum Course   :  Computer Science and Engineering
 Major Major         :  Bachelor of Technology (B.Tech.)
 Clearance Rating    :  100% Fully Valid Certificate Archive

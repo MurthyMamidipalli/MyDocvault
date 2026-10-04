@@ -679,6 +679,47 @@ export default function App() {
     localStorage.setItem('nexus_current_user', JSON.stringify(user));
   };
 
+  const resetUserDataState = (userEmail?: string, userName?: string) => {
+    const defaultProfile: PersonalProfile = {
+      name: userName || (userEmail ? userEmail.split('@')[0] : 'User'),
+      firstName: userName ? userName.split(' ')[0] : 'User',
+      lastName: userName ? userName.split(' ').slice(1).join(' ') : '',
+      email: userEmail || '',
+      phone: '',
+      location: '',
+      headline: 'Verified Professional',
+      bio: '',
+      avatarUrl: '',
+      shareSlug: userEmail ? userEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') : 'my-profile',
+      publicProfile: true
+    };
+    setProfile(defaultProfile);
+    setSkills([]);
+    setExperience([]);
+    setCertifications([]);
+    setProjects([]);
+    setProducts([]);
+    setEducation([]);
+    setAchievements([]);
+    setTestimonials([]);
+    setLinks([]);
+    setResumes([]);
+    setDocuments([]);
+    setCalendarEvents([]);
+    setCurrentJob({
+      employer: '',
+      company: '',
+      role: '',
+      department: '',
+      joiningDate: '',
+      startDate: '',
+      location: '',
+      description: '',
+      employmentType: '',
+      isPublic: true
+    });
+  };
+
   const handleUserLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -687,6 +728,7 @@ export default function App() {
     }
     setCurrentUser(null);
     localStorage.removeItem('nexus_current_user');
+    resetUserDataState();
   };
 
   // Styled custom modal dialog to bypass native iframe confirm blocking
@@ -1074,9 +1116,14 @@ export default function App() {
 
   // Supabase Database restore & initial sync whenever currentUser logs in
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      resetUserDataState();
+      return;
+    }
     const userId = currentUser.id;
     if (!userId) return;
+
+    resetUserDataState(currentUser.email, `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim());
 
     const loadSupabaseUserData = async () => {
       console.log(`[Supabase DB] Loading records for authenticated user: ${userId}`);
@@ -1129,8 +1176,8 @@ export default function App() {
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(mapped));
         } else {
           const emailKey = currentUser?.email?.toLowerCase().trim();
-          let currentLocalSkills: Skill[] = skills;
-          if ((!currentLocalSkills || currentLocalSkills.length === 0) && emailKey) {
+          let currentLocalSkills: Skill[] = [];
+          if (emailKey) {
             const raw = localStorage.getItem(`${emailKey}_skills`);
             if (raw) { try { currentLocalSkills = JSON.parse(raw); } catch (e) {} }
           }
@@ -1205,8 +1252,8 @@ export default function App() {
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(mapped));
         } else {
           const emailKey = currentUser?.email?.toLowerCase().trim();
-          let currentLocalCerts: Certification[] = certifications;
-          if ((!currentLocalCerts || currentLocalCerts.length === 0) && emailKey) {
+          let currentLocalCerts: Certification[] = [];
+          if (emailKey) {
             const raw = localStorage.getItem(`${emailKey}_certs`);
             if (raw) { try { currentLocalCerts = JSON.parse(raw); } catch (e) {} }
           }
@@ -3073,7 +3120,8 @@ export default function App() {
   };
 
   const getFullShareUrl = () => {
-    const shareSlug = profile.shareSlug || (profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'ramachandra-murthy');
+    const defaultSlug = currentUser?.email ? currentUser.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '') : 'my-profile';
+    const shareSlug = profile.shareSlug || (profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : defaultSlug);
     const origin = (import.meta as any).env?.VITE_PUBLIC_URL || window.location.origin;
     return `${origin}/${shareSlug}`;
   };
@@ -3124,7 +3172,8 @@ export default function App() {
 
     // 2. debounce to avoid excessive REST request flooding on fast inputs
     const timer = setTimeout(() => {
-      const shareSlug = profile.shareSlug || (profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'ramachandra-murthy');
+      const defaultSlug = currentUser?.email ? currentUser.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '') : 'my-profile';
+      const shareSlug = profile.shareSlug || (profile.name ? profile.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : defaultSlug);
       
       // CRITICAL SECURITY ENHANCEMENT: Filter out anything that the user selected as "private"
       // so that private items are STRICTLY excluded from the public serialized payload.
@@ -3259,7 +3308,7 @@ export default function App() {
     let active = true;
 
     // Parse slug from URL (path or hash)
-    let rawSlug = 'ramachandra-murthy';
+    let rawSlug = currentUser?.email ? currentUser.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '') : 'my-profile';
     const currentHash = window.location.hash || '';
     const currentPathname = window.location.pathname || '';
     
