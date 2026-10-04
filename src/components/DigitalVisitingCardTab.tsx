@@ -61,6 +61,14 @@ export default function DigitalVisitingCardTab({
         return;
       }
 
+      const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
+        if (typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(x, y, w, h, r);
+        } else {
+          ctx.rect(x, y, w, h);
+        }
+      };
+
       // Background Gradient
       const bgGrad = ctx.createLinearGradient(0, 0, 700, 420);
       bgGrad.addColorStop(0, '#0a0d14');
@@ -70,7 +78,7 @@ export default function DigitalVisitingCardTab({
       
       // Draw rounded rectangle card background
       ctx.beginPath();
-      ctx.roundRect(0, 0, 700, 420, 24);
+      drawRoundRect(0, 0, 700, 420, 24);
       ctx.fill();
 
       // Border outline
@@ -160,7 +168,7 @@ export default function DigitalVisitingCardTab({
           // White background box for QR Code dead-centered
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.roundRect(260, 105, 180, 180, 16);
+          drawRoundRect(260, 105, 180, 180, 16);
           ctx.fill();
 
           ctx.drawImage(img, 270, 115, 160, 160);

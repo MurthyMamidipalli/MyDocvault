@@ -213,27 +213,27 @@ export default function TimelineTab({
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] uppercase font-mono font-bold tracking-widest text-emerald-400">{mil.category}</span>
                   {mil.isAuto && (
-                    <span className="text-[8px] uppercase font-mono font-bold bg-[#0d2a1f] border border-emerald-900/60 text-emerald-305 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                    <span className="text-[8px] uppercase font-mono font-bold bg-[#0d2a1f] border border-emerald-900/60 text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                       <Cpu className="w-2.5 h-2.5 text-emerald-400" />
                       Syncing Active
                     </span>
                   )}
                 </div>
                 <h4 className="text-white font-bold text-sm leading-snug">{mil.title}</h4>
-                <p className="text-gray-450 text-xs leading-relaxed max-w-2xl">{mil.description}</p>
+                <p className="text-gray-400 text-xs leading-relaxed max-w-2xl">{mil.description}</p>
               </div>
             </div>
 
             <div className="flex items-center justify-between md:flex-col md:items-end gap-2 shrink-0 md:text-right">
               <span className="inline-flex items-center gap-1 text-xs font-mono font-medium text-gray-400">
-                <Calendar className="w-3.5 h-3.5 text-gray-650" />
+                <Calendar className="w-3.5 h-3.5 text-gray-500" />
                 {mil.date}
               </span>
               
               {!mil.isAuto ? (
                 <button 
                   onClick={() => onDeleteMilestone(mil.id)}
-                  className="p-1 rounded text-gray-600 hover:text-rose-400 hover:bg-slate-955 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                  className="p-1 rounded text-gray-600 hover:text-rose-400 hover:bg-slate-950 opacity-0 group-hover:opacity-100 transition cursor-pointer"
                   title="Wipe milestone snapshot"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

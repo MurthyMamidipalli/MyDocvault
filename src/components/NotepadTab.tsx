@@ -86,6 +86,7 @@ export default function NotepadTab({
       setActiveNoteId(nextActiveId);
     }
     onUpdateNotes(nextNotes);
+    setDeleteConfirmId(null);
     triggerToast('Document deleted successfully.');
   };
 

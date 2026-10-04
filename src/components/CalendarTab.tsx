@@ -41,8 +41,8 @@ export default function CalendarTab({
   onDeleteEvent
 }: CalendarTabProps) {
   // Current viewed month and year
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 5, 1)); // Default June 2026
-  const [selectedDateStr, setSelectedDateStr] = useState<string>('2026-06-22'); // Match default interview date
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(() => new Date().toISOString().split('T')[0]);
   
   // Active Event Type filter
   const [filterType, setFilterType] = useState<string>('all');
@@ -55,7 +55,7 @@ export default function CalendarTab({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<'interview' | 'class' | 'work' | 'other'>('interview');
-  const [dateVal, setDateVal] = useState('2026-06-22');
+  const [dateVal, setDateVal] = useState(() => new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('10:00');
   const [endTime, setEndTime] = useState('11:30');
   const [location, setLocation] = useState('');

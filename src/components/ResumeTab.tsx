@@ -108,7 +108,7 @@ export default function ResumeTab({
 
   const getLayoutClasses = () => {
     switch (layoutStyle) {
-      case 'classic': return 'bg-white text-slate-900 font-serif border border-slate-250';
+      case 'classic': return 'bg-white text-slate-900 font-serif border border-slate-200';
       case 'mono': return 'bg-gray-50 text-gray-900 font-mono border border-gray-300';
       default: return 'bg-slate-900 text-white font-sans border border-slate-800';
     }

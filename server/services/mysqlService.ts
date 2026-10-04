@@ -98,7 +98,7 @@ class MySQLService {
 
       // 2. Ensure standard JSON tables exist
       const standardJsonTables = [
-        "profiles", "education", "experience", "skills", "certifications",
+        "profiles", "education", "experience", "skills", "others", "certifications",
         "documents", "resumes", "notes", "calendar_events", "contacts", "settings"
       ];
       for (const t of standardJsonTables) {
@@ -449,6 +449,7 @@ class MySQLService {
         { name: "education", payload: rawData.education || [] },
         { name: "experience", payload: rawData.experience || [] },
         { name: "skills", payload: rawData.skills || [] },
+        { name: "others", payload: rawData.others || [] },
         { name: "certifications", payload: rawData.certifications || [] },
         { name: "documents", payload: rawData.documents || [] },
         { name: "resumes", payload: rawData.resumes || [] },
@@ -572,7 +573,7 @@ class MySQLService {
         skills: (await fetchJsonTable("skills")) || localData.skills || [],
         projects: finalProjects,
         products: finalProducts,
-        others: localData.others || [],
+        others: (await fetchJsonTable("others")) || localData.others || [],
         certifications: (await fetchJsonTable("certifications")) || localData.certifications || [],
         documents: (await fetchJsonTable("documents")) || localData.documents || [],
         resumes: (await fetchJsonTable("resumes")) || localData.resumes || [],

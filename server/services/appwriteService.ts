@@ -80,7 +80,7 @@ export async function initializeAppwriteSchema(): Promise<void> {
         ]
       },
       ...[
-        "profiles", "education", "experience", "skills", "projects", "products",
+        "profiles", "education", "experience", "skills", "projects", "products", "others",
         "certifications", "grade_sheets", "documents", "resumes", "notes",
         "calendar_events", "contacts", "settings"
       ].map(collectionName => ({
@@ -528,6 +528,7 @@ export const appwriteService = {
       { name: "skills", payload: data.skills || [] },
       { name: "projects", payload: data.projects || [] },
       { name: "products", payload: data.products || [] },
+      { name: "others", payload: data.others || [] },
       { name: "certifications", payload: data.certifications || [] },
       { name: "documents", payload: data.documents || [] },
       { name: "resumes", payload: data.resumes || [] },
@@ -585,6 +586,7 @@ export const appwriteService = {
       "skills",
       "projects",
       "products",
+      "others",
       "certifications",
       "documents",
       "resumes",
@@ -625,6 +627,7 @@ export const appwriteService = {
       skills: lookup["skills"] || [],
       projects: lookup["projects"] || [],
       products: lookup["products"] || [],
+      others: lookup["others"] || [],
       certifications: lookup["certifications"] || [],
       documents: lookup["documents"] || [],
       resumes: lookup["resumes"] || [],
