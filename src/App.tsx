@@ -538,7 +538,7 @@ export default function App() {
         } catch (e) {}
       }
     }
-    return INITIAL_CALENDAR_EVENTS;
+    return [];
   });
 
   const [notes, setNotes] = useState<NotepadNote[]>(() => {
@@ -1526,23 +1526,31 @@ export default function App() {
           setMilestones(mapped);
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(mapped));
         } else {
-          const listToSync = ((milestones && milestones.length > 0) ? milestones : INITIAL_TIMELINE).map(m => ({
-            ...m,
-            id: ensureUUID(m.id)
-          }));
-          setMilestones(listToSync);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(listToSync));
-          for (const m of listToSync) {
-            const { error: syncErr } = await supabase.from('career_timeline').upsert({
-              id: m.id,
-              user_id: userId,
-              title: m.title || 'Career Milestone',
-              date: m.date || new Date().toISOString().substring(0, 7),
-              category: m.category || m.type || 'experience',
-              intensity: m.intensity || 'medium',
-              description: m.description || '',
-              is_public: true
-            });
+          const emailKey = currentUser?.email?.toLowerCase().trim();
+          let currentLocalMilestones: TimelineMilestone[] = [];
+          if (emailKey) {
+            const raw = localStorage.getItem(`${emailKey}_milestones`);
+            if (raw) { try { currentLocalMilestones = JSON.parse(raw); } catch (e) {} }
+          }
+          if (currentLocalMilestones && currentLocalMilestones.length > 0) {
+            setMilestones(currentLocalMilestones);
+            for (const m of currentLocalMilestones) {
+              const mId = ensureUUID(m.id);
+              try {
+                await supabase.from('career_timeline').upsert({
+                  id: mId,
+                  user_id: userId,
+                  title: m.title || 'Career Milestone',
+                  date: m.date || new Date().toISOString().substring(0, 7),
+                  category: m.category || m.type || 'experience',
+                  intensity: m.intensity || 'medium',
+                  description: m.description || '',
+                  is_public: true
+                });
+              } catch (err) {}
+            }
+          } else {
+            setMilestones([]);
           }
         }
       } catch (err) { console.warn("[Supabase Timeline Load]", err); }
