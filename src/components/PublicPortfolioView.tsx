@@ -41,6 +41,7 @@ import {
   getAvatarInitials
 } from '../types';
 import { openPdfInNewTab, downloadFileUrl } from '../lib/pdfUtils';
+import { generateCertificationPdf } from './CertificationsTab';
 
 interface PublicPortfolioViewProps {
   profile: PersonalProfile;
@@ -203,7 +204,16 @@ export default function PublicPortfolioView({
   // Filter portfolio links to public ones
   const publicLinks = cleanLinks.filter(lk => lk.isPublic !== false);
   // Filter achievements to public ones
-  const publicAchievements = cleanAchievements.filter(ach => ach.isPublic !== false);
+  const publicAchievements = cleanAchievements.filter(ach => 
+    ach && 
+    ach.isPublic !== false && 
+    (ach.isPublic as any) !== 'false' && 
+    (ach.isPublic as any) !== 0 && 
+    (ach.isPublic as any) !== '0' && 
+    (ach as any).visibility !== 'private' && 
+    (ach as any).is_public !== false && 
+    (ach as any).is_public !== 'false'
+  );
   // Filter public resumes
   const publicResumes = cleanResumes.filter(res => res.visibility !== 'private');
   // Filter public documents
@@ -512,28 +522,49 @@ export default function PublicPortfolioView({
               <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
                 <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
                   <Award className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Certified Credentials
+                  Certified Credentials & Courses
                 </h3>
                 <div className="space-y-3 pt-1">
-                  {publicCerts.map(cert => (
-                    <div key={cert.id} className="bg-slate-950/45 p-3.5 rounded-xl border border-slate-900 space-y-2 hover:bg-slate-900/30 transition">
-                      <div className="space-y-0.5">
-                        <h4 className="text-white font-semibold text-xs leading-snug">{cert.title}</h4>
-                        <p className="text-[10px] text-gray-500 font-mono">{cert.issuer} • {cert.dateIssued}</p>
+                  {publicCerts.map(cert => {
+                    const certUrl = cert.fileUrl || (cert.credentialUrl && cert.credentialUrl.startsWith('data:') ? cert.credentialUrl : '') || generateCertificationPdf(cert);
+                    const certName = cert.fileName || `${cert.title.replace(/\s+/g, '_')}_Certificate.pdf`;
+                    return (
+                      <div key={cert.id} className="bg-slate-950/45 p-3.5 rounded-xl border border-slate-900 space-y-2 hover:bg-slate-900/30 transition flex flex-col justify-between">
+                        <div className="space-y-0.5">
+                          <h4 className="text-white font-semibold text-xs leading-snug">{cert.title}</h4>
+                          <p className="text-[10px] text-gray-500 font-mono">{cert.issuer} • {cert.dateIssued}</p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
+                          <button
+                            onClick={() => openPdfInNewTab(certUrl, certName)}
+                            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>View Certificate</span>
+                          </button>
+                          <button
+                            onClick={() => downloadFileUrl(certUrl, certName)}
+                            className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Download</span>
+                          </button>
+                          {cert.credentialUrl && cert.credentialUrl.startsWith('http') && (
+                            <a 
+                              href={cert.credentialUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-gray-400 hover:text-emerald-400 font-semibold flex items-center gap-1 ml-auto"
+                            >
+                              <span>Verify</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
                       </div>
-                      {cert.credentialUrl && (
-                        <a 
-                          href={cert.credentialUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] text-emerald-400 hover:underline font-semibold font-mono flex items-center gap-1"
-                        >
-                          <span>Verify Authenticity</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -965,16 +996,37 @@ export default function PublicPortfolioView({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {publicAchievements.map(ach => (
-                    <div key={ach.id} className="bg-slate-950/40 p-4 rounded-xl border border-slate-900 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/15 px-1.5 py-0.5 rounded text-[8px] font-bold font-mono uppercase tracking-wider">
-                          Award
-                        </span>
-                        <span className="text-[9px] font-mono text-gray-550">{ach.date}</span>
+                    <div key={ach.id} className="bg-slate-950/40 p-4 rounded-xl border border-slate-900 space-y-2 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/15 px-1.5 py-0.5 rounded text-[8px] font-bold font-mono uppercase tracking-wider">
+                            Award
+                          </span>
+                          <span className="text-[9px] font-mono text-gray-550">{ach.date}</span>
+                        </div>
+                        <h4 className="text-white font-bold text-xs">{ach.title}</h4>
+                        <p className="text-[11px] text-gray-400 font-mono leading-relaxed">{ach.issuer}</p>
+                        <p className="text-xs text-gray-400 font-sans leading-relaxed pt-1">{ach.description}</p>
                       </div>
-                      <h4 className="text-white font-bold text-xs">{ach.title}</h4>
-                      <p className="text-[11px] text-gray-400 font-mono leading-relaxed">{ach.issuer}</p>
-                      <p className="text-xs text-gray-400 font-sans leading-relaxed pt-1">{ach.description}</p>
+
+                      {ach.fileUrl && (
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
+                          <button
+                            onClick={() => openPdfInNewTab(ach.fileUrl!, ach.fileName || `${ach.title}_Achievement.pdf`)}
+                            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>View Document</span>
+                          </button>
+                          <button
+                            onClick={() => downloadFileUrl(ach.fileUrl!, ach.fileName || `${ach.title}_Achievement.pdf`)}
+                            className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

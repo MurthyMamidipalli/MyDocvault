@@ -1555,7 +1555,9 @@ export default function App() {
             date: a.date,
             description: a.description,
             badgeUrl: a.badge_url,
-            isPublic: a.is_public !== false
+            fileName: a.file_name,
+            fileUrl: a.file_url,
+            isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
           }));
           setAchievements(mapped);
           if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(mapped));
@@ -3662,7 +3664,7 @@ export default function App() {
               }))
             ] : (isDemo ? INITIAL_PROJECTS : []),
             education: hasCustomEdu ? eData.map((e: any) => ({ id: e.id, degree: e.degree, institution: e.institution, fieldOfStudy: e.field_of_study, startYear: e.start_year, endYear: e.end_year, grade: e.grade })) : (isDemo ? INITIAL_EDUCATION : []),
-            achievements: (aData && aData.length > 0) ? aData.map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, isPublic: a.is_public !== false })) : (isDemo ? INITIAL_ACHIEVEMENTS : []),
+            achievements: (aData && aData.length > 0) ? aData.map((a: any) => ({ id: a.id, title: a.title, issuer: a.issuer, date: a.date, description: a.description, fileName: a.file_name, fileUrl: a.file_url, isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0' })) : (isDemo ? INITIAL_ACHIEVEMENTS : []),
             testimonials: (tData && tData.length > 0) ? tData.map((t: any) => ({ id: t.id, name: t.name, company: t.company, role: t.role, text: t.text, relationship: t.relationship, avatarColor: t.avatar_color })) : (isDemo ? INITIAL_TESTIMONIALS : []),
             links: (lData && lData.length > 0) ? lData.map((l: any) => ({ id: l.id, platform: l.platform, label: l.label, url: l.url, isPublic: l.is_public !== false })) : (isDemo ? INITIAL_LINKS : []),
             calendarEvents: (calData && calData.length > 0) ? calData.map((cal: any) => ({ id: cal.id, title: cal.title, date: cal.date, startTime: cal.start_time, endTime: cal.end_time, type: cal.type, isPublic: cal.is_public !== false })) : (isDemo ? INITIAL_CALENDAR_EVENTS : []),
