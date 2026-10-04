@@ -29,6 +29,8 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
 
   const handleStartEdit = (edu: Education) => {
     setEditingItem(edu);
+    const sDate = edu.startDate || (edu.startYear && /^\d{4}$/.test(edu.startYear) ? `${edu.startYear}-01-01` : '');
+    const eDate = edu.endDate && edu.endDate !== 'Present' ? edu.endDate : (edu.endYear && /^\d{4}$/.test(edu.endYear) ? `${edu.endYear}-05-30` : '');
     setFormData({
       institution: edu.institution,
       degree: edu.degree,
@@ -39,8 +41,8 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       activities: edu.activities || '',
       percentage: edu.percentage || '',
       enrollmentId: edu.enrollmentId || '',
-      startDate: edu.startDate || '',
-      endDate: edu.endDate || '',
+      startDate: sDate,
+      endDate: eDate,
       isCurrentlyPursuing: edu.isCurrentlyPursuing || edu.endDate === 'Present' || edu.endYear === 'Present'
     });
     setShowForm(true);
@@ -70,8 +72,8 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
     if (!formData.institution || !formData.degree) return;
 
     // Automatically map date selections back to standard startYear & endYear strings
-    const sYear = formData.startDate ? formData.startDate.substring(0, 4) : '2010';
-    const eYear = formData.isCurrentlyPursuing ? 'Present' : (formData.endDate ? formData.endDate.substring(0, 4) : '2014');
+    const sYear = formData.startDate ? formData.startDate.substring(0, 4) : (formData.startYear || '2019');
+    const eYear = formData.isCurrentlyPursuing ? 'Present' : (formData.endDate ? formData.endDate.substring(0, 4) : (formData.endYear || '2023'));
 
     const finalData = {
       ...formData,
@@ -231,20 +233,18 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
             {/* Start Date & End Date Grid Split */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-mono text-gray-400">Start Date</label>
+                <label className="text-xs font-mono text-gray-400">Start Date (Optional)</label>
                 <input 
                   type="date"
-                  required
                   value={formData.startDate || ''}
                   onChange={e => setFormData({ ...formData, startDate: e.target.value })}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none text-gray-300 [color-scheme:dark]"
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-mono text-gray-400">End Date</label>
+                <label className="text-xs font-mono text-gray-400">End Date (Optional)</label>
                 <input 
                   type="date"
-                  required={!formData.isCurrentlyPursuing}
                   disabled={formData.isCurrentlyPursuing}
                   value={formData.isCurrentlyPursuing ? '' : (formData.endDate || '')}
                   onChange={e => setFormData({ ...formData, endDate: e.target.value })}

@@ -680,6 +680,22 @@ export default function App() {
   };
 
   const resetUserDataState = (userEmail?: string, userName?: string) => {
+    const emailKey = userEmail ? userEmail.toLowerCase().trim() : '';
+
+    const getLocal = <T,>(key: string, fallback: T): T => {
+      if (emailKey) {
+        const raw = localStorage.getItem(`${emailKey}_${key}`);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed as any;
+            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed as any;
+          } catch (e) {}
+        }
+      }
+      return fallback;
+    };
+
     const defaultProfile: PersonalProfile = {
       name: userName || (userEmail ? userEmail.split('@')[0] : 'User'),
       firstName: userName ? userName.split(' ')[0] : 'User',
@@ -693,31 +709,32 @@ export default function App() {
       shareSlug: userEmail ? userEmail.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '') : 'my-profile',
       publicProfile: true
     };
-    setProfile(defaultProfile);
-    setSkills([]);
-    setExperience([]);
-    setCertifications([]);
-    setProjects([]);
-    setProducts([]);
-    setEducation([]);
-    setAchievements([]);
-    setTestimonials([]);
-    setLinks([]);
-    setResumes([]);
-    setDocuments([]);
-    setCalendarEvents([]);
-    setCurrentJob({
-      employer: '',
-      company: '',
-      role: '',
-      department: '',
-      joiningDate: '',
-      startDate: '',
-      location: '',
+
+    setProfile(getLocal('profile', defaultProfile));
+    setSkills(getLocal('skills', INITIAL_SKILLS));
+    setExperience(getLocal('experience', INITIAL_EXPERIENCE));
+    setCertifications(getLocal('certs', INITIAL_CERTIFICATIONS));
+    setProjects(getLocal('projects', INITIAL_PROJECTS));
+    setProducts(getLocal('products', []));
+    setEducation(getLocal('education', INITIAL_EDUCATION));
+    setAchievements(getLocal('achievements', INITIAL_ACHIEVEMENTS));
+    setTestimonials(getLocal('testimonials', INITIAL_TESTIMONIALS));
+    setLinks(getLocal('links', INITIAL_LINKS));
+    setResumes(getLocal('nexus_vault_resumes', []));
+    setDocuments(getLocal('documents', []));
+    setCalendarEvents(getLocal('calendar_events', []));
+    setCurrentJob(getLocal('current_job', {
+      employer: 'Photonx Technologies',
+      company: 'Photonx Technologies',
+      role: 'Tester',
+      department: 'Testing',
+      joiningDate: '2026-05-14',
+      startDate: '2026-05-14',
+      location: 'on-site',
       description: '',
-      employmentType: '',
+      employmentType: 'internship',
       isPublic: true
-    });
+    }));
   };
 
   const handleUserLogout = async () => {
@@ -847,86 +864,63 @@ export default function App() {
 
   // 2. State persistence side-effects
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_profile`, JSON.stringify(profile));
-      }
+      safeLocalStorageSetItem(`${email}_profile`, JSON.stringify(profile));
     }
   }, [profile, currentUser]);
 
   useEffect(() => {
     if (currentUser?.email) {
-      lastLoadedEmailRef.current = currentUser.email.toLowerCase().trim();
-    }
-  }, [currentUser]);
-
-  useEffect(() => {
-    if (currentUser) {
       const email = currentUser.email.toLowerCase().trim();
       safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(skills));
     }
   }, [skills, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_education`, JSON.stringify(education));
-      }
+      safeLocalStorageSetItem(`${email}_education`, JSON.stringify(education));
+      heavyStorage.set(`${email}_education`, education).catch(e => {});
     }
   }, [education, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (isCertsRestoringRef.current) {
-        return;
-      }
+      if (isCertsRestoringRef.current) return;
       safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(certifications));
       heavyStorage.set(`${email}_certs`, certifications).catch(e => {});
     }
   }, [certifications, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_experience`, JSON.stringify(experience));
-      }
+      safeLocalStorageSetItem(`${email}_experience`, JSON.stringify(experience));
     }
   }, [experience, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(currentJob));
-      }
+      safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(currentJob));
     }
   }, [currentJob, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        if (isProjsRestoringRef.current) {
-          return;
-        }
-        safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(projects));
-      }
+      if (isProjsRestoringRef.current) return;
+      safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(projects));
     }
   }, [projects, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        if (isProjsRestoringRef.current) {
-          return;
-        }
-        safeLocalStorageSetItem(`${email}_products`, JSON.stringify(products));
-      }
+      if (isProjsRestoringRef.current) return;
+      safeLocalStorageSetItem(`${email}_products`, JSON.stringify(products));
     }
   }, [products, currentUser]);
 
