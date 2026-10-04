@@ -1393,8 +1393,8 @@ export default function App() {
             type: r.file_type || 'Resume',
             fileType: r.file_type,
             isPrimary: r.is_primary,
-            visibility: r.is_public ? 'public' : 'private',
-            isPublic: r.is_public !== false,
+            visibility: (r.is_public === false || r.is_public === 'false') ? 'private' : 'public',
+            isPublic: r.is_public !== false && r.is_public !== 'false',
             uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
             category: 'SUPABASE'
           }));
@@ -3682,13 +3682,17 @@ export default function App() {
               tags: d.tags,
               visibility: d.visibility || 'public'
             })) : [],
-            resumes: (resData && resData.length > 0) ? resData.filter((r: any) => r.is_public !== false).map((r: any) => ({
+            resumes: (resData && resData.length > 0) ? resData.filter((r: any) => r.is_public !== false && r.is_public !== 'false').map((r: any) => ({
               id: r.id,
-              name: r.title || r.file_name,
-              uploadDate: r.created_at ? r.created_at.substring(0, 10) : 'Verified',
+              name: r.title || r.file_name || 'Resume Document',
+              title: r.title || r.file_name,
+              fileName: r.file_name,
+              fileUrl: r.file_url,
               fileDataUrl: r.file_url,
+              uploadDate: r.created_at ? r.created_at.substring(0, 10) : 'Verified',
               visibility: 'public',
-              type: 'Resume'
+              isPublic: true,
+              type: r.file_type || 'Resume'
             })) : [],
             currentJob: cjData ? {
               employer: cjData.company,
@@ -3874,7 +3878,7 @@ export default function App() {
         achievements={remoteShareData.achievements}
         testimonials={remoteShareData.testimonials}
         links={remoteShareData.links}
-        resumes={resumes}
+        resumes={remoteShareData.resumes && remoteShareData.resumes.length > 0 ? remoteShareData.resumes : resumes}
         documents={remoteShareData.documents || documents}
         calendarEvents={remoteShareData.calendarEvents || []}
         currentJob={remoteShareData.currentJob || currentJob}

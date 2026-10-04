@@ -164,19 +164,51 @@ export function openPdfInNewTab(url: string, filename?: string): void {
     targetUrl = dataUrlToBlobUrl(targetUrl, filename);
   }
 
-  const win = window.open(targetUrl, '_blank', 'noopener,noreferrer');
-  if (!win) {
-    // Fallback if popup blocker prevented window.open
-    const cleanName = sanitizeFilename(filename || 'document.pdf');
-    const a = document.createElement('a');
-    a.href = targetUrl;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.download = cleanName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  const cleanTitle = (filename || 'PDF Document').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const win = window.open('', '_blank');
+  if (win) {
+    try {
+      win.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${cleanTitle}</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #323639;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+  <iframe src="${targetUrl}" type="application/pdf"></iframe>
+</body>
+</html>`);
+      win.document.close();
+      return;
+    } catch (err) {
+      console.warn("[pdfUtils] iframe wrapper failed, falling back to direct tab:", err);
+    }
   }
+
+  // Fallback to direct navigation without download attribute
+  const a = document.createElement('a');
+  a.href = targetUrl;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 /**

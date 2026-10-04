@@ -194,7 +194,7 @@ export default function PublicPortfolioView({
   })();
 
   const cleanLinks = deduplicateByUniqueKey(links || [], lk => (lk.url || lk.label || ''));
-  const cleanResumes = deduplicateByUniqueKey(resumes || [], res => res.name || '');
+  const cleanResumes = deduplicateByUniqueKey(resumes || [], res => res.name || res.title || res.fileName || res.id || '');
   const cleanDocuments = deduplicateByUniqueKey(documents || [], doc => doc.name || doc.title || '');
 
   // Filter skills to show all public/unflagged ones
@@ -215,7 +215,7 @@ export default function PublicPortfolioView({
     (ach as any).is_public !== 'false'
   );
   // Filter public resumes
-  const publicResumes = cleanResumes.filter(res => res.visibility !== 'private');
+  const publicResumes = cleanResumes.filter(res => res && res.visibility !== 'private' && (res as any).isPublic !== false && (res as any).isPublic !== 'false');
   // Filter public documents
   const publicDocuments = cleanDocuments.filter(doc => doc.visibility === 'public');
 
