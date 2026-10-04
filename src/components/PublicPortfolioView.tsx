@@ -422,52 +422,6 @@ export default function PublicPortfolioView({
               </div>
             )}
 
-            {/* Public Resumes / CV Documents Section */}
-            {publicResumes.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
-                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                  <FileText className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Resumes & Documents
-                </h3>
-                <div className="space-y-3 pt-1">
-                  {publicResumes.map(res => (
-                    <div key={res.id} className="bg-slate-950/45 p-3.5 rounded-xl border border-slate-900 space-y-2.5 hover:bg-slate-900/30 transition">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-mono text-emerald-400 uppercase font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                          {res.type || 'Resume'}
-                        </span>
-                        <span className="text-[9px] font-mono text-gray-500">{res.uploadDate || 'Verified'}</span>
-                      </div>
-                      <h4 className="text-white font-semibold text-xs leading-snug truncate" title={res.name}>{res.name}</h4>
-                      
-                      <div className="flex items-center gap-2 pt-1 font-mono text-[10px]">
-                        {(res.fileDataUrl || res.linkUrl) && (
-                          <a
-                            href={res.fileDataUrl || res.linkUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>View</span>
-                          </a>
-                        )}
-                        {res.fileDataUrl && (
-                          <a
-                            href={res.fileDataUrl}
-                            download={res.fileName || `${res.name}.pdf`}
-                            className="bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 transition"
-                          >
-                            <Download className="w-3 h-3" />
-                            <span>Download</span>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Public Vault Documents Section */}
             {publicDocuments.length > 0 && (
