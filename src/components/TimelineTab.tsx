@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Plus, Calendar, Star, Trash2, Award, Briefcase, GraduationCap, LayoutGrid, Cpu } from 'lucide-react';
-import { TimelineMilestone, Experience, CurrentJob } from '../types';
+import { TimelineMilestone, Experience, Education, CurrentJob } from '../types';
 
 interface TimelineTabProps {
   milestones: TimelineMilestone[];
   onAddMilestone: (milestone: Omit<TimelineMilestone, 'id'>) => void;
   onDeleteMilestone: (id: string) => void;
   experience?: Experience[];
+  education?: Education[];
   currentJob?: CurrentJob;
 }
 
@@ -15,6 +16,7 @@ export default function TimelineTab({
   onAddMilestone,
   onDeleteMilestone,
   experience = [],
+  education = [],
   currentJob
 }: TimelineTabProps) {
   const [showForm, setShowForm] = useState(false);
@@ -35,10 +37,21 @@ export default function TimelineTab({
     setShowForm(false);
   };
 
+  // Convert education items to timeline milestones
+  const educationMilestones = (education || []).map(edu => ({
+    id: `auto-edu-${edu.id}`,
+    date: edu.startYear || edu.startDate || (edu.endYear ? `${edu.endYear}-05` : new Date().toISOString().substring(0, 7)),
+    title: `${edu.degree}${edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : ''} at ${edu.institution}`,
+    category: 'education' as const,
+    description: `${edu.degree} program at ${edu.institution}${edu.grade ? ` (Score/Grade: ${edu.grade})` : ''}.`,
+    intensity: 'medium' as const,
+    isAuto: true
+  }));
+
   // Convert experience items to timeline milestones
-  const experienceMilestones = experience.map(exp => ({
+  const experienceMilestones = (experience || []).map(exp => ({
     id: `auto-exp-${exp.id}`,
-    date: exp.startDate,
+    date: exp.startDate || new Date().toISOString().substring(0, 7),
     title: `${exp.role} at ${exp.company}`,
     category: 'experience' as const,
     description: exp.description && exp.description.length > 0
@@ -48,24 +61,48 @@ export default function TimelineTab({
     isAuto: true
   }));
 
-  // Convert currentJob if employer or role is specified
+  // Convert currentJob if employer or role is specified and not already in experience
   const currentJobMilestones = [];
-  if (currentJob && currentJob.employer && currentJob.role) {
-    const jobDate = currentJob.startDate ? currentJob.startDate.substring(0, 7) : new Date().toISOString().substring(0, 7);
-    currentJobMilestones.push({
-      id: 'auto-current-job',
-      date: jobDate,
-      title: `${currentJob.role} (Current Job Engagement) at ${currentJob.employer}`,
-      category: 'experience' as const,
-      description: currentJob.dailyStandupText || `Active role in ${currentJob.department || 'the firm'}.`,
-      intensity: 'high' as const,
-      isAuto: true
-    });
+  if (currentJob && (currentJob.employer || currentJob.company) && currentJob.role) {
+    const emp = (currentJob.employer || currentJob.company).trim().toLowerCase();
+    const rol = currentJob.role.trim().toLowerCase();
+    const alreadyInExp = (experience || []).some(exp => 
+      (exp.company || '').trim().toLowerCase() === emp && 
+      (exp.role || '').trim().toLowerCase() === rol
+    );
+    if (!alreadyInExp) {
+      const jobDate = currentJob.startDate ? currentJob.startDate.substring(0, 7) : (currentJob.joiningDate ? currentJob.joiningDate.substring(0, 7) : new Date().toISOString().substring(0, 7));
+      currentJobMilestones.push({
+        id: 'auto-current-job',
+        date: jobDate,
+        title: `${currentJob.role} (Active Engagement) at ${currentJob.employer || currentJob.company}`,
+        category: 'experience' as const,
+        description: currentJob.description || `Active role in ${currentJob.department || 'the organization'}.`,
+        intensity: 'high' as const,
+        isAuto: true
+      });
+    }
   }
+
+  const DEMO_TITLES = [
+    'admitted to b.tech at kl university',
+    'graduated with 8.5 cgpa',
+    'commenced mba at amity university',
+    'joined photonx technologies as qa intern'
+  ];
+
+  // Filter out any static milestones that match demo titles or demo IDs
+  const cleanUserMilestones = (milestones || []).filter(m => {
+    if (m.id === 'mil-1' || m.id === 'mil-2' || m.id === 'mil-3' || m.id === 'mil-4') return false;
+    const cleanTitle = (m.title || '').toLowerCase().trim();
+    if (DEMO_TITLES.includes(cleanTitle)) return false;
+    return true;
+  });
 
   // Combine static milestones with auto-generated career coordinates
   const combined = [
-    ...milestones.map(m => ({ ...m, isAuto: false })),
+    ...cleanUserMilestones.map(m => ({ ...m, isAuto: false })),
+    ...educationMilestones,
     ...experienceMilestones,
     ...currentJobMilestones
   ];
