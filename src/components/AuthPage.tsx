@@ -246,11 +246,13 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
 
     setIsValidating(true);
     try {
-      console.log(`[Supabase Auth] Registering user ${trimmedEmail}...`);
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : 'https://mydocvault-lilac.vercel.app/';
+      console.log(`[Supabase Auth] Registering user ${trimmedEmail} with redirect ${redirectUrl}...`);
       const { data, error } = await supabase.auth.signUp({
         email: trimmedEmail,
         password: password,
         options: {
+          emailRedirectTo: redirectUrl,
           data: {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
