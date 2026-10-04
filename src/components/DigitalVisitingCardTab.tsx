@@ -14,17 +14,19 @@ import {
   Building2,
   Image as ImageIcon
 } from 'lucide-react';
-import { PersonalProfile, CurrentJob, getAvatarInitials } from '../types';
+import { PersonalProfile, CurrentJob, Experience, getAvatarInitials } from '../types';
 
 interface DigitalVisitingCardTabProps {
   profile: PersonalProfile;
   currentJob?: CurrentJob;
+  experience?: Experience[];
   shareUrl: string;
 }
 
 export default function DigitalVisitingCardTab({
   profile,
   currentJob,
+  experience = [],
   shareUrl
 }: DigitalVisitingCardTabProps) {
   const [isFlipped, setIsFlipped] = useState(false);
@@ -37,6 +39,7 @@ export default function DigitalVisitingCardTab({
   const emailId = profile.email || '';
   const mobileNumber = profile.phone || '';
   const designation = profile.headline || currentJob?.role || '';
+  const companyName = currentJob?.employer || currentJob?.company || (experience && experience.length > 0 ? experience[0].company : '');
   const avatarUrl = profile.avatarUrl || '';
 
   // Use existing MyDocVault public share URL
@@ -101,19 +104,26 @@ export default function DigitalVisitingCardTab({
         // User Name
         ctx.fillStyle = displayName ? '#ffffff' : '#64748b';
         ctx.font = 'bold 28px sans-serif';
-        ctx.fillText(displayName || 'Name Not Provided', 45, 105);
+        ctx.fillText(displayName || 'Name Not Provided', 45, 95);
 
         // Designation
         ctx.fillStyle = designation ? '#34d399' : '#64748b';
-        ctx.font = '600 16px sans-serif';
-        ctx.fillText(designation || 'Designation Not Provided', 45, 138);
+        ctx.font = '600 15px sans-serif';
+        ctx.fillText(designation || 'Designation Not Provided', 45, 122);
+
+        // Company Name
+        if (companyName) {
+          ctx.fillStyle = '#cbd5e1';
+          ctx.font = '600 14px sans-serif';
+          ctx.fillText(`Company: ${companyName}`, 45, 146);
+        }
 
         // Divider
         ctx.strokeStyle = '#1e293b';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(45, 165);
-        ctx.lineTo(655, 165);
+        ctx.moveTo(45, 168);
+        ctx.lineTo(655, 168);
         ctx.stroke();
 
         // Contact Section: Email ID
@@ -387,8 +397,8 @@ export default function DigitalVisitingCardTab({
                 </div>
               </div>
 
-              {/* Main Profile Info (User Name & Current Designation) */}
-              <div className="space-y-1.5 relative z-10 my-auto">
+              {/* Main Profile Info (User Name, Designation & Company Name) */}
+              <div className="space-y-1 relative z-10 my-auto">
                 <h3 className="text-xl md:text-2xl font-bold text-white tracking-tight leading-tight">
                   {displayName || (
                     <span className="text-gray-500 italic text-base">User Name Not Provided</span>
@@ -401,6 +411,13 @@ export default function DigitalVisitingCardTab({
                     <span className="text-gray-500 italic font-normal">Current Designation Not Provided</span>
                   )}
                 </p>
+
+                {companyName && (
+                  <p className="text-gray-300 font-semibold text-xs md:text-sm flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                    {companyName}
+                  </p>
+                )}
               </div>
 
               {/* Contact Information (Full Email ID & Mobile Number) */}

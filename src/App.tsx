@@ -4368,6 +4368,7 @@ export default function App() {
             <DigitalVisitingCardTab
               profile={profile}
               currentJob={currentJob}
+              experience={experience}
               shareUrl={getFullShareUrl()}
             />
           )}
