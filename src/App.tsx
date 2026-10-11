@@ -104,6 +104,492 @@ import { handleOAuthCallback } from './lib/googleDrive';
 import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from './lib/supabase';
 
 
+// ==========================================
+// UNIFIED DEDUPLICATION UTILITIES ACROSS ALL ENTITIES
+// ==========================================
+export const deduplicateCertifications = (items?: Certification[]): Certification[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Certification[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const title = (item.title || '').trim().toLowerCase();
+    const issuer = (item.issuer || '').trim().toLowerCase();
+    const type = (item.type || 'study').trim().toLowerCase();
+    const idKey = item.id ? toUUID(item.id) : '';
+    const contentKey = `${title}__${issuer}__${type}`;
+
+    let matchIdx = -1;
+    if (idKey && seenKeys.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (title && issuer && seenKeys.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rTitle = (r.title || '').trim().toLowerCase();
+        const rIssuer = (r.issuer || '').trim().toLowerCase();
+        const rType = (r.type || 'study').trim().toLowerCase();
+        return rTitle === title && rIssuer === issuer && rType === type;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      const existing = result[matchIdx];
+      result[matchIdx] = {
+        ...existing,
+        ...item,
+        id: existing.id || item.id,
+        fileUrl: existing.fileUrl || item.fileUrl || '',
+        fileName: existing.fileName || item.fileName || '',
+        credentialId: existing.credentialId || item.credentialId || '',
+        credentialUrl: existing.credentialUrl || item.credentialUrl || '',
+        dateIssued: existing.dateIssued || item.dateIssued || existing.issueDate || item.issueDate || '',
+        issueDate: existing.issueDate || item.issueDate || existing.dateIssued || item.dateIssued || '',
+        percentage: existing.percentage || item.percentage || '',
+        description: existing.description || item.description || ''
+      };
+    } else {
+      if (idKey) seenKeys.add(idKey);
+      if (title && issuer) seenKeys.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateEducation = (items?: Education[]): Education[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Education[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const degree = (item.degree || '').trim().toLowerCase();
+    const inst = (item.institution || '').trim().toLowerCase();
+    const idKey = item.id ? toUUID(item.id) : '';
+    const contentKey = `${degree}__${inst}`;
+
+    let matchIdx = -1;
+    if (idKey && seenKeys.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (degree && inst && seenKeys.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rDeg = (r.degree || '').trim().toLowerCase();
+        const rInst = (r.institution || '').trim().toLowerCase();
+        return rDeg === degree && rInst === inst;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      const existing = result[matchIdx];
+      result[matchIdx] = {
+        ...existing,
+        ...item,
+        id: existing.id || item.id,
+        enrollmentId: existing.enrollmentId || item.enrollmentId || '',
+        startDate: existing.startDate || item.startDate || '',
+        endDate: existing.endDate || item.endDate || '',
+        grade: existing.grade || item.grade || '',
+        percentage: existing.percentage || item.percentage || '',
+        activities: existing.activities || item.activities || '',
+        description: existing.description || item.description || ''
+      };
+    } else {
+      if (idKey) seenKeys.add(idKey);
+      if (degree && inst) seenKeys.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateSkills = (items?: Skill[]): Skill[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Skill[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item || !item.name) continue;
+    const nameKey = item.name.trim().toLowerCase();
+    const idKey = item.id ? toUUID(item.id) : '';
+    if (seen.has(nameKey) || (idKey && seen.has(idKey))) {
+      const idx = result.findIndex(r => (r.name && r.name.trim().toLowerCase() === nameKey) || (idKey && r.id && toUUID(r.id) === idKey));
+      if (idx >= 0) {
+        result[idx] = { ...result[idx], ...item, id: result[idx].id || item.id };
+      }
+      continue;
+    }
+    seen.add(nameKey);
+    if (idKey) seen.add(idKey);
+    result.push(item);
+  }
+  return result;
+};
+
+export const deduplicateExperience = (items?: Experience[]): Experience[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Experience[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const roleKey = (item.role || '').trim().toLowerCase();
+    const compKey = (item.company || '').trim().toLowerCase();
+    const idKey = item.id ? toUUID(item.id) : '';
+    const contentKey = `${roleKey}__${compKey}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (roleKey && compKey && seen.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rRole = (r.role || '').trim().toLowerCase();
+        const rComp = (r.company || '').trim().toLowerCase();
+        return rRole === roleKey && rComp === compKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (roleKey && compKey) seen.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateProjects = (items?: Project[]): Project[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Project[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const nameKey = (item.name || '').trim().toLowerCase();
+    const typeKey = (item.type || 'project').trim().toLowerCase();
+    const idKey = item.id ? toUUID(item.id) : '';
+    const contentKey = `${nameKey}__${typeKey}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (nameKey && seen.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rName = (r.name || '').trim().toLowerCase();
+        const rType = (r.type || 'project').trim().toLowerCase();
+        return rName === nameKey && rType === typeKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (nameKey) seen.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateContacts = (items?: Contact[]): Contact[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Contact[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const emailKey = item.email ? item.email.trim().toLowerCase() : '';
+    const nameKey = (item.name || '').trim().toLowerCase();
+    const compKey = (item.company || '').trim().toLowerCase();
+    const nameCompKey = `${nameKey}__${compKey}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (emailKey && seen.has(emailKey)) {
+      matchIdx = result.findIndex(r => r.email && r.email.trim().toLowerCase() === emailKey);
+    } else if (nameKey && seen.has(nameCompKey)) {
+      matchIdx = result.findIndex(r => {
+        const rName = (r.name || '').trim().toLowerCase();
+        const rComp = (r.company || '').trim().toLowerCase();
+        return rName === nameKey && rComp === compKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (emailKey) seen.add(emailKey);
+      if (nameKey) seen.add(nameCompKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateCalendarEvents = (items?: CalendarEvent[]): CalendarEvent[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: CalendarEvent[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const titleKey = (item.title || '').trim().toLowerCase();
+    const dateKey = (item.date || '').trim();
+    const timeKey = (item.startTime || '').trim();
+    const contentKey = `${titleKey}__${dateKey}__${timeKey}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (titleKey && dateKey && seen.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rTitle = (r.title || '').trim().toLowerCase();
+        const rDate = (r.date || '').trim();
+        const rTime = (r.startTime || '').trim();
+        return rTitle === titleKey && rDate === dateKey && rTime === timeKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (titleKey && dateKey) seen.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateNotes = (items?: NotepadNote[]): NotepadNote[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: NotepadNote[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const titleKey = (item.title || '').trim().toLowerCase();
+    const contentKey = `${titleKey}__${(item.category || '').trim().toLowerCase()}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (titleKey && titleKey !== 'untitled document' && seen.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rTitle = (r.title || '').trim().toLowerCase();
+        const rCat = (r.category || '').trim().toLowerCase();
+        return rTitle === titleKey && rCat === (item.category || '').trim().toLowerCase();
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (titleKey && titleKey !== 'untitled document') seen.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateResumes = (items?: ResumeItem[]): ResumeItem[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: ResumeItem[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const nameKey = (item.fileName || item.name || item.title || '').trim().toLowerCase();
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (nameKey && seen.has(nameKey)) {
+      matchIdx = result.findIndex(r => {
+        const rName = (r.fileName || r.name || r.title || '').trim().toLowerCase();
+        return rName === nameKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (nameKey) seen.add(nameKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateLinks = (items?: PortfolioLink[]): PortfolioLink[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: PortfolioLink[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const urlKey = (item.url || '').trim().toLowerCase();
+    const platKey = `${(item.platform || '').trim().toLowerCase()}__${(item.label || '').trim().toLowerCase()}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (urlKey && seen.has(urlKey)) {
+      matchIdx = result.findIndex(r => (r.url || '').trim().toLowerCase() === urlKey);
+    } else if (seen.has(platKey)) {
+      matchIdx = result.findIndex(r => {
+        const rPlat = `${(r.platform || '').trim().toLowerCase()}__${(r.label || '').trim().toLowerCase()}`;
+        return rPlat === platKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (urlKey) seen.add(urlKey);
+      seen.add(platKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateMilestones = (items?: TimelineMilestone[]): TimelineMilestone[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: TimelineMilestone[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const contentKey = `${(item.title || '').trim().toLowerCase()}__${(item.date || '').trim()}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (seen.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rKey = `${(r.title || '').trim().toLowerCase()}__${(r.date || '').trim()}`;
+        return rKey === contentKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      seen.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateAchievements = (items?: Achievement[]): Achievement[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Achievement[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const contentKey = `${(item.title || '').trim().toLowerCase()}__${(item.issuer || '').trim().toLowerCase()}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (seen.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rKey = `${(r.title || '').trim().toLowerCase()}__${(r.issuer || '').trim().toLowerCase()}`;
+        return rKey === contentKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      seen.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateTestimonials = (items?: Testimonial[]): Testimonial[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Testimonial[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const contentKey = `${(item.name || '').trim().toLowerCase()}__${(item.company || '').trim().toLowerCase()}`;
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (seen.has(contentKey)) {
+      matchIdx = result.findIndex(r => {
+        const rKey = `${(r.name || '').trim().toLowerCase()}__${(r.company || '').trim().toLowerCase()}`;
+        return rKey === contentKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      seen.add(contentKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateDocuments = (items?: VaultDocument[]): VaultDocument[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: VaultDocument[] = [];
+  const seen = new Set<string>();
+
+  for (const item of items) {
+    if (!item) continue;
+    const idKey = item.id ? toUUID(item.id) : '';
+    const nameKey = (item.fileName || item.name || item.title || '').trim().toLowerCase();
+
+    let matchIdx = -1;
+    if (idKey && seen.has(idKey)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (nameKey && seen.has(nameKey)) {
+      matchIdx = result.findIndex(r => {
+        const rName = (r.fileName || r.name || r.title || '').trim().toLowerCase();
+        return rName === nameKey;
+      });
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+    } else {
+      if (idKey) seen.add(idKey);
+      if (nameKey) seen.add(nameKey);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
 export default function App() {
   
   // Helper to merge array records by ID or unique key without dropping any records
@@ -219,29 +705,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const unique: Skill[] = [];
-            const seen = new Set<string>();
-            for (const s of parsed) {
-              if (s && s.name) {
-                const nameLower = s.name.toLowerCase().trim();
-                if (!seen.has(nameLower)) {
-                  seen.add(nameLower);
-                  unique.push(s);
-                }
-              }
-            }
-            return unique.map((s: any) => ({
-              id: s.id,
-              name: s.name,
-              category: s.category || 'Technical',
-              proficiency: s.proficiency || 'Intermediate',
-              yearsOfExp: s.yearsOfExp || 1,
-              endorsements: s.endorsements || 0,
-              description: s.description || '',
-              visibility: s.visibility || 'public'
-            }));
-          }
+          if (Array.isArray(parsed)) return deduplicateSkills(parsed);
         } catch (e) {}
       }
     }
@@ -255,18 +719,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const unique: Education[] = [];
-            const seen = new Set<string>();
-            for (const item of parsed) {
-              const key = `${item.institution || ''}-${item.degree || ''}`.toLowerCase().trim();
-              if (!seen.has(key)) {
-                seen.add(key);
-                unique.push(item);
-              }
-            }
-            return unique;
-          }
+          if (Array.isArray(parsed)) return deduplicateEducation(parsed);
         } catch (e) {}
       }
     }
@@ -280,18 +733,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const unique: Certification[] = [];
-            const seen = new Set<string>();
-            for (const item of parsed) {
-              const key = item.id ? String(item.id).trim() : `${(item.title || '').toLowerCase().trim()}_${(item.issuer || '').toLowerCase().trim()}_${(item.credentialId || '').toLowerCase().trim()}_${(item.dateIssued || item.issueDate || '').toLowerCase().trim()}`;
-              if (!seen.has(key)) {
-                seen.add(key);
-                unique.push(item);
-              }
-            }
-            return unique;
-          }
+          if (Array.isArray(parsed)) return deduplicateCertifications(parsed);
         } catch (e) {}
       }
     }
@@ -305,18 +747,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const unique: Experience[] = [];
-            const seen = new Set<string>();
-            for (const item of parsed) {
-              const key = `${item.role || ''}-${item.company || ''}`.toLowerCase().trim();
-              if (!seen.has(key)) {
-                seen.add(key);
-                unique.push(item);
-              }
-            }
-            return unique;
-          }
+          if (Array.isArray(parsed)) return deduplicateExperience(parsed);
         } catch (e) {}
       }
     }
@@ -330,9 +761,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (parsed) {
-            return { ...EMPTY_CURRENT_JOB, ...parsed };
-          }
+          if (parsed) return { ...EMPTY_CURRENT_JOB, ...parsed };
         } catch (e) {}
       }
     }
@@ -346,18 +775,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const unique: Project[] = [];
-            const seen = new Set<string>();
-            for (const item of parsed) {
-              const key = item.id || (item.name ? `${item.name.toLowerCase().trim()}_${item.date || ''}` : `proj_${Math.random()}`);
-              if (!seen.has(key)) {
-                seen.add(key);
-                unique.push(item);
-              }
-            }
-            return unique;
-          }
+          if (Array.isArray(parsed)) return deduplicateProjects(parsed);
         } catch (e) {}
       }
     }
@@ -371,18 +789,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const unique: Project[] = [];
-            const seen = new Set<string>();
-            for (const item of parsed) {
-              const key = item.id || (item.name ? `${item.name.toLowerCase().trim()}_${item.date || ''}` : `prod_${Math.random()}`);
-              if (!seen.has(key)) {
-                seen.add(key);
-                unique.push(item);
-              }
-            }
-            return unique;
-          }
+          if (Array.isArray(parsed)) return deduplicateProjects(parsed);
         } catch (e) {}
       }
     }
@@ -396,18 +803,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            const unique: Project[] = [];
-            const seen = new Set<string>();
-            for (const item of parsed) {
-              const key = item.id || (item.name ? `${item.name.toLowerCase().trim()}_${item.date || ''}` : `oth_${Math.random()}`);
-              if (!seen.has(key)) {
-                seen.add(key);
-                unique.push(item);
-              }
-            }
-            return unique;
-          }
+          if (Array.isArray(parsed)) return deduplicateProjects(parsed);
         } catch (e) {}
       }
     }
@@ -421,9 +817,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateLinks(parsed);
         } catch (e) {}
       }
     }
@@ -437,9 +831,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateLinks(parsed);
         } catch (e) {}
       }
     }
@@ -453,9 +845,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateMilestones(parsed);
         } catch (e) {}
       }
     }
@@ -469,9 +859,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateContacts(parsed);
         } catch (e) {}
       }
     }
@@ -485,9 +873,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateAchievements(parsed);
         } catch (e) {}
       }
     }
@@ -501,9 +887,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateTestimonials(parsed);
         } catch (e) {}
       }
     }
@@ -517,9 +901,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateDocuments(parsed);
         } catch (e) {}
       }
     }
@@ -533,9 +915,7 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            return parsed;
-          }
+          if (Array.isArray(parsed)) return deduplicateCalendarEvents(parsed);
         } catch (e) {}
       }
     }
@@ -548,7 +928,8 @@ export default function App() {
       const saved = localStorage.getItem(`${email}_notepad_notes`);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return deduplicateNotes(parsed);
         } catch (e) {}
       }
     }
@@ -561,7 +942,8 @@ export default function App() {
       const saved = localStorage.getItem(`${email}_nexus_vault_resumes`);
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return deduplicateResumes(parsed);
         } catch (e) {}
       }
     }
@@ -697,6 +1079,7 @@ export default function App() {
 
   const resetUserDataState = (userEmail?: string, userName?: string) => {
     const emailKey = userEmail ? userEmail.toLowerCase().trim() : '';
+    const isUserLoggedIn = Boolean(emailKey);
 
     const getLocal = <T,>(key: string, fallback: T): T => {
       if (emailKey) {
@@ -704,8 +1087,8 @@ export default function App() {
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed as any;
-            if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) return parsed as any;
+            if (Array.isArray(parsed)) return parsed as any;
+            if (parsed && typeof parsed === 'object') return parsed as any;
           } catch (e) {}
         }
       }
@@ -727,18 +1110,22 @@ export default function App() {
     };
 
     setProfile(getLocal('profile', defaultProfile));
-    setSkills(getLocal('skills', INITIAL_SKILLS));
-    setExperience(getLocal('experience', INITIAL_EXPERIENCE));
-    setCertifications(getLocal('certs', INITIAL_CERTIFICATIONS));
-    setProjects(getLocal('projects', INITIAL_PROJECTS));
-    setProducts(getLocal('products', []));
-    setEducation(getLocal('education', INITIAL_EDUCATION));
-    setAchievements(getLocal('achievements', INITIAL_ACHIEVEMENTS));
-    setTestimonials(getLocal('testimonials', INITIAL_TESTIMONIALS));
-    setLinks(getLocal('links', INITIAL_LINKS));
-    setResumes(getLocal('nexus_vault_resumes', []));
-    setDocuments(getLocal('documents', []));
-    setCalendarEvents(getLocal('calendar_events', []));
+    setSkills(deduplicateSkills(getLocal('skills', isUserLoggedIn ? [] : INITIAL_SKILLS)));
+    setExperience(deduplicateExperience(getLocal('experience', isUserLoggedIn ? [] : INITIAL_EXPERIENCE)));
+    setCertifications(deduplicateCertifications(getLocal('certs', isUserLoggedIn ? [] : INITIAL_CERTIFICATIONS)));
+    setProjects(deduplicateProjects(getLocal('projects', isUserLoggedIn ? [] : INITIAL_PROJECTS)));
+    setProducts(deduplicateProjects(getLocal('products', [])));
+    setOthers(deduplicateProjects(getLocal('others', [])));
+    setEducation(deduplicateEducation(getLocal('education', isUserLoggedIn ? [] : INITIAL_EDUCATION)));
+    setAchievements(deduplicateAchievements(getLocal('achievements', isUserLoggedIn ? [] : INITIAL_ACHIEVEMENTS)));
+    setTestimonials(deduplicateTestimonials(getLocal('testimonials', isUserLoggedIn ? [] : INITIAL_TESTIMONIALS)));
+    setLinks(deduplicateLinks(getLocal('links', isUserLoggedIn ? [] : INITIAL_LINKS)));
+    setResumes(deduplicateResumes(getLocal('nexus_vault_resumes', [])));
+    setDocuments(deduplicateDocuments(getLocal('documents', [])));
+    setCalendarEvents(deduplicateCalendarEvents(getLocal('calendar_events', [])));
+    setNotes(deduplicateNotes(getLocal('notepad_notes', [])));
+    setMilestones(deduplicateMilestones(getLocal('milestones', isUserLoggedIn ? [] : INITIAL_TIMELINE)));
+    setContacts(deduplicateContacts(getLocal('contacts', isUserLoggedIn ? [] : INITIAL_CONTACTS)));
     setCurrentJob(getLocal('current_job', {
       employer: 'Photonx Technologies',
       company: 'Photonx Technologies',
@@ -800,7 +1187,7 @@ export default function App() {
   }, []);
 
   const safeLocalStorageSetItem = (key: string, value: string) => {
-    // 1. Save to high-capacity IndexedDB database first to guarantee permanent persistence of all full data
+    // 1. Save to high-capacity IndexedDB database first to guarantee permanent persistence of 100% full data (unlimited items & size)
     let parsedData: any = null;
     try {
       parsedData = JSON.parse(value);
@@ -813,35 +1200,42 @@ export default function App() {
       });
     }
 
-    // 2. High-capacity safeguard: if value is large (> 250KB), prepare a stripped version for localStorage
-    // to preserve all records (titles, IDs, metadata) without blowing past the 5MB browser quota.
+    // 2. High-capacity safeguard: sanitize bulky base64 data strings for localStorage to prevent hitting browser 5MB quota
+    // while keeping 100% of records, metadata, titles, dates, IDs, fields intact.
     let storageValue = value;
-    if (value.length > 250000 && parsedData) {
+    if (parsedData) {
       try {
-        if (Array.isArray(parsedData)) {
-          const stripped = parsedData.map((item: any) => {
-            if (!item || typeof item !== 'object') return item;
-            const copy = { ...item };
-            if (typeof copy.coverUrl === 'string' && copy.coverUrl.startsWith('data:')) {
-              copy.coverUrl = '';
+        const sanitizeNode = (node: any): any => {
+          if (!node) return node;
+          if (typeof node === 'string') {
+            if (node.startsWith('data:') && node.length > 500) return '';
+            return node;
+          }
+          if (Array.isArray(node)) {
+            return node.map(sanitizeNode);
+          }
+          if (typeof node === 'object') {
+            const out: any = {};
+            for (const k of Object.keys(node)) {
+              const v = node[k];
+              if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) {
+                out[k] = '';
+              } else if (v && typeof v === 'object') {
+                out[k] = sanitizeNode(v);
+              } else {
+                out[k] = v;
+              }
             }
-            if (typeof copy.pdfUrl === 'string' && copy.pdfUrl.startsWith('data:')) {
-              copy.pdfUrl = '';
-            }
-            if (typeof copy.fileUrl === 'string' && copy.fileUrl.startsWith('data:')) {
-              copy.fileUrl = '';
-            }
-            if (typeof copy.imageUrl === 'string' && copy.imageUrl.startsWith('data:')) {
-              copy.imageUrl = '';
-            }
-            return copy;
-          });
-          storageValue = JSON.stringify(stripped);
-        }
+            return out;
+          }
+          return node;
+        };
+        const sanitized = sanitizeNode(parsedData);
+        storageValue = JSON.stringify(sanitized);
       } catch (_) {}
     }
 
-    // 3. Save small configuration items to localStorage with graceful fallback
+    // 3. Save configuration and sanitized data to localStorage with graceful fallback
     try {
       localStorage.setItem(key, storageValue);
     } catch (error) {
@@ -849,27 +1243,18 @@ export default function App() {
         error.name === 'QuotaExceededError' ||
         error.name === 'NS_ERROR_DOM_QUOTA_REACHED'
       )) {
-        // Silently clear any legacy pending sync strings from localStorage to free space
         try {
+          // Clear legacy temporary sync keys to free quota
           for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (k && k.startsWith('nexus_pending_sync_')) {
               localStorage.removeItem(k);
             }
           }
-          if (parsedData && Array.isArray(parsedData)) {
-            const minItems = parsedData.map((item: any) => ({
-              id: item.id,
-              name: item.name,
-              title: item.title,
-              type: item.type,
-              date: item.date,
-              category: item.category,
-              description: item.description ? (item.description.slice(0, 100) + '...') : ''
-            }));
-            localStorage.setItem(key, JSON.stringify(minItems));
-          }
-        } catch (_) {}
+          localStorage.setItem(key, storageValue);
+        } catch (_) {
+          // If still out of localStorage quota, IndexedDB (heavyStorage) holds the full authoritative dataset
+        }
       }
     }
   };
@@ -1051,7 +1436,7 @@ export default function App() {
       try {
         const dDocs = await heavyStorage.get(`${email}_documents`);
         if (dDocs && Array.isArray(dDocs) && dDocs.length > 0) {
-          setDocuments(dDocs);
+          setDocuments(prev => deduplicateDocuments([...dDocs, ...prev]));
         }
       } catch (err) {
         console.warn("Async restoration of documents deferred:", err);
@@ -1062,18 +1447,7 @@ export default function App() {
       try {
         const dCerts = await heavyStorage.get(`${email}_certs`);
         if (dCerts && Array.isArray(dCerts) && dCerts.length > 0) {
-          setCertifications(prev => {
-            const sanitized = dCerts.map((c: any) => {
-              const existing = prev.find(p => p.id === c.id || (c.id && toUUID(p.id) === toUUID(c.id)));
-              const dVal = c.dateIssued || c.issueDate || c.issue_date || c.date_issued || existing?.dateIssued || existing?.issueDate || '';
-              return {
-                ...c,
-                dateIssued: dVal,
-                issueDate: dVal
-              };
-            });
-            return mergeArrayRecords(sanitized, prev);
-          });
+          setCertifications(prev => deduplicateCertifications([...dCerts, ...prev]));
         }
       } catch (err) {
         console.warn("Async restoration of certifications deferred:", err);
@@ -1084,7 +1458,7 @@ export default function App() {
       try {
         const dProjs = await heavyStorage.get(`${email}_projects`);
         if (dProjs && Array.isArray(dProjs) && dProjs.length > 0) {
-          setProjects(prev => mergeArrayRecords(dProjs, prev));
+          setProjects(prev => deduplicateProjects([...dProjs, ...prev]));
         }
       } catch (err) {
         console.warn("Async restoration of projects deferred:", err);
@@ -1093,7 +1467,7 @@ export default function App() {
       try {
         const dProds = await heavyStorage.get(`${email}_products`);
         if (dProds && Array.isArray(dProds) && dProds.length > 0) {
-          setProducts(prev => mergeArrayRecords(dProds, prev));
+          setProducts(prev => deduplicateProjects([...dProds, ...prev]));
         }
       } catch (err) {
         console.warn("Async restoration of products deferred:", err);
@@ -1102,7 +1476,7 @@ export default function App() {
       try {
         const dOthers = await heavyStorage.get(`${email}_others`);
         if (dOthers && Array.isArray(dOthers) && dOthers.length > 0) {
-          setOthers(prev => mergeArrayRecords(dOthers, prev));
+          setOthers(prev => deduplicateProjects([...dOthers, ...prev]));
         }
       } catch (err) {
         console.warn("Async restoration of others deferred:", err);
@@ -1111,13 +1485,83 @@ export default function App() {
       try {
         const dEdu = await heavyStorage.get(`${email}_education`);
         if (dEdu && Array.isArray(dEdu) && dEdu.length > 0) {
-          setEducation(prev => mergeArrayRecords(dEdu, prev));
+          setEducation(prev => deduplicateEducation([...dEdu, ...prev]));
         }
       } catch (err) {
         console.warn("Async restoration of education deferred:", err);
       } finally {
         isProjsRestoringRef.current = false;
       }
+
+      try {
+        const dSkills = await heavyStorage.get(`${email}_skills`);
+        if (dSkills && Array.isArray(dSkills) && dSkills.length > 0) {
+          setSkills(prev => deduplicateSkills([...dSkills, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dExp = await heavyStorage.get(`${email}_experience`);
+        if (dExp && Array.isArray(dExp) && dExp.length > 0) {
+          setExperience(prev => deduplicateExperience([...dExp, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dCt = await heavyStorage.get(`${email}_contacts`);
+        if (dCt && Array.isArray(dCt) && dCt.length > 0) {
+          setContacts(prev => deduplicateContacts([...dCt, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dCal = await heavyStorage.get(`${email}_calendar_events`);
+        if (dCal && Array.isArray(dCal) && dCal.length > 0) {
+          setCalendarEvents(prev => deduplicateCalendarEvents([...dCal, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dNotes = await heavyStorage.get(`${email}_notepad_notes`);
+        if (dNotes && Array.isArray(dNotes) && dNotes.length > 0) {
+          setNotes(prev => deduplicateNotes([...dNotes, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dRes = await heavyStorage.get(`${email}_nexus_vault_resumes`);
+        if (dRes && Array.isArray(dRes) && dRes.length > 0) {
+          setResumes(prev => deduplicateResumes([...dRes, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dLinks = await heavyStorage.get(`${email}_links`);
+        if (dLinks && Array.isArray(dLinks) && dLinks.length > 0) {
+          setLinks(prev => deduplicateLinks([...dLinks, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dMil = await heavyStorage.get(`${email}_milestones`);
+        if (dMil && Array.isArray(dMil) && dMil.length > 0) {
+          setMilestones(prev => deduplicateMilestones([...dMil, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dAch = await heavyStorage.get(`${email}_achievements`);
+        if (dAch && Array.isArray(dAch) && dAch.length > 0) {
+          setAchievements(prev => deduplicateAchievements([...dAch, ...prev]));
+        }
+      } catch (err) {}
+
+      try {
+        const dTest = await heavyStorage.get(`${email}_testimonials`);
+        if (dTest && Array.isArray(dTest) && dTest.length > 0) {
+          setTestimonials(prev => deduplicateTestimonials([...dTest, ...prev]));
+        }
+      } catch (err) {}
     };
 
     fetchHeavyData();
@@ -1215,41 +1659,18 @@ export default function App() {
               description: s.description || '',
               visibility: s.visibility || 'public'
             }));
-            setSkills(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(mapped));
-          } else {
-            const emailKey = currentUser?.email?.toLowerCase().trim();
-            let currentLocalSkills: Skill[] = [];
-            if (emailKey) {
-              const raw = localStorage.getItem(`${emailKey}_skills`);
-              if (raw) { try { currentLocalSkills = JSON.parse(raw); } catch (e) {} }
-            }
-            if (currentLocalSkills && currentLocalSkills.length > 0) {
-              setSkills(currentLocalSkills);
-              for (const sk of currentLocalSkills) {
-                const skId = ensureUUID(sk.id);
-                try {
-                  await supabase.from('skills').upsert({
-                    id: skId,
-                    user_id: userId,
-                    name: sk.name,
-                    category: sk.category || 'Technical',
-                    proficiency: sk.proficiency || 'Intermediate',
-                    years_of_exp: sk.yearsOfExp || 1,
-                    endorsements: sk.endorsements || 0,
-                    description: sk.description || '',
-                    visibility: sk.visibility || 'public'
-                  });
-                } catch (err) {}
-              }
-            }
+            setSkills(prev => {
+              const merged = deduplicateSkills([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Skills Load]", err); }
 
         // 3. Education
         try {
           const eData = eRes.status === 'fulfilled' ? eRes.value.data : null;
-          if (eData && Array.isArray(eData)) {
+          if (eData && Array.isArray(eData) && eData.length > 0) {
             const mapped = eData.map(e => {
               let extraMeta: any = {};
               if (e.description && typeof e.description === 'string' && e.description.startsWith('{')) {
@@ -1273,17 +1694,7 @@ export default function App() {
               };
             });
             setEducation(prev => {
-              const merged = mapped.map(item => {
-                const localMatch = prev.find(p => p.id === item.id || (p.degree?.trim().toLowerCase() === item.degree?.trim().toLowerCase() && p.institution?.trim().toLowerCase() === item.institution?.trim().toLowerCase()));
-                return {
-                  ...item,
-                  enrollmentId: item.enrollmentId || localMatch?.enrollmentId || '',
-                  startDate: item.startDate || localMatch?.startDate || '',
-                  endDate: item.endDate || localMatch?.endDate || '',
-                  isCurrentlyPursuing: item.isCurrentlyPursuing ?? localMatch?.isCurrentlyPursuing ?? false,
-                  activities: item.activities || localMatch?.activities || ''
-                };
-              });
+              const merged = deduplicateEducation([...mapped, ...prev]);
               if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(merged));
               return merged;
             });
@@ -1296,6 +1707,29 @@ export default function App() {
           if (cData && Array.isArray(cData) && cData.length > 0) {
             const mapped = cData.map(c => {
               const dVal = c.issue_date || c.date_issued || c.dateIssued || c.issueDate || '';
+              let certType = c.type;
+              let certPct = c.percentage || '';
+              let certDesc = c.description || '';
+              if (c.description && typeof c.description === 'string' && c.description.startsWith('{')) {
+                try {
+                  const parsed = JSON.parse(c.description);
+                  if (parsed.type) certType = parsed.type;
+                  if (parsed.percentage) certPct = parsed.percentage;
+                  if (parsed.desc !== undefined) certDesc = parsed.desc;
+                } catch (_) {}
+              }
+              if (!certType) {
+                const lowerTitle = (c.title || '').toLowerCase();
+                const lowerIssuer = (c.issuer || '').toLowerCase();
+                const lowerUrl = (c.credential_url || c.credentialUrl || '').toLowerCase();
+                if (lowerTitle.includes('course') || lowerIssuer.includes('coursera') || lowerIssuer.includes('udemy') || lowerIssuer.includes('edx') || lowerUrl.includes('coursera') || lowerUrl.includes('udemy')) {
+                  certType = 'course';
+                } else if (lowerTitle.includes('memo') || lowerTitle.includes('marks') || lowerTitle.includes('grade')) {
+                  certType = 'grades';
+                } else {
+                  certType = 'study';
+                }
+              }
               return {
                 id: c.id,
                 title: c.title,
@@ -1306,87 +1740,30 @@ export default function App() {
                 expirationDate: c.expiry_date || c.expirationDate || '',
                 expiryDate: c.expiry_date || c.expiryDate || '',
                 credentialUrl: c.credential_url || c.credentialUrl,
-                description: c.description,
+                description: certDesc,
                 fileName: c.file_name || c.fileName || '',
                 fileUrl: c.file_url || c.fileUrl,
                 storagePath: c.storage_path || c.storagePath,
-                type: c.type || 'study',
-                percentage: c.percentage || '',
+                type: certType,
+                percentage: certPct,
                 visibility: c.visibility || 'public'
               };
             });
             setCertifications(prev => {
-              const merged = [...mapped];
-              for (const localItem of prev) {
-                const matchIndex = merged.findIndex(m => m.id === localItem.id || toUUID(m.id) === toUUID(localItem.id));
-                if (matchIndex >= 0) {
-                  if (!merged[matchIndex].fileUrl && localItem.fileUrl) {
-                    merged[matchIndex].fileUrl = localItem.fileUrl;
-                  }
-                  if (!merged[matchIndex].fileName && localItem.fileName) {
-                    merged[matchIndex].fileName = localItem.fileName;
-                  }
-                  if (!merged[matchIndex].credentialId && localItem.credentialId) {
-                    merged[matchIndex].credentialId = localItem.credentialId;
-                  }
-                } else {
-                  merged.push(localItem);
-                }
-              }
+              const merged = deduplicateCertifications([...mapped, ...prev]);
               if (currentUser?.email) {
                 safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(merged));
                 heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, merged).catch(() => {});
               }
               return merged;
             });
-          } else {
-            const emailKey = currentUser?.email?.toLowerCase().trim();
-            let currentLocalCerts: Certification[] = [];
-            if (emailKey) {
-              const raw = localStorage.getItem(`${emailKey}_certs`);
-              if (raw) { try { currentLocalCerts = JSON.parse(raw); } catch (e) {} }
-            }
-            if (!currentLocalCerts || currentLocalCerts.length === 0) {
-              currentLocalCerts = INITIAL_CERTIFICATIONS;
-            }
-            if (currentLocalCerts && currentLocalCerts.length > 0) {
-              setCertifications(currentLocalCerts);
-              if (currentUser?.email) {
-                safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(currentLocalCerts));
-                heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, currentLocalCerts).catch(() => {});
-              }
-              for (const c of currentLocalCerts) {
-                const cId = ensureUUID(c.id);
-                const dVal = c.dateIssued || c.issueDate || '';
-                const payload: any = {
-                  id: cId,
-                  user_id: userId,
-                  title: c.title,
-                  issuer: c.issuer,
-                  credential_id: c.credentialId,
-                  issue_date: dVal,
-                  expiry_date: c.expirationDate || c.expiryDate,
-                  credential_url: c.credentialUrl,
-                  description: c.description,
-                  file_name: c.fileName,
-                  file_url: (c.fileUrl && !c.fileUrl.startsWith('data:')) ? c.fileUrl : '',
-                  storage_path: c.storagePath,
-                  type: c.type || 'study',
-                  percentage: c.percentage,
-                  visibility: c.visibility || 'public'
-                };
-                try {
-                  await supabase.from('certifications').upsert(payload);
-                } catch (err) {}
-              }
-            }
           }
         } catch (err) { console.warn("[Supabase Certifications Load]", err); }
 
         // 5. Experience
         try {
           const expData = expRes.status === 'fulfilled' ? expRes.value.data : null;
-          if (expData && Array.isArray(expData)) {
+          if (expData && Array.isArray(expData) && expData.length > 0) {
             const mapped = expData.map(exp => ({
               id: exp.id,
               company: exp.company,
@@ -1400,8 +1777,11 @@ export default function App() {
               skillsUsed: exp.skills_used || [],
               links: exp.links || []
             }));
-            setExperience(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(mapped));
+            setExperience(prev => {
+              const merged = deduplicateExperience([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Experience Load]", err); }
 
@@ -1466,8 +1846,11 @@ export default function App() {
               isPublic: p.is_public !== false,
               date: p.date
             }));
-            setProjects(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_projects`, JSON.stringify(mapped));
+            setProjects(prev => {
+              const merged = deduplicateProjects([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_projects`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Projects Load]", err); }
 
@@ -1490,8 +1873,11 @@ export default function App() {
               isPublic: p.is_public !== false,
               date: p.date
             }));
-            setProducts(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_products`, JSON.stringify(mapped));
+            setProducts(prev => {
+              const merged = deduplicateProjects([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_products`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Products Load]", err); }
 
@@ -1515,8 +1901,11 @@ export default function App() {
               isPublic: p.is_public !== false,
               date: p.date
             }));
-            setOthers(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(mapped));
+            setOthers(prev => {
+              const merged = deduplicateProjects([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(merged));
+              return merged;
+            });
           } else {
             // Fallback: If table 'others' does not exist in Supabase yet, check projects table for type === 'other'
             const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
@@ -1538,8 +1927,11 @@ export default function App() {
                 date: p.date
               }));
               if (fallbackOthers.length > 0) {
-                setOthers(fallbackOthers);
-                if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(fallbackOthers));
+                setOthers(prev => {
+                  const merged = deduplicateProjects([...fallbackOthers, ...prev]);
+                  if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(merged));
+                  return merged;
+                });
               }
             }
           }
@@ -1548,7 +1940,7 @@ export default function App() {
         // 9. Resumes
         try {
           const resData = resRes.status === 'fulfilled' ? resRes.value.data : null;
-          if (resData && Array.isArray(resData)) {
+          if (resData && Array.isArray(resData) && resData.length > 0) {
             const mapped = resData.map(r => ({
               id: r.id,
               name: r.title || r.file_name,
@@ -1567,15 +1959,18 @@ export default function App() {
               uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
               category: 'SUPABASE'
             }));
-            setResumes(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(mapped));
+            setResumes(prev => {
+              const merged = deduplicateResumes([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Resumes Load]", err); }
 
         // 10. Documents (Vault)
         try {
           const docData = docRes.status === 'fulfilled' ? docRes.value.data : null;
-          if (docData && Array.isArray(docData)) {
+          if (docData && Array.isArray(docData) && docData.length > 0) {
             const mapped = docData.map(d => ({
               id: d.id,
               name: d.file_name || d.title,
@@ -1593,15 +1988,18 @@ export default function App() {
               tags: d.tags || [],
               visibility: d.visibility || 'private'
             }));
-            setDocuments(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(mapped));
+            setDocuments(prev => {
+              const merged = deduplicateDocuments([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Documents Load]", err); }
 
         // 11. Notes
         try {
           const nData = nRes.status === 'fulfilled' ? nRes.value.data : null;
-          if (nData && Array.isArray(nData)) {
+          if (nData && Array.isArray(nData) && nData.length > 0) {
             const mapped = nData.map(n => ({
               id: n.id,
               title: n.title,
@@ -1611,15 +2009,18 @@ export default function App() {
               isPublic: n.is_public !== false,
               updatedAt: n.updated_at || new Date().toISOString()
             }));
-            setNotes(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(mapped));
+            setNotes(prev => {
+              const merged = deduplicateNotes([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Notes Load]", err); }
 
         // 12. Portfolio Links
         try {
           const lData = lRes.status === 'fulfilled' ? lRes.value.data : null;
-          if (lData && Array.isArray(lData)) {
+          if (lData && Array.isArray(lData) && lData.length > 0) {
             const mapped = lData.map(l => ({
               id: l.id,
               platform: l.platform,
@@ -1627,8 +2028,11 @@ export default function App() {
               url: l.url,
               isPublic: l.is_public !== false
             }));
-            setLinks(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(mapped));
+            setLinks(prev => {
+              const merged = deduplicateLinks([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
 
@@ -1645,42 +2049,18 @@ export default function App() {
               intensity: m.intensity || 'medium',
               description: m.description || ''
             }));
-            setMilestones(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(mapped));
-          } else {
-            const emailKey = currentUser?.email?.toLowerCase().trim();
-            let currentLocalMilestones: TimelineMilestone[] = [];
-            if (emailKey) {
-              const raw = localStorage.getItem(`${emailKey}_milestones`);
-              if (raw) { try { currentLocalMilestones = JSON.parse(raw); } catch (e) {} }
-            }
-            if (currentLocalMilestones && currentLocalMilestones.length > 0) {
-              setMilestones(currentLocalMilestones);
-              for (const m of currentLocalMilestones) {
-                const mId = ensureUUID(m.id);
-                try {
-                  await supabase.from('career_timeline').upsert({
-                    id: mId,
-                    user_id: userId,
-                    title: m.title || 'Career Milestone',
-                    date: m.date || new Date().toISOString().substring(0, 7),
-                    category: m.category || m.type || 'experience',
-                    intensity: m.intensity || 'medium',
-                    description: m.description || '',
-                    is_public: true
-                  });
-                } catch (err) {}
-              }
-            } else {
-              setMilestones([]);
-            }
+            setMilestones(prev => {
+              const merged = deduplicateMilestones([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Timeline Load]", err); }
 
         // 14. Contacts
         try {
           const ctData = ctRes.status === 'fulfilled' ? ctRes.value.data : null;
-          if (ctData && Array.isArray(ctData)) {
+          if (ctData && Array.isArray(ctData) && ctData.length > 0) {
             const mapped = ctData.map(ct => ({
               id: ct.id,
               name: ct.name,
@@ -1695,15 +2075,18 @@ export default function App() {
               lastInteracted: ct.last_interacted,
               interactionLogs: ct.interaction_logs || []
             }));
-            setContacts(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(mapped));
+            setContacts(prev => {
+              const merged = deduplicateContacts([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Contacts Load]", err); }
 
         // 15. Calendar Events
         try {
           const calData = calRes.status === 'fulfilled' ? calRes.value.data : null;
-          if (calData && Array.isArray(calData)) {
+          if (calData && Array.isArray(calData) && calData.length > 0) {
             const mapped = calData.map(cal => ({
               id: cal.id,
               title: cal.title,
@@ -1714,15 +2097,18 @@ export default function App() {
               description: cal.description,
               isPublic: cal.is_public !== false
             }));
-            setCalendarEvents(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_calendar_events`, JSON.stringify(mapped));
+            setCalendarEvents(prev => {
+              const merged = deduplicateCalendarEvents([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_calendar_events`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Calendar Events Load]", err); }
 
         // 16. Achievements
         try {
           const aData = aRes.status === 'fulfilled' ? aRes.value.data : null;
-          if (aData && Array.isArray(aData)) {
+          if (aData && Array.isArray(aData) && aData.length > 0) {
             const mapped = aData.map(a => ({
               id: a.id,
               title: a.title,
@@ -1734,15 +2120,18 @@ export default function App() {
               fileUrl: a.file_url,
               isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
             }));
-            setAchievements(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(mapped));
+            setAchievements(prev => {
+              const merged = deduplicateAchievements([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Achievements Load]", err); }
 
         // 17. Testimonials
         try {
           const tData = tRes.status === 'fulfilled' ? tRes.value.data : null;
-          if (tData && Array.isArray(tData)) {
+          if (tData && Array.isArray(tData) && tData.length > 0) {
             const mapped = tData.map(t => ({
               id: t.id,
               name: t.name,
@@ -1753,8 +2142,11 @@ export default function App() {
               avatarColor: t.avatar_color,
               isPublic: t.is_public !== false
             }));
-            setTestimonials(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_testimonials`, JSON.stringify(mapped));
+            setTestimonials(prev => {
+              const merged = deduplicateTestimonials([...mapped, ...prev]);
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_testimonials`, JSON.stringify(merged));
+              return merged;
+            });
           }
         } catch (err) { console.warn("[Supabase Testimonials Load]", err); }
       } catch (globalErr) {
@@ -1970,7 +2362,7 @@ export default function App() {
   const handleAddSkill = async (newSk: Omit<Skill, 'id'>) => {
     const id = generateUUID();
     const skill: Skill = { ...newSk, id };
-    const updatedSkills = [skill, ...skills];
+    const updatedSkills = deduplicateSkills([skill, ...skills]);
     setSkills(updatedSkills);
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     if (email) {
@@ -2024,7 +2416,6 @@ export default function App() {
   };
 
   const handleDeleteSkill = async (id: string) => {
-    const targetItem = skills.find(s => s.id === id);
     const targetId = toUUID(id);
     const updated = skills.filter(s => s.id !== id && s.id !== targetId);
     setSkills(updated);
@@ -2041,9 +2432,6 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('skills').delete().eq('id', id).eq('user_id', currentUser.id);
         }
-        if (targetItem?.name) {
-          await supabase.from('skills').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
-        }
       } catch (err) { console.warn("[Supabase Delete Skill Error]", err); }
     }
   };
@@ -2053,7 +2441,7 @@ export default function App() {
     const id = generateUUID();
     const eduItem: Education = { ...newEd, id };
     setEducation(prev => {
-      const updated = [eduItem, ...prev];
+      const updated = deduplicateEducation([eduItem, ...prev]);
       if (currentUser?.email) {
         const email = currentUser.email.toLowerCase().trim();
         safeLocalStorageSetItem(`${email}_education`, JSON.stringify(updated));
@@ -2109,7 +2497,6 @@ export default function App() {
   };
 
   const handleDeleteEdu = async (id: string) => {
-    const targetItem = education.find(e => e.id === id);
     const targetId = toUUID(id);
     const updated = education.filter(e => e.id !== id && e.id !== targetId);
     setEducation(updated);
@@ -2125,9 +2512,6 @@ export default function App() {
         await supabase.from('education').delete().eq('id', targetId).eq('user_id', currentUser.id);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('education').delete().eq('id', id).eq('user_id', currentUser.id);
-        }
-        if (targetItem?.degree && targetItem?.institution) {
-          await supabase.from('education').delete().eq('degree', targetItem.degree).eq('institution', targetItem.institution).eq('user_id', currentUser.id);
         }
       } catch (err) { console.warn("[Supabase Delete Edu Error]", err); }
     }
@@ -2198,7 +2582,7 @@ export default function App() {
     const dVal = newCert.dateIssued || newCert.issueDate || '';
     const cert: Certification = { ...newCert, id, dateIssued: dVal, issueDate: dVal };
     setCertifications(prev => {
-      const updatedCerts = [cert, ...prev];
+      const updatedCerts = deduplicateCertifications([cert, ...prev]);
       if (currentUser?.email) {
         const email = currentUser.email.toLowerCase().trim();
         safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
@@ -2226,19 +2610,28 @@ export default function App() {
         percentage: newCert.percentage,
         visibility: newCert.visibility || 'public'
       };
+      let insertPayload = { ...payload };
+      if (insertPayload.file_url && insertPayload.file_url.startsWith('data:') && insertPayload.file_url.length > 50000) {
+        insertPayload.file_url = '';
+      }
       try {
-        await supabase.from('certifications').insert(payload);
-      } catch (err) {
-        if (payload.file_url && payload.file_url.startsWith('data:')) {
-          payload.file_url = '';
-          try {
-            await supabase.from('certifications').insert(payload);
-          } catch (e2) {
-            console.warn("[Supabase Add Cert Fallback Error]", e2);
+        const { error: insErr } = await supabase.from('certifications').insert(insertPayload);
+        if (insErr) {
+          console.warn("[Supabase Add Cert Warning]", insErr);
+          let retryPayload = { ...insertPayload };
+          if (retryPayload.file_url) retryPayload.file_url = '';
+          const { error: retryErr } = await supabase.from('certifications').insert(retryPayload);
+          if (retryErr) {
+            // If schema lacks type or percentage columns, stash in description JSON
+            const meta = { type: newCert.type || 'study', percentage: newCert.percentage || '', desc: newCert.description || '' };
+            delete retryPayload.type;
+            delete retryPayload.percentage;
+            retryPayload.description = JSON.stringify(meta);
+            await supabase.from('certifications').insert(retryPayload);
           }
-        } else {
-          console.warn("[Supabase Add Cert Error]", err);
         }
+      } catch (err) {
+        console.warn("[Supabase Add Cert Exception]", err);
       }
     }
   };
@@ -2299,19 +2692,27 @@ export default function App() {
         percentage: updatedCert.percentage,
         visibility: updatedCert.visibility || 'public'
       };
+      let updatePayload = { ...payload };
+      if (updatePayload.file_url && updatePayload.file_url.startsWith('data:') && updatePayload.file_url.length > 50000) {
+        updatePayload.file_url = '';
+      }
       try {
-        await supabase.from('certifications').upsert(payload);
-      } catch (err) {
-        if (payload.file_url && payload.file_url.startsWith('data:')) {
-          payload.file_url = '';
-          try {
-            await supabase.from('certifications').upsert(payload);
-          } catch (e2) {
-            console.warn("[Supabase Update Cert Fallback Error]", e2);
+        const { error: upErr } = await supabase.from('certifications').upsert(updatePayload);
+        if (upErr) {
+          console.warn("[Supabase Update Cert Warning]", upErr);
+          let retryPayload = { ...updatePayload };
+          if (retryPayload.file_url) retryPayload.file_url = '';
+          const { error: retryErr } = await supabase.from('certifications').upsert(retryPayload);
+          if (retryErr) {
+            const meta = { type: updatedCert.type || 'study', percentage: updatedCert.percentage || '', desc: updatedCert.description || '' };
+            delete retryPayload.type;
+            delete retryPayload.percentage;
+            retryPayload.description = JSON.stringify(meta);
+            await supabase.from('certifications').upsert(retryPayload);
           }
-        } else {
-          console.warn("[Supabase Update Cert Error]", err);
         }
+      } catch (err) {
+        console.warn("[Supabase Update Cert Exception]", err);
       }
     }
   };
@@ -2320,7 +2721,7 @@ export default function App() {
   const handleAddExp = async (newExp: Omit<Experience, 'id'>) => {
     const id = generateUUID();
     const exp: Experience = { ...newExp, id };
-    setExperience(prev => [exp, ...prev]);
+    setExperience(prev => deduplicateExperience([exp, ...prev]));
     triggerToast(`Registered employment tenure: ${newExp.role}`);
 
     if (currentUser?.id) {
@@ -2344,7 +2745,6 @@ export default function App() {
   };
 
   const handleDeleteExp = async (id: string) => {
-    const targetItem = experience.find(e => e.id === id);
     const targetId = toUUID(id);
     const updated = experience.filter(e => e.id !== id && e.id !== targetId);
     setExperience(updated);
@@ -2359,9 +2759,6 @@ export default function App() {
         await supabase.from('experience').delete().eq('id', targetId).eq('user_id', currentUser.id);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('experience').delete().eq('id', id).eq('user_id', currentUser.id);
-        }
-        if (targetItem?.company && targetItem?.role) {
-          await supabase.from('experience').delete().eq('company', targetItem.company).eq('role', targetItem.role).eq('user_id', currentUser.id);
         }
       } catch (err) { console.warn("[Supabase Delete Exp Error]", err); }
     }
@@ -2383,7 +2780,7 @@ export default function App() {
   const handleAddMilestone = async (newMil: Omit<TimelineMilestone, 'id'>) => {
     const id = generateUUID();
     const mil: TimelineMilestone = { ...newMil, id };
-    const updated = [mil, ...milestones];
+    const updated = deduplicateMilestones([mil, ...milestones]);
     setMilestones(updated);
     const email = currentUser?.email?.toLowerCase().trim();
     if (email) {
@@ -2423,8 +2820,11 @@ export default function App() {
     const email = currentUser?.email?.toLowerCase().trim();
     const userId = await getActiveUserId();
 
+    const cleanPdf = (newPr.pdfUrl && newPr.pdfUrl.startsWith('data:') && newPr.pdfUrl.length > 50000) ? '' : (newPr.pdfUrl || '');
+    const cleanImg = (newPr.imageUrl && newPr.imageUrl.startsWith('data:') && newPr.imageUrl.length > 50000) ? '' : (newPr.imageUrl || newPr.coverUrl || '');
+
     if (newPr.type === 'product') {
-      const updatedProducts = [proj, ...products];
+      const updatedProducts = deduplicateProjects([proj, ...products]);
       setProducts(updatedProducts);
       if (email) safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
       triggerToast(`Published product assets: ${newPr.name}`);
@@ -2440,8 +2840,8 @@ export default function App() {
             tech_stack: newPr.techStack || [],
             live_url: newPr.liveUrl || '',
             github_url: newPr.githubUrl || '',
-            pdf_url: newPr.pdfUrl || '',
-            image_url: newPr.imageUrl || newPr.coverUrl || '',
+            pdf_url: cleanPdf,
+            image_url: cleanImg,
             is_public: newPr.isPublic !== false,
             date: newPr.date || ''
           };
@@ -2453,7 +2853,7 @@ export default function App() {
         } catch (err) { console.warn("[Supabase Add Product Error]", err); }
       }
     } else if (newPr.type === 'other') {
-      const updatedOthers = [proj, ...others];
+      const updatedOthers = deduplicateProjects([proj, ...others]);
       setOthers(updatedOthers);
       if (email) safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
       triggerToast(`Added document: ${newPr.name}`);
@@ -2471,8 +2871,8 @@ export default function App() {
             tech_stack: newPr.techStack || [],
             live_url: newPr.liveUrl || '',
             github_url: newPr.githubUrl || '',
-            pdf_url: newPr.pdfUrl || '',
-            image_url: newPr.imageUrl || newPr.coverUrl || '',
+            pdf_url: cleanPdf,
+            image_url: cleanImg,
             is_public: newPr.isPublic !== false,
             date: newPr.date || ''
           };
@@ -2484,7 +2884,7 @@ export default function App() {
         } catch (err) { console.warn("[Supabase Add Other Error]", err); }
       }
     } else {
-      const updatedProjects = [proj, ...projects];
+      const updatedProjects = deduplicateProjects([proj, ...projects]);
       setProjects(updatedProjects);
       if (email) safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
       triggerToast(`Published project assets: ${newPr.name}`);
@@ -2500,8 +2900,8 @@ export default function App() {
             tech_stack: newPr.techStack || [],
             live_url: newPr.liveUrl || '',
             github_url: newPr.githubUrl || '',
-            pdf_url: newPr.pdfUrl || '',
-            image_url: newPr.imageUrl || newPr.coverUrl || '',
+            pdf_url: cleanPdf,
+            image_url: cleanImg,
             is_public: newPr.isPublic !== false,
             date: newPr.date || ''
           };
@@ -2516,10 +2916,6 @@ export default function App() {
   };
 
   const handleDeleteProj = async (id: string) => {
-    const targetProj = projects.find(p => p.id === id);
-    const targetProd = products.find(p => p.id === id);
-    const targetOth = others.find(p => p.id === id);
-    const targetItem = targetProj || targetProd || targetOth;
     const targetId = toUUID(id);
 
     const updatedProj = projects.filter(p => p.id !== id && p.id !== targetId);
@@ -2549,11 +2945,6 @@ export default function App() {
           await supabase.from('products').delete().eq('id', id).eq('user_id', userId);
           await supabase.from('others').delete().eq('id', id).eq('user_id', userId);
         }
-        if (targetItem?.name) {
-          await supabase.from('projects').delete().eq('name', targetItem.name).eq('user_id', userId);
-          await supabase.from('products').delete().eq('name', targetItem.name).eq('user_id', userId);
-          await supabase.from('others').delete().eq('name', targetItem.name).eq('user_id', userId);
-        }
       } catch (err) { console.warn("[Supabase Delete Project/Product Error]", err); }
     }
   };
@@ -2564,8 +2955,11 @@ export default function App() {
     const email = currentUser?.email?.toLowerCase().trim();
     const userId = await getActiveUserId();
 
+    const cleanPdf = (updatedPr.pdfUrl && updatedPr.pdfUrl.startsWith('data:') && updatedPr.pdfUrl.length > 50000) ? '' : (updatedPr.pdfUrl || '');
+    const cleanImg = (updatedPr.imageUrl && updatedPr.imageUrl.startsWith('data:') && updatedPr.imageUrl.length > 50000) ? '' : (updatedPr.imageUrl || updatedPr.coverUrl || '');
+
     if (updatedPr.type === 'product') {
-      const updatedProducts = products.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p);
+      const updatedProducts = deduplicateProjects(products.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
       setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setProducts(updatedProducts);
@@ -2583,8 +2977,8 @@ export default function App() {
             tech_stack: updatedPr.techStack || [],
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
-            pdf_url: updatedPr.pdfUrl || '',
-            image_url: updatedPr.imageUrl || updatedPr.coverUrl || '',
+            pdf_url: cleanPdf,
+            image_url: cleanImg,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -2594,7 +2988,7 @@ export default function App() {
         } catch (err) { console.warn("[Supabase Update Product Error]", err); }
       }
     } else if (updatedPr.type === 'other') {
-      const updatedOthers = others.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p);
+      const updatedOthers = deduplicateProjects(others.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
       setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setOthers(updatedOthers);
@@ -2614,8 +3008,8 @@ export default function App() {
             tech_stack: updatedPr.techStack || [],
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
-            pdf_url: updatedPr.pdfUrl || '',
-            image_url: updatedPr.imageUrl || updatedPr.coverUrl || '',
+            pdf_url: cleanPdf,
+            image_url: cleanImg,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -2630,7 +3024,7 @@ export default function App() {
         } catch (err) { console.warn("[Supabase Update Other Error]", err); }
       }
     } else {
-      const updatedProjects = projects.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p);
+      const updatedProjects = deduplicateProjects(projects.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
       setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setProjects(updatedProjects);
@@ -2648,8 +3042,8 @@ export default function App() {
             tech_stack: updatedPr.techStack || [],
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
-            pdf_url: updatedPr.pdfUrl || '',
-            image_url: updatedPr.imageUrl || updatedPr.coverUrl || '',
+            pdf_url: cleanPdf,
+            image_url: cleanImg,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -2665,7 +3059,7 @@ export default function App() {
   const handleAddLink = async (newLk: Omit<PortfolioLink, 'id'>) => {
     const id = generateUUID();
     const link: PortfolioLink = { ...newLk, id };
-    setLinks(prev => [link, ...prev]);
+    setLinks(prev => deduplicateLinks([link, ...prev]));
     triggerToast(`Published portal entry: ${newLk.label}`);
 
     if (currentUser?.id) {
@@ -2683,7 +3077,6 @@ export default function App() {
   };
 
   const handleDeleteLink = async (id: string) => {
-    const targetItem = links.find(l => l.id === id);
     const targetId = toUUID(id);
     const updated = links.filter(l => l.id !== id && l.id !== targetId);
     setLinks(updated);
@@ -2699,9 +3092,6 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', currentUser.id);
         }
-        if (targetItem?.url) {
-          await supabase.from('portfolio_links').delete().eq('url', targetItem.url).eq('user_id', currentUser.id);
-        }
       } catch (err) { console.warn("[Supabase Delete Link Error]", err); }
     }
   };
@@ -2709,7 +3099,7 @@ export default function App() {
   const handleUpdateLink = async (updatedLk: PortfolioLink) => {
     const targetId = ensureUUID(updatedLk.id);
     const item = { ...updatedLk, id: targetId };
-    setLinks(prev => prev.map(l => l.id === updatedLk.id ? item : l));
+    setLinks(prev => deduplicateLinks(prev.map(l => l.id === updatedLk.id ? item : l)));
     triggerToast(`Updated portal entry: ${updatedLk.label}`);
 
     if (currentUser?.id) {
@@ -2729,7 +3119,7 @@ export default function App() {
   // Resume Links Handlers
   const handleAddResumeLink = (newLk: Omit<PortfolioLink, 'id'>) => {
     const link: PortfolioLink = { ...newLk, id: generateUUID() };
-    setResumeLinks(prev => [link, ...prev]);
+    setResumeLinks(prev => deduplicateLinks([link, ...prev]));
     triggerToast(`Added resume link: ${newLk.label}`);
   };
 
@@ -2739,14 +3129,11 @@ export default function App() {
   };
 
   const handleUpdateResumeLink = (updatedLk: PortfolioLink) => {
-    setResumeLinks(prev => prev.map(l => l.id === updatedLk.id ? updatedLk : l));
+    setResumeLinks(prev => deduplicateLinks(prev.map(l => l.id === updatedLk.id ? updatedLk : l)));
     triggerToast(`Updated resume link: ${updatedLk.label}`);
   };
 
-
-
   const handleDeleteMilestone = async (id: string) => {
-    const targetItem = milestones.find(m => m.id === id);
     const targetId = toUUID(id);
     const updated = milestones.filter(m => m.id !== id && m.id !== targetId);
     setMilestones(updated);
@@ -2764,9 +3151,6 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('career_timeline').delete().eq('id', id).eq('user_id', userId);
         }
-        if (targetItem?.title) {
-          await supabase.from('career_timeline').delete().eq('title', targetItem.title).eq('user_id', userId);
-        }
       } catch (err) { console.warn("[Supabase Delete Milestone Error]", err); }
     }
   };
@@ -2775,7 +3159,7 @@ export default function App() {
   const handleAddContact = async (newCt: Omit<Contact, 'id' | 'interactionLogs'>) => {
     const id = generateUUID();
     const contact: Contact = { ...newCt, id, interactionLogs: [] };
-    setContacts(prev => [contact, ...prev]);
+    setContacts(prev => deduplicateContacts([contact, ...prev]));
     triggerToast(`Added pipeline network coordinate: ${newCt.name}`);
 
     if (currentUser?.id) {
@@ -2801,7 +3185,6 @@ export default function App() {
   };
 
   const handleDeleteContact = async (id: string) => {
-    const targetItem = contacts.find(c => c.id === id);
     const targetId = toUUID(id);
     const updated = contacts.filter(c => c.id !== id && c.id !== targetId);
     setContacts(updated);
@@ -2817,9 +3200,6 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('contacts').delete().eq('id', id).eq('user_id', currentUser.id);
         }
-        if (targetItem?.name) {
-          await supabase.from('contacts').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
-        }
       } catch (err) { console.warn("[Supabase Delete Contact Error]", err); }
     }
   };
@@ -2827,7 +3207,7 @@ export default function App() {
   const handleUpdateContact = async (updatedCt: Contact) => {
     const targetId = ensureUUID(updatedCt.id);
     const item = { ...updatedCt, id: targetId };
-    setContacts(prev => prev.map(c => c.id === updatedCt.id ? item : c));
+    setContacts(prev => deduplicateContacts(prev.map(c => c.id === updatedCt.id ? item : c)));
     triggerToast(`Updated connection coordinates for: ${updatedCt.name}`);
 
     if (currentUser?.id) {
@@ -2854,7 +3234,7 @@ export default function App() {
 
   const handleAddInteraction = async (contactId: string, log: { type: 'email' | 'call' | 'meeting' | 'note'; summary: string }) => {
     let updatedContact: Contact | null = null;
-    setContacts(prev => prev.map(ct => {
+    setContacts(prev => deduplicateContacts(prev.map(ct => {
       if (ct.id === contactId) {
         const fullLog = {
           id: `log-${Date.now()}`,
@@ -2869,7 +3249,7 @@ export default function App() {
         return updatedContact;
       }
       return ct;
-    }));
+    })));
     triggerToast(`Logged connection sync transaction.`);
 
     if (currentUser?.id && updatedContact) {
@@ -2899,7 +3279,7 @@ export default function App() {
   const handleAddAchievement = async (newAch: Omit<Achievement, 'id'>) => {
     const id = generateUUID();
     const ach: Achievement = { ...newAch, id };
-    setAchievements(prev => [ach, ...prev]);
+    setAchievements(prev => deduplicateAchievements([ach, ...prev]));
     triggerToast(`Acquired industry award validation!`);
 
     if (currentUser?.id) {
@@ -2919,7 +3299,6 @@ export default function App() {
   };
 
   const handleDeleteAchievement = async (id: string) => {
-    const targetItem = achievements.find(a => a.id === id);
     const targetId = toUUID(id);
     const updated = achievements.filter(a => a.id !== id && a.id !== targetId);
     setAchievements(updated);
@@ -2935,9 +3314,6 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('achievements').delete().eq('id', id).eq('user_id', currentUser.id);
         }
-        if (targetItem?.title) {
-          await supabase.from('achievements').delete().eq('title', targetItem.title).eq('user_id', currentUser.id);
-        }
       } catch (err) { console.warn("[Supabase Delete Achievement Error]", err); }
     }
   };
@@ -2945,7 +3321,7 @@ export default function App() {
   const handleUpdateAchievement = async (updatedAch: Achievement) => {
     const targetId = ensureUUID(updatedAch.id);
     const item = { ...updatedAch, id: targetId };
-    setAchievements(prev => prev.map(a => a.id === updatedAch.id ? item : a));
+    setAchievements(prev => deduplicateAchievements(prev.map(a => a.id === updatedAch.id ? item : a)));
     triggerToast(`Updated achievement details: ${updatedAch.title}`);
 
     if (currentUser?.id) {
@@ -2968,7 +3344,7 @@ export default function App() {
   const handleAddTestimonial = async (newRec: Omit<Testimonial, 'id'>) => {
     const id = generateUUID();
     const rec: Testimonial = { ...newRec, id };
-    setTestimonials(prev => [rec, ...prev]);
+    setTestimonials(prev => deduplicateTestimonials([rec, ...prev]));
     triggerToast(`Published peer quote endorsement.`);
 
     if (currentUser?.id) {
@@ -2989,7 +3365,6 @@ export default function App() {
   };
 
   const handleDeleteTestimonial = async (id: string) => {
-    const targetItem = testimonials.find(t => t.id === id);
     const targetId = toUUID(id);
     const updated = testimonials.filter(t => t.id !== id && t.id !== targetId);
     setTestimonials(updated);
@@ -3005,25 +3380,20 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('testimonials').delete().eq('id', id).eq('user_id', currentUser.id);
         }
-        if (targetItem?.name) {
-          await supabase.from('testimonials').delete().eq('name', targetItem.name).eq('user_id', currentUser.id);
-        }
       } catch (err) { console.warn("[Supabase Delete Testimonial Error]", err); }
     }
   };
 
   // Documents
   const handleAddDocument = async (newDoc: Omit<VaultDocument, 'id'>) => {
-    const isDuplicate = documents.some(d => d.name === newDoc.name && d.size === newDoc.size);
-    if (isDuplicate) return;
-
     const id = generateUUID();
     const doc: VaultDocument = { ...newDoc, id };
-    setDocuments(prev => [doc, ...prev]);
+    setDocuments(prev => deduplicateDocuments([doc, ...prev]));
     triggerToast(`Secured vault backup file: ${newDoc.name}`);
 
     if (currentUser?.id) {
       try {
+        const cleanFileUrl = (newDoc.fileUrl && newDoc.fileUrl.startsWith('data:') && newDoc.fileUrl.length > 50000) ? '' : (newDoc.fileUrl || '');
         await supabase.from('documents').insert({
           id,
           user_id: currentUser.id,
@@ -3033,7 +3403,7 @@ export default function App() {
           file_name: newDoc.name,
           file_type: newDoc.fileType || 'application/pdf',
           file_size: newDoc.size || newDoc.fileSize || '',
-          file_url: newDoc.fileUrl || '',
+          file_url: cleanFileUrl,
           storage_path: newDoc.storagePath || '',
           expiry_date: newDoc.expiryDate || null,
           tags: newDoc.tags || [newDoc.category || 'vault'],
@@ -3061,20 +3431,17 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('documents').delete().eq('id', id).eq('user_id', currentUser.id);
         }
-        if (docToDelete?.name) {
-          await supabase.from('documents').delete().eq('file_name', docToDelete.name).eq('user_id', currentUser.id);
-          await supabase.from('documents').delete().eq('title', docToDelete.name).eq('user_id', currentUser.id);
-        }
       } catch (err) { console.warn("[Supabase Delete Document Error]", err); }
     }
   };
 
   const handleUpdateDocument = async (updatedDoc: VaultDocument) => {
-    setDocuments(prev => prev.map(d => d.id === updatedDoc.id ? updatedDoc : d));
+    setDocuments(prev => deduplicateDocuments(prev.map(d => d.id === updatedDoc.id ? updatedDoc : d)));
     triggerToast(`Updated visibility for document: ${updatedDoc.name}`);
 
     if (currentUser?.id) {
       try {
+        const cleanFileUrl = (updatedDoc.fileUrl && updatedDoc.fileUrl.startsWith('data:') && updatedDoc.fileUrl.length > 50000) ? '' : (updatedDoc.fileUrl || '');
         await supabase.from('documents').upsert({
           id: updatedDoc.id,
           user_id: currentUser.id,
@@ -3084,7 +3451,7 @@ export default function App() {
           file_name: updatedDoc.name,
           file_type: updatedDoc.fileType || 'application/pdf',
           file_size: updatedDoc.size || updatedDoc.fileSize || '',
-          file_url: updatedDoc.fileUrl || '',
+          file_url: cleanFileUrl,
           storage_path: updatedDoc.storagePath || '',
           expiry_date: updatedDoc.expiryDate || null,
           tags: updatedDoc.tags || [updatedDoc.category || 'vault'],
@@ -3098,7 +3465,7 @@ export default function App() {
   const handleAddCalendarEvent = async (newEvt: Omit<CalendarEvent, 'id'>) => {
     const id = generateUUID();
     const evt: CalendarEvent = { ...newEvt, id };
-    setCalendarEvents(prev => [evt, ...prev]);
+    setCalendarEvents(prev => deduplicateCalendarEvents([evt, ...prev]));
     triggerToast(`Added scheduled event: "${newEvt.title}"`);
 
     if (currentUser?.id) {
@@ -3121,7 +3488,7 @@ export default function App() {
   const handleUpdateCalendarEvent = async (updatedEvt: CalendarEvent) => {
     const targetId = ensureUUID(updatedEvt.id);
     const item = { ...updatedEvt, id: targetId };
-    setCalendarEvents(prev => prev.map(evt => evt.id === updatedEvt.id ? item : evt));
+    setCalendarEvents(prev => deduplicateCalendarEvents(prev.map(evt => evt.id === updatedEvt.id ? item : evt)));
     triggerToast(`Updated scheduled event: "${updatedEvt.title}"`);
 
     if (currentUser?.id) {
@@ -3159,20 +3526,18 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('calendar_events').delete().eq('id', id).eq('user_id', currentUser.id);
         }
-        if (evtToDelete?.title) {
-          await supabase.from('calendar_events').delete().eq('title', evtToDelete.title).eq('user_id', currentUser.id);
-        }
       } catch (err) { console.warn("[Supabase Delete Calendar Event Error]", err); }
     }
   };
 
   // Resumes update handler
   const handleUpdateResumes = async (newResumes: ResumeItem[]) => {
-    const deletedResumes = resumes.filter(oldR => !newResumes.some(newR => newR.id === oldR.id));
-    setResumes(newResumes);
+    const cleanResumes = deduplicateResumes(newResumes);
+    const deletedResumes = resumes.filter(oldR => !cleanResumes.some(newR => newR.id === oldR.id));
+    setResumes(cleanResumes);
 
     if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(newResumes));
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(cleanResumes));
     }
 
     if (currentUser?.id) {
@@ -3183,16 +3548,11 @@ export default function App() {
           if (del.id && del.id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(del.id)) {
             await supabase.from('resumes').delete().eq('id', del.id).eq('user_id', currentUser.id);
           }
-          if (del.fileName || del.name) {
-            const fn = del.fileName || del.name;
-            await supabase.from('resumes').delete().eq('file_name', fn).eq('user_id', currentUser.id);
-            await supabase.from('resumes').delete().eq('title', fn).eq('user_id', currentUser.id);
-          }
         } catch (err) { console.warn("[Supabase Delete Resume Error]", err); }
       }
 
-      if (newResumes.length > 0) {
-        for (const r of newResumes) {
+      if (cleanResumes.length > 0) {
+        for (const r of cleanResumes) {
           const targetId = ensureUUID(r.id);
           try {
             // Convert string size (e.g. "120 KB") to integer for PostgreSQL BIGINT
@@ -3207,12 +3567,15 @@ export default function App() {
               numericSize = isNaN(parsed) ? 0 : parsed;
             }
 
+            const rawUrl = r.fileUrl || r.fileDataUrl || r.linkUrl || 'https://example.com/resume.pdf';
+            const cleanUrl = (rawUrl.startsWith('data:') && rawUrl.length > 50000) ? (r.linkUrl || 'https://example.com/resume.pdf') : rawUrl;
+
             const { error } = await supabase.from('resumes').upsert({
               id: targetId,
               user_id: currentUser.id,
               title: r.name || r.title || 'Resume',
               file_name: r.fileName || r.name || 'resume.pdf',
-              file_url: r.fileUrl || r.fileDataUrl || r.linkUrl || 'https://example.com/resume.pdf',
+              file_url: cleanUrl,
               storage_path: r.storagePath || '',
               file_size: numericSize,
               file_type: r.type || r.fileType || 'Resume',
@@ -3230,11 +3593,12 @@ export default function App() {
 
   // Notes update handler
   const handleUpdateNotes = async (newNotes: NotepadNote[]) => {
-    const deletedNotes = notes.filter(oldN => !newNotes.some(newN => newN.id === oldN.id));
-    setNotes(newNotes);
+    const cleanNotes = deduplicateNotes(newNotes);
+    const deletedNotes = notes.filter(oldN => !cleanNotes.some(newN => newN.id === oldN.id));
+    setNotes(cleanNotes);
 
     if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(newNotes));
+      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(cleanNotes));
     }
 
     if (currentUser?.id) {
@@ -3245,14 +3609,11 @@ export default function App() {
           if (del.id && del.id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(del.id)) {
             await supabase.from('notes').delete().eq('id', del.id).eq('user_id', currentUser.id);
           }
-          if (del.title) {
-            await supabase.from('notes').delete().eq('title', del.title).eq('user_id', currentUser.id);
-          }
         } catch (err) { console.warn("[Supabase Delete Note Error]", err); }
       }
 
-      if (newNotes.length > 0) {
-        for (const n of newNotes) {
+      if (cleanNotes.length > 0) {
+        for (const n of cleanNotes) {
           const targetId = ensureUUID(n.id);
           try {
             await supabase.from('notes').upsert({
