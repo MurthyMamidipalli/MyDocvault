@@ -31,6 +31,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
     setEditingItem(edu);
     const sDate = edu.startDate || (edu.startYear && /^\d{4}$/.test(edu.startYear) ? `${edu.startYear}-01-01` : '');
     const eDate = edu.endDate && edu.endDate !== 'Present' ? edu.endDate : (edu.endYear && /^\d{4}$/.test(edu.endYear) ? `${edu.endYear}-05-30` : '');
+    const idVal = edu.enrollmentId || (edu as any).enrollment_id || (edu as any).studentId || '';
     setFormData({
       institution: edu.institution,
       degree: edu.degree,
@@ -40,7 +41,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       grade: edu.grade || '',
       activities: edu.activities || '',
       percentage: edu.percentage || '',
-      enrollmentId: edu.enrollmentId || '',
+      enrollmentId: idVal,
       startDate: sDate,
       endDate: eDate,
       isCurrentlyPursuing: edu.isCurrentlyPursuing || edu.endDate === 'Present' || edu.endYear === 'Present'
@@ -72,14 +73,22 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
     if (!formData.institution || !formData.degree) return;
 
     // Automatically map date selections back to standard startYear & endYear strings
-    const sYear = formData.startDate ? formData.startDate.substring(0, 4) : (formData.startYear || '2019');
-    const eYear = formData.isCurrentlyPursuing ? 'Present' : (formData.endDate ? formData.endDate.substring(0, 4) : (formData.endYear || '2023'));
+    const sYear = formData.startDate ? formData.startDate.substring(0, 4) : (formData.startYear || new Date().getFullYear().toString());
+    const eYear = formData.isCurrentlyPursuing ? 'Present' : (formData.endDate ? formData.endDate.substring(0, 4) : (formData.endYear || new Date().getFullYear().toString()));
 
-    const finalData = {
-      ...formData,
+    const finalData: Omit<Education, 'id'> = {
+      institution: formData.institution.trim(),
+      degree: formData.degree.trim(),
+      fieldOfStudy: formData.fieldOfStudy?.trim() || '',
       startYear: sYear,
       endYear: eYear,
-      endDate: formData.isCurrentlyPursuing ? 'Present' : formData.endDate
+      startDate: formData.startDate || '',
+      endDate: formData.isCurrentlyPursuing ? 'Present' : (formData.endDate || ''),
+      grade: formData.grade?.trim() || '',
+      percentage: formData.percentage?.trim() || '',
+      enrollmentId: formData.enrollmentId?.trim() || '',
+      activities: formData.activities?.trim() || '',
+      isCurrentlyPursuing: !!formData.isCurrentlyPursuing
     };
 
     if (editingItem) {
@@ -115,7 +124,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
     if (dateStr === 'Present') return 'Present';
     try {
       const parts = dateStr.split('-');
-      if (parts.length === 3) {
+      if (parts.length === 3 && parts[0].length === 4) {
         // YYYY-MM-DD -> DD-MM-YYYY
         return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
@@ -126,14 +135,16 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
   };
 
   const displayDuration = (edu: Education) => {
-    if (edu.isCurrentlyPursuing || edu.endDate === 'Present' || edu.endYear === 'Present') {
-      const start = edu.startDate ? formatDateDisplay(edu.startDate) : (edu.startYear || '');
-      return `${start} — Present`;
+    const isCurrent = edu.isCurrentlyPursuing || edu.endDate === 'Present' || edu.endYear === 'Present';
+    const startStr = edu.startDate ? formatDateDisplay(edu.startDate) : (edu.startYear || '');
+    if (isCurrent) {
+      return startStr ? `${startStr} — Present` : 'Present';
     }
-    if (edu.startDate && edu.endDate) {
-      return `${formatDateDisplay(edu.startDate)} — ${formatDateDisplay(edu.endDate)}`;
+    const endStr = edu.endDate ? formatDateDisplay(edu.endDate) : (edu.endYear || '');
+    if (startStr && endStr) {
+      return `${startStr} — ${endStr}`;
     }
-    return `${edu.startYear} — ${edu.endYear}`;
+    return startStr || endStr || `${edu.startYear || ''} — ${edu.endYear || ''}`;
   };
 
   return (
@@ -369,9 +380,10 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                     <span>{displayDuration(edu)}</span>
                   </span>
                   
-                  {edu.enrollmentId && (
-                    <span className="bg-slate-950/60 text-[11px] text-gray-400 px-2.5 py-0.5 rounded border border-slate-800 font-mono">
-                      ID: {edu.enrollmentId}
+                  {(edu.enrollmentId || (edu as any).enrollment_id) && (
+                    <span className="bg-slate-950/60 text-[11px] text-gray-300 px-2.5 py-0.5 rounded border border-slate-800 font-mono flex items-center gap-1.5 shadow-sm">
+                      <Fingerprint className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>ID: {edu.enrollmentId || (edu as any).enrollment_id}</span>
                     </span>
                   )}
 

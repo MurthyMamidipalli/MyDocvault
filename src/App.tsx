@@ -1085,6 +1085,15 @@ export default function App() {
         }
       } catch (err) {
         console.warn("Async restoration of others deferred:", err);
+      }
+
+      try {
+        const dEdu = await heavyStorage.get(`${email}_education`);
+        if (dEdu && Array.isArray(dEdu) && dEdu.length > 0) {
+          setEducation(prev => mergeArrayRecords(dEdu, prev));
+        }
+      } catch (err) {
+        console.warn("Async restoration of education deferred:", err);
       } finally {
         isProjsRestoringRef.current = false;
       }
@@ -1223,8 +1232,21 @@ export default function App() {
               activities: e.activities || extraMeta.activities || (e.description && !e.description.startsWith('{') ? e.description : '')
             };
           });
-          setEducation(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(mapped));
+          setEducation(prev => {
+            const merged = mapped.map(item => {
+              const localMatch = prev.find(p => p.id === item.id || (p.degree?.trim().toLowerCase() === item.degree?.trim().toLowerCase() && p.institution?.trim().toLowerCase() === item.institution?.trim().toLowerCase()));
+              return {
+                ...item,
+                enrollmentId: item.enrollmentId || localMatch?.enrollmentId || '',
+                startDate: item.startDate || localMatch?.startDate || '',
+                endDate: item.endDate || localMatch?.endDate || '',
+                isCurrentlyPursuing: item.isCurrentlyPursuing ?? localMatch?.isCurrentlyPursuing ?? false,
+                activities: item.activities || localMatch?.activities || ''
+              };
+            });
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(merged));
+            return merged;
+          });
         }
       } catch (err) { console.warn("[Supabase Education Load]", err); }
 
@@ -1953,7 +1975,7 @@ export default function App() {
         endDate: newEd.endDate || '',
         isCurrentlyPursuing: !!newEd.isCurrentlyPursuing
       });
-      const payload: any = {
+      const cleanPayload: any = {
         id,
         user_id: currentUser.id,
         degree: newEd.degree,
@@ -1963,7 +1985,10 @@ export default function App() {
         end_year: newEd.endYear,
         grade: newEd.grade,
         percentage: newEd.percentage,
-        description: descPayload,
+        description: descPayload
+      };
+      const extendedPayload: any = {
+        ...cleanPayload,
         enrollment_id: newEd.enrollmentId || '',
         start_date: newEd.startDate || '',
         end_date: newEd.endDate || '',
@@ -1971,14 +1996,18 @@ export default function App() {
         activities: newEd.activities || ''
       };
       try {
-        await supabase.from('education').insert(payload);
+        const { error } = await supabase.from('education').insert(extendedPayload);
+        if (error) {
+          console.warn("[Supabase Add Edu extended schema error, falling back to clean payload]", error);
+          const { error: fallbackErr } = await supabase.from('education').insert(cleanPayload);
+          if (fallbackErr) {
+            console.warn("[Supabase Add Edu fallback error]", fallbackErr);
+          }
+        }
       } catch (err) {
-        delete payload.enrollment_id;
-        delete payload.start_date;
-        delete payload.end_date;
-        delete payload.is_currently_pursuing;
-        delete payload.activities;
-        try { await supabase.from('education').insert(payload); } catch (e) { console.warn("[Supabase Add Edu Error]", e); }
+        try {
+          await supabase.from('education').insert(cleanPayload);
+        } catch (e) { console.warn("[Supabase Add Edu Error]", e); }
       }
     }
   };
@@ -2030,7 +2059,7 @@ export default function App() {
         endDate: updatedEd.endDate || '',
         isCurrentlyPursuing: !!updatedEd.isCurrentlyPursuing
       });
-      const payload: any = {
+      const cleanPayload: any = {
         id: targetId,
         user_id: currentUser.id,
         degree: updatedEd.degree,
@@ -2040,7 +2069,10 @@ export default function App() {
         end_year: updatedEd.endYear,
         grade: updatedEd.grade,
         percentage: updatedEd.percentage,
-        description: descPayload,
+        description: descPayload
+      };
+      const extendedPayload: any = {
+        ...cleanPayload,
         enrollment_id: updatedEd.enrollmentId || '',
         start_date: updatedEd.startDate || '',
         end_date: updatedEd.endDate || '',
@@ -2048,14 +2080,18 @@ export default function App() {
         activities: updatedEd.activities || ''
       };
       try {
-        await supabase.from('education').upsert(payload);
+        const { error } = await supabase.from('education').upsert(extendedPayload);
+        if (error) {
+          console.warn("[Supabase Update Edu extended schema error, falling back to clean payload]", error);
+          const { error: fallbackErr } = await supabase.from('education').upsert(cleanPayload);
+          if (fallbackErr) {
+            console.warn("[Supabase Update Edu fallback error]", fallbackErr);
+          }
+        }
       } catch (err) {
-        delete payload.enrollment_id;
-        delete payload.start_date;
-        delete payload.end_date;
-        delete payload.is_currently_pursuing;
-        delete payload.activities;
-        try { await supabase.from('education').upsert(payload); } catch (e) { console.warn("[Supabase Update Edu Error]", e); }
+        try {
+          await supabase.from('education').upsert(cleanPayload);
+        } catch (e) { console.warn("[Supabase Update Edu Error]", e); }
       }
     }
   };
