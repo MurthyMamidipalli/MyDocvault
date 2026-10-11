@@ -127,14 +127,19 @@ export default function ProjectsTab({
     return list;
   }, [projects, products]);
 
-  // 3. Others: ONLY other documents/files
+  // 3. Others: ONLY other documents/files (excluding certificates)
   const otherItems = useMemo(() => {
     const list: Project[] = [];
     const seen = new Set<string>();
 
+    const isNonCertificate = (p: Project) => {
+      const dt = (p.docType || '').toLowerCase();
+      return dt !== 'certificate';
+    };
+
     if (others && Array.isArray(others)) {
       for (const p of others) {
-        if (p.type === 'other' || !p.type) {
+        if ((p.type === 'other' || !p.type) && isNonCertificate(p)) {
           const key = p.id || (p.name ? p.name.toLowerCase().trim() : '');
           if (key && !seen.has(key)) {
             seen.add(key);
@@ -147,7 +152,7 @@ export default function ProjectsTab({
     }
     if (projects && Array.isArray(projects)) {
       for (const p of projects) {
-        if (p.type === 'other') {
+        if (p.type === 'other' && isNonCertificate(p)) {
           const key = p.id || (p.name ? p.name.toLowerCase().trim() : '');
           if (key && !seen.has(key)) {
             seen.add(key);
@@ -373,14 +378,14 @@ export default function ProjectsTab({
   // Helper to get matching icon for document type
   const getDocTypeIcon = (type?: string) => {
     switch ((type || '').toLowerCase()) {
-      case 'certificate':
-        return <Award className="w-4 h-4 text-amber-400 shrink-0" />;
       case 'research paper':
         return <BookOpen className="w-4 h-4 text-indigo-400 shrink-0" />;
       case 'report':
         return <BarChart2 className="w-4 h-4 text-emerald-400 shrink-0" />;
       case 'case study':
         return <Layers className="w-4 h-4 text-purple-400 shrink-0" />;
+      case 'whitepaper':
+        return <FileText className="w-4 h-4 text-cyan-400 shrink-0" />;
       default:
         return <FileText className="w-4 h-4 text-cyan-400 shrink-0" />;
     }
@@ -413,7 +418,7 @@ export default function ProjectsTab({
         </button>
       </div>
 
-      {/* 2 Categories Segmented Switcher: [ Projects ] [ Products ] */}
+      {/* 3 Categories Segmented Switcher: [ Projects ] [ Products ] [ Others ] */}
       <div className="flex flex-wrap items-center bg-[#0b0c10]/95 p-1 rounded-2xl border border-slate-800/80 w-fit select-none gap-1">
         <button
           type="button"
@@ -450,6 +455,25 @@ export default function ProjectsTab({
           <span>Products</span>
           <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-900 text-gray-400 border border-slate-800">
             {productItems.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveFilter('other');
+            setShowForm(false);
+          }}
+          className={`px-5 sm:px-6 py-2.5 rounded-xl text-xs font-bold tracking-wide flex items-center gap-2 transition select-none cursor-pointer ${
+            activeFilter === 'other'
+              ? 'bg-[#16171d] text-white shadow-sm border border-slate-800/85'
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          <FileText className="w-4 h-4 text-emerald-400 stroke-[1.75]" />
+          <span>Others</span>
+          <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-slate-900 text-gray-400 border border-slate-800">
+            {otherItems.length}
           </span>
         </button>
       </div>
@@ -840,8 +864,7 @@ export default function ProjectsTab({
                     <option value="Report">Report</option>
                     <option value="Research paper">Research paper</option>
                     <option value="Case study">Case study</option>
-                    <option value="Certificate">Certificate</option>
-                    <option value="Other PDF / Document">Other PDF / Document</option>
+                    <option value="Whitepaper">Whitepaper</option>
                   </select>
                 </div>
 

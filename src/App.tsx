@@ -86,7 +86,6 @@ import CertificationsTab from './components/CertificationsTab';
 import ExperienceTab from './components/ExperienceTab';
 import CurrentJobTab from './components/CurrentJobTab';
 import ProjectsTab from './components/ProjectsTab';
-import OthersTab from './components/OthersTab';
 import ResumeTab from './components/ResumeTab';
 import PortfoliosTab from './components/PortfoliosTab';
 import TimelineTab from './components/TimelineTab';
@@ -571,7 +570,7 @@ export default function App() {
 
   const VALID_APP_TABS = [
     'overview', 'profile', 'skills', 'education', 'certifications', 'experience',
-    'current-job', 'projects', 'others', 'resume', 'portfolios', 'timeline', 'contacts',
+    'current-job', 'projects', 'resume', 'portfolios', 'timeline', 'contacts',
     'calendar', 'achievements', 'testimonials', 'vault', 'notepad', 'digital-visiting-card', 'settings'
   ];
 
@@ -672,13 +671,6 @@ export default function App() {
         };
         setCurrentUser(mappedUser);
         localStorage.setItem('nexus_current_user', JSON.stringify(mappedUser));
-        if (_event === 'SIGNED_IN') {
-          setActiveTab('overview');
-          localStorage.setItem('nexus_active_tab', 'overview');
-          if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
-            window.history.replaceState(null, '', `${window.location.pathname}#overview`);
-          }
-        }
       } else if (_event === 'SIGNED_OUT') {
         setCurrentUser(null);
         localStorage.removeItem('nexus_current_user');
@@ -4155,7 +4147,6 @@ export default function App() {
     { id: 'experience', label: 'Experience', icon: Briefcase },
     { id: 'current-job', label: 'Current Job', icon: Laptop },
     { id: 'projects', label: 'Projects & Products', icon: Rocket },
-    { id: 'others', label: 'Others', icon: Layers },
     { id: 'resume', label: 'Resume / CV', icon: FileText },
     { id: 'portfolios', label: 'Portfolios & Links', icon: Link2 },
     { id: 'timeline', label: 'Career Timeline', icon: GitBranch },
@@ -4456,15 +4447,6 @@ export default function App() {
               onAddProject={handleAddProj}
               onDeleteProject={handleDeleteProj}
               onUpdateProject={handleUpdateProj}
-            />
-          )}
-
-          {activeTab === 'others' && (
-            <OthersTab 
-              others={others}
-              onAddOther={handleAddProj}
-              onDeleteOther={handleDeleteProj}
-              onUpdateOther={handleUpdateProj}
             />
           )}
 
