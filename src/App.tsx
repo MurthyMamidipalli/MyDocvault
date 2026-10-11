@@ -34,7 +34,8 @@ import {
   StickyNote,
   Calendar,
   AlertTriangle,
-  CreditCard
+  CreditCard,
+  Layers
 } from 'lucide-react';
 
 import { 
@@ -85,6 +86,7 @@ import CertificationsTab from './components/CertificationsTab';
 import ExperienceTab from './components/ExperienceTab';
 import CurrentJobTab from './components/CurrentJobTab';
 import ProjectsTab from './components/ProjectsTab';
+import OthersTab from './components/OthersTab';
 import ResumeTab from './components/ResumeTab';
 import PortfoliosTab from './components/PortfoliosTab';
 import TimelineTab from './components/TimelineTab';
@@ -569,7 +571,7 @@ export default function App() {
 
   const VALID_APP_TABS = [
     'overview', 'profile', 'skills', 'education', 'certifications', 'experience',
-    'current-job', 'projects', 'resume', 'portfolios', 'timeline', 'contacts',
+    'current-job', 'projects', 'others', 'resume', 'portfolios', 'timeline', 'contacts',
     'calendar', 'achievements', 'testimonials', 'vault', 'notepad', 'digital-visiting-card', 'settings'
   ];
 
@@ -1493,6 +1495,31 @@ export default function App() {
             }));
             setOthers(mapped);
             if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(mapped));
+          } else {
+            // Fallback: If table 'others' does not exist in Supabase yet, check projects table for type === 'other'
+            const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
+            if (projData && Array.isArray(projData)) {
+              const fallbackOthers = projData.filter(p => p.type === 'other' || p.category === 'others' || (p.category as any) === 'other').map(p => ({
+                id: p.id,
+                name: p.name,
+                category: p.category || 'others',
+                type: 'other' as const,
+                docType: p.doc_type || p.category || 'Report',
+                description: p.description,
+                highlights: p.highlights || [],
+                techStack: p.tech_stack || [],
+                liveUrl: p.live_url,
+                githubUrl: p.github_url,
+                pdfUrl: p.pdf_url,
+                imageUrl: p.image_url,
+                isPublic: p.is_public !== false,
+                date: p.date
+              }));
+              if (fallbackOthers.length > 0) {
+                setOthers(fallbackOthers);
+                if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(fallbackOthers));
+              }
+            }
           }
         } catch (err) { console.warn("[Supabase Others Load]", err); }
 
@@ -2533,6 +2560,8 @@ export default function App() {
             user_id: userId,
             name: updatedPr.name,
             category: updatedPr.category || 'others',
+            type: 'other',
+            doc_type: updatedPr.docType || 'Report',
             description: updatedPr.description || '',
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
@@ -2543,8 +2572,13 @@ export default function App() {
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
-          await supabase.from('others').upsert(payload);
-          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
+          const { error: othErr } = await supabase.from('others').upsert(payload);
+          if (othErr) {
+            console.warn("[Supabase Update Other Fallback to projects]", othErr);
+            await supabase.from('projects').upsert(payload);
+          } else {
+            await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
+          }
           await supabase.from('products').delete().eq('id', targetId).eq('user_id', userId);
         } catch (err) { console.warn("[Supabase Update Other Error]", err); }
       }
@@ -4121,6 +4155,7 @@ export default function App() {
     { id: 'experience', label: 'Experience', icon: Briefcase },
     { id: 'current-job', label: 'Current Job', icon: Laptop },
     { id: 'projects', label: 'Projects & Products', icon: Rocket },
+    { id: 'others', label: 'Others', icon: Layers },
     { id: 'resume', label: 'Resume / CV', icon: FileText },
     { id: 'portfolios', label: 'Portfolios & Links', icon: Link2 },
     { id: 'timeline', label: 'Career Timeline', icon: GitBranch },
@@ -4421,6 +4456,15 @@ export default function App() {
               onAddProject={handleAddProj}
               onDeleteProject={handleDeleteProj}
               onUpdateProject={handleUpdateProj}
+            />
+          )}
+
+          {activeTab === 'others' && (
+            <OthersTab 
+              others={others}
+              onAddOther={handleAddProj}
+              onDeleteOther={handleDeleteProj}
+              onUpdateOther={handleUpdateProj}
             />
           )}
 

@@ -109,7 +109,7 @@ export interface CurrentJob {
 export interface Project {
   id: string;
   name: string;
-  category: 'enterprise' | 'frontend' | 'fullstack' | 'open-source' | 'utilities';
+  category: 'enterprise' | 'frontend' | 'fullstack' | 'open-source' | 'utilities' | 'others' | 'products';
   description: string;
   techStack: string[];
   githubUrl: string;
