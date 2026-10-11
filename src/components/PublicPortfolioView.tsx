@@ -170,7 +170,7 @@ export default function PublicPortfolioView({
 
   const cleanSkills = deduplicateByUniqueKey(skills || [], sk => sk.name || '');
   const cleanExperience = deduplicateByUniqueKey(experience || [], exp => `${exp.role || ''}-${exp.company || ''}`);
-  const cleanCerts = deduplicateByUniqueKey(certifications || [], c => c.title || '');
+  const cleanCerts = deduplicateByUniqueKey(certifications || [], c => c.id || `${c.title || ''}-${c.issuer || ''}-${c.dateIssued || ''}`);
   const cleanEducation = deduplicateByUniqueKey(education || [], edu => `${edu.degree || ''}-${edu.institution || ''}`);
   const cleanAchievements = deduplicateByUniqueKey(achievements || [], ach => ach.title || '');
   // Strict Testimonials / Peer Endorsements deduplication by text & name

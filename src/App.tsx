@@ -107,7 +107,7 @@ import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from './lib/su
 export default function App() {
   
   // Helper to merge array records by ID or unique key without dropping any records
-  const mergeArrayRecords = <T extends { id?: string; name?: string }>(incoming?: T[], existing?: T[]): T[] => {
+  const mergeArrayRecords = <T extends { id?: string; name?: string; title?: string }>(incoming?: T[], existing?: T[]): T[] => {
     const inc = Array.isArray(incoming) ? incoming : [];
     const ext = Array.isArray(existing) ? existing : [];
     if (inc.length === 0) return ext;
@@ -116,12 +116,12 @@ export default function App() {
     const map = new Map<string, T>();
     // First keep existing records
     for (const item of ext) {
-      const key = item.id || (item.name ? item.name.toLowerCase().trim() : `item_${Math.random()}`);
+      const key = item.id || (item.name ? item.name.toLowerCase().trim() : (item.title ? item.title.toLowerCase().trim() : `item_${Math.random()}`));
       map.set(key, item);
     }
     // Then merge/update incoming records
     for (const item of inc) {
-      const key = item.id || (item.name ? item.name.toLowerCase().trim() : `item_${Math.random()}`);
+      const key = item.id || (item.name ? item.name.toLowerCase().trim() : (item.title ? item.title.toLowerCase().trim() : `item_${Math.random()}`));
       map.set(key, item);
     }
     return Array.from(map.values());
@@ -284,7 +284,7 @@ export default function App() {
             const unique: Certification[] = [];
             const seen = new Set<string>();
             for (const item of parsed) {
-              const key = (item.title || '').toLowerCase().trim();
+              const key = item.id ? String(item.id).trim() : `${(item.title || '').toLowerCase().trim()}_${(item.issuer || '').toLowerCase().trim()}_${(item.credentialId || '').toLowerCase().trim()}_${(item.dateIssued || item.issueDate || '').toLowerCase().trim()}`;
               if (!seen.has(key)) {
                 seen.add(key);
                 unique.push(item);
@@ -1064,7 +1064,7 @@ export default function App() {
         if (dCerts && Array.isArray(dCerts) && dCerts.length > 0) {
           setCertifications(prev => {
             const sanitized = dCerts.map((c: any) => {
-              const existing = prev.find(p => p.id === c.id || (p.title && c.title && p.title.toLowerCase().trim() === c.title.toLowerCase().trim()));
+              const existing = prev.find(p => p.id === c.id || (c.id && toUUID(p.id) === toUUID(c.id)));
               const dVal = c.dateIssued || c.issueDate || c.issue_date || c.date_issued || existing?.dateIssued || existing?.issueDate || '';
               return {
                 ...c,
@@ -1315,8 +1315,30 @@ export default function App() {
                 visibility: c.visibility || 'public'
               };
             });
-            setCertifications(mapped);
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(mapped));
+            setCertifications(prev => {
+              const merged = [...mapped];
+              for (const localItem of prev) {
+                const matchIndex = merged.findIndex(m => m.id === localItem.id || toUUID(m.id) === toUUID(localItem.id));
+                if (matchIndex >= 0) {
+                  if (!merged[matchIndex].fileUrl && localItem.fileUrl) {
+                    merged[matchIndex].fileUrl = localItem.fileUrl;
+                  }
+                  if (!merged[matchIndex].fileName && localItem.fileName) {
+                    merged[matchIndex].fileName = localItem.fileName;
+                  }
+                  if (!merged[matchIndex].credentialId && localItem.credentialId) {
+                    merged[matchIndex].credentialId = localItem.credentialId;
+                  }
+                } else {
+                  merged.push(localItem);
+                }
+              }
+              if (currentUser?.email) {
+                safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(merged));
+                heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, merged).catch(() => {});
+              }
+              return merged;
+            });
           } else {
             const emailKey = currentUser?.email?.toLowerCase().trim();
             let currentLocalCerts: Certification[] = [];
@@ -1324,29 +1346,37 @@ export default function App() {
               const raw = localStorage.getItem(`${emailKey}_certs`);
               if (raw) { try { currentLocalCerts = JSON.parse(raw); } catch (e) {} }
             }
+            if (!currentLocalCerts || currentLocalCerts.length === 0) {
+              currentLocalCerts = INITIAL_CERTIFICATIONS;
+            }
             if (currentLocalCerts && currentLocalCerts.length > 0) {
               setCertifications(currentLocalCerts);
+              if (currentUser?.email) {
+                safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(currentLocalCerts));
+                heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, currentLocalCerts).catch(() => {});
+              }
               for (const c of currentLocalCerts) {
                 const cId = ensureUUID(c.id);
                 const dVal = c.dateIssued || c.issueDate || '';
+                const payload: any = {
+                  id: cId,
+                  user_id: userId,
+                  title: c.title,
+                  issuer: c.issuer,
+                  credential_id: c.credentialId,
+                  issue_date: dVal,
+                  expiry_date: c.expirationDate || c.expiryDate,
+                  credential_url: c.credentialUrl,
+                  description: c.description,
+                  file_name: c.fileName,
+                  file_url: (c.fileUrl && !c.fileUrl.startsWith('data:')) ? c.fileUrl : '',
+                  storage_path: c.storagePath,
+                  type: c.type || 'study',
+                  percentage: c.percentage,
+                  visibility: c.visibility || 'public'
+                };
                 try {
-                  await supabase.from('certifications').upsert({
-                    id: cId,
-                    user_id: userId,
-                    title: c.title,
-                    issuer: c.issuer,
-                    credential_id: c.credentialId,
-                    issue_date: dVal,
-                    expiry_date: c.expirationDate || c.expiryDate,
-                    credential_url: c.credentialUrl,
-                    description: c.description,
-                    file_name: c.fileName,
-                    file_url: c.fileUrl,
-                    storage_path: c.storagePath,
-                    type: c.type || 'study',
-                    percentage: c.percentage,
-                    visibility: c.visibility || 'public'
-                  });
+                  await supabase.from('certifications').upsert(payload);
                 } catch (err) {}
               }
             }
@@ -2167,47 +2197,63 @@ export default function App() {
     const id = generateUUID();
     const dVal = newCert.dateIssued || newCert.issueDate || '';
     const cert: Certification = { ...newCert, id, dateIssued: dVal, issueDate: dVal };
-    const updatedCerts = [cert, ...certifications];
-    setCertifications(updatedCerts);
-    if (currentUser?.email) {
-      const email = currentUser.email.toLowerCase().trim();
-      safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
-      heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
-    }
-    triggerToast(`Exposed regulatory certificate: ${newCert.title}`);
+    setCertifications(prev => {
+      const updatedCerts = [cert, ...prev];
+      if (currentUser?.email) {
+        const email = currentUser.email.toLowerCase().trim();
+        safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
+        heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
+      }
+      return updatedCerts;
+    });
+    triggerToast(`Added credential: ${newCert.title}`);
 
     if (currentUser?.id) {
+      const payload: any = {
+        id,
+        user_id: currentUser.id,
+        title: newCert.title,
+        issuer: newCert.issuer,
+        credential_id: newCert.credentialId,
+        issue_date: dVal,
+        expiry_date: newCert.expirationDate || newCert.expiryDate,
+        credential_url: newCert.credentialUrl,
+        description: newCert.description,
+        file_name: newCert.fileName,
+        file_url: newCert.fileUrl,
+        storage_path: newCert.storagePath,
+        type: newCert.type || 'study',
+        percentage: newCert.percentage,
+        visibility: newCert.visibility || 'public'
+      };
       try {
-        await supabase.from('certifications').insert({
-          id,
-          user_id: currentUser.id,
-          title: newCert.title,
-          issuer: newCert.issuer,
-          credential_id: newCert.credentialId,
-          issue_date: dVal,
-          expiry_date: newCert.expirationDate || newCert.expiryDate,
-          credential_url: newCert.credentialUrl,
-          description: newCert.description,
-          file_name: newCert.fileName,
-          file_url: newCert.fileUrl,
-          storage_path: newCert.storagePath,
-          type: newCert.type || 'study',
-          percentage: newCert.percentage,
-          visibility: newCert.visibility || 'public'
-        });
-      } catch (err) { console.warn("[Supabase Add Cert Error]", err); }
+        await supabase.from('certifications').insert(payload);
+      } catch (err) {
+        if (payload.file_url && payload.file_url.startsWith('data:')) {
+          payload.file_url = '';
+          try {
+            await supabase.from('certifications').insert(payload);
+          } catch (e2) {
+            console.warn("[Supabase Add Cert Fallback Error]", e2);
+          }
+        } else {
+          console.warn("[Supabase Add Cert Error]", err);
+        }
+      }
     }
   };
 
   const handleDeleteCert = async (id: string) => {
-    const targetItem = certifications.find(c => c.id === id);
     const targetId = toUUID(id);
-    const updated = certifications.filter(c => c.id !== id && c.id !== targetId);
-    setCertifications(updated);
-
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(updated));
-    }
+    setCertifications(prev => {
+      const updated = prev.filter(c => c.id !== id && c.id !== targetId);
+      if (currentUser?.email) {
+        const email = currentUser.email.toLowerCase().trim();
+        safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_certs`, updated).catch(e => {});
+      }
+      return updated;
+    });
     triggerToast(`Wiped credential clearance.`);
 
     if (currentUser?.id) {
@@ -2215,9 +2261,6 @@ export default function App() {
         await supabase.from('certifications').delete().eq('id', targetId).eq('user_id', currentUser.id);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('certifications').delete().eq('id', id).eq('user_id', currentUser.id);
-        }
-        if (targetItem?.title) {
-          await supabase.from('certifications').delete().eq('title', targetItem.title).eq('user_id', currentUser.id);
         }
       } catch (err) { console.warn("[Supabase Delete Cert Error]", err); }
     }
@@ -2228,7 +2271,7 @@ export default function App() {
     const dVal = updatedCert.dateIssued || updatedCert.issueDate || '';
     const item = { ...updatedCert, id: targetId, dateIssued: dVal, issueDate: dVal };
     setCertifications(prev => {
-      const updatedCerts = prev.map(c => (c.id === updatedCert.id || c.id === targetId || (c.title && updatedCert.title && c.title.toLowerCase().trim() === updatedCert.title.toLowerCase().trim())) ? item : c);
+      const updatedCerts = prev.map(c => (c.id === updatedCert.id || c.id === targetId) ? item : c);
       if (currentUser?.email) {
         const email = currentUser.email.toLowerCase().trim();
         safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
@@ -2239,25 +2282,37 @@ export default function App() {
     triggerToast(`Updated file attachment for: ${updatedCert.title}`);
 
     if (currentUser?.id) {
+      const payload: any = {
+        id: targetId,
+        user_id: currentUser.id,
+        title: updatedCert.title,
+        issuer: updatedCert.issuer,
+        credential_id: updatedCert.credentialId,
+        issue_date: dVal,
+        expiry_date: updatedCert.expirationDate || updatedCert.expiryDate,
+        credential_url: updatedCert.credentialUrl,
+        description: updatedCert.description,
+        file_name: updatedCert.fileName,
+        file_url: updatedCert.fileUrl,
+        storage_path: updatedCert.storagePath,
+        type: updatedCert.type || 'study',
+        percentage: updatedCert.percentage,
+        visibility: updatedCert.visibility || 'public'
+      };
       try {
-        await supabase.from('certifications').upsert({
-          id: targetId,
-          user_id: currentUser.id,
-          title: updatedCert.title,
-          issuer: updatedCert.issuer,
-          credential_id: updatedCert.credentialId,
-          issue_date: dVal,
-          expiry_date: updatedCert.expirationDate || updatedCert.expiryDate,
-          credential_url: updatedCert.credentialUrl,
-          description: updatedCert.description,
-          file_name: updatedCert.fileName,
-          file_url: updatedCert.fileUrl,
-          storage_path: updatedCert.storagePath,
-          type: updatedCert.type || 'study',
-          percentage: updatedCert.percentage,
-          visibility: updatedCert.visibility || 'public'
-        });
-      } catch (err) { console.warn("[Supabase Update Cert Error]", err); }
+        await supabase.from('certifications').upsert(payload);
+      } catch (err) {
+        if (payload.file_url && payload.file_url.startsWith('data:')) {
+          payload.file_url = '';
+          try {
+            await supabase.from('certifications').upsert(payload);
+          } catch (e2) {
+            console.warn("[Supabase Update Cert Fallback Error]", e2);
+          }
+        } else {
+          console.warn("[Supabase Update Cert Error]", err);
+        }
+      }
     }
   };
 
@@ -3396,7 +3451,7 @@ export default function App() {
 
       const deduplicatedSkills = deduplicatePayloadArray(publicSkillsOnly, sk => sk.name || '');
       const deduplicatedExperience = deduplicatePayloadArray(experience, exp => `${exp.role || ''}-${exp.company || ''}`);
-      const deduplicatedCerts = deduplicatePayloadArray(publicCertsOnly, c => c.title || '');
+      const deduplicatedCerts = deduplicatePayloadArray(publicCertsOnly, c => c.id || `${c.title || ''}-${c.issuer || ''}-${c.dateIssued || ''}`);
       const deduplicatedProjects = deduplicatePayloadArray(publicProjectsOnly, proj => proj.name || '');
       const deduplicatedEducation = deduplicatePayloadArray(education, edu => `${edu.degree || ''}-${edu.institution || ''}`);
       const deduplicatedAchievements = deduplicatePayloadArray(achievements, ach => ach.title || '');
