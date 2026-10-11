@@ -576,6 +576,11 @@ export default function App() {
   // Active navigation sidebar link with persistence
   const [activeTab, setActiveTab] = useState<string>(() => {
     try {
+      // If user is not logged in, always start at overview (Home Page)
+      const user = localStorage.getItem('nexus_current_user');
+      if (!user) {
+        return 'overview';
+      }
       const hash = window.location.hash;
       if (hash && !hash.includes('access_token')) {
         const cleaned = hash.replace(/^#\/?/, '').split('?')[0].split('/')[0].trim().toLowerCase();
@@ -665,9 +670,21 @@ export default function App() {
         };
         setCurrentUser(mappedUser);
         localStorage.setItem('nexus_current_user', JSON.stringify(mappedUser));
+        if (_event === 'SIGNED_IN') {
+          setActiveTab('overview');
+          localStorage.setItem('nexus_active_tab', 'overview');
+          if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
+            window.history.replaceState(null, '', `${window.location.pathname}#overview`);
+          }
+        }
       } else if (_event === 'SIGNED_OUT') {
         setCurrentUser(null);
         localStorage.removeItem('nexus_current_user');
+        localStorage.setItem('nexus_active_tab', 'overview');
+        setActiveTab('overview');
+        if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
+          window.history.replaceState(null, '', `${window.location.pathname}#overview`);
+        }
       }
     });
 
@@ -677,6 +694,11 @@ export default function App() {
   const handleUserLogin = (user: { id?: string; email: string; firstName?: string; lastName?: string }) => {
     setCurrentUser(user);
     localStorage.setItem('nexus_current_user', JSON.stringify(user));
+    setActiveTab('overview');
+    localStorage.setItem('nexus_active_tab', 'overview');
+    if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
+      window.history.replaceState(null, '', `${window.location.pathname}#overview`);
+    }
   };
 
   const resetUserDataState = (userEmail?: string, userName?: string) => {
@@ -745,6 +767,11 @@ export default function App() {
     }
     setCurrentUser(null);
     localStorage.removeItem('nexus_current_user');
+    localStorage.setItem('nexus_active_tab', 'overview');
+    setActiveTab('overview');
+    if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
+      window.history.replaceState(null, '', `${window.location.pathname}#overview`);
+    }
     resetUserDataState();
   };
 
@@ -1131,539 +1158,559 @@ export default function App() {
     const loadSupabaseUserData = async () => {
       console.log(`[Supabase DB] Loading records for authenticated user: ${userId}`);
       
-      // 1. Profile
       try {
-        const { data: pData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
+        const [
+          pRes, sRes, eRes, cRes, expRes, jobRes,
+          projRes, prodRes, othRes, resRes, docRes,
+          nRes, lRes, tmRes, ctRes, calRes, aRes, tRes
+        ] = await Promise.allSettled([
+          supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+          supabase.from('skills').select('*').eq('user_id', userId),
+          supabase.from('education').select('*').eq('user_id', userId),
+          supabase.from('certifications').select('*').eq('user_id', userId),
+          supabase.from('experience').select('*').eq('user_id', userId),
+          supabase.from('current_jobs').select('*').eq('user_id', userId).maybeSingle(),
+          supabase.from('projects').select('*').eq('user_id', userId),
+          supabase.from('products').select('*').eq('user_id', userId),
+          supabase.from('others').select('*').eq('user_id', userId),
+          supabase.from('resumes').select('*').eq('user_id', userId),
+          supabase.from('documents').select('*').eq('user_id', userId),
+          supabase.from('notes').select('*').eq('user_id', userId),
+          supabase.from('portfolio_links').select('*').eq('user_id', userId),
+          supabase.from('career_timeline').select('*').eq('user_id', userId),
+          supabase.from('contacts').select('*').eq('user_id', userId),
+          supabase.from('calendar_events').select('*').eq('user_id', userId),
+          supabase.from('achievements').select('*').eq('user_id', userId),
+          supabase.from('testimonials').select('*').eq('user_id', userId)
+        ]);
 
-        if (pData) {
-          setProfile(prev => ({
-            ...prev,
-            name: pData.name || prev.name,
-            firstName: pData.first_name || prev.firstName,
-            lastName: pData.last_name || prev.lastName,
-            headline: pData.headline || prev.headline,
-            bio: pData.bio || prev.bio,
-            email: pData.email || prev.email,
-            phone: pData.phone || prev.phone,
-            secondaryEmail: pData.secondary_email || prev.secondaryEmail,
-            secondaryPhone: pData.secondary_phone || prev.secondaryPhone,
-            location: pData.location || prev.location,
-            avatarUrl: pData.avatar_url || prev.avatarUrl,
-            publicProfile: pData.public_profile ?? prev.publicProfile,
-            shareSlug: pData.share_slug || prev.shareSlug
-          }));
-        }
-      } catch (err) {
-        console.warn("[Supabase Profiles Load]", err);
-      }
-
-      // 2. Skills
-      try {
-        const { data: sData } = await supabase.from('skills').select('*').eq('user_id', userId);
-        if (sData && Array.isArray(sData) && sData.length > 0) {
-          const mapped = sData.map(s => ({
-            id: s.id,
-            name: s.name,
-            category: s.category || 'Technical',
-            proficiency: s.proficiency || 'Intermediate',
-            yearsOfExp: s.years_of_exp || 1,
-            endorsements: s.endorsements || 0,
-            description: s.description || '',
-            visibility: s.visibility || 'public'
-          }));
-          setSkills(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(mapped));
-        } else {
-          const emailKey = currentUser?.email?.toLowerCase().trim();
-          let currentLocalSkills: Skill[] = [];
-          if (emailKey) {
-            const raw = localStorage.getItem(`${emailKey}_skills`);
-            if (raw) { try { currentLocalSkills = JSON.parse(raw); } catch (e) {} }
+        // 1. Profile
+        try {
+          const pData = pRes.status === 'fulfilled' ? pRes.value.data : null;
+          if (pData) {
+            setProfile(prev => ({
+              ...prev,
+              name: pData.name || prev.name,
+              firstName: pData.first_name || prev.firstName,
+              lastName: pData.last_name || prev.lastName,
+              headline: pData.headline || prev.headline,
+              bio: pData.bio || prev.bio,
+              email: pData.email || prev.email,
+              phone: pData.phone || prev.phone,
+              secondaryEmail: pData.secondary_email || prev.secondaryEmail,
+              secondaryPhone: pData.secondary_phone || prev.secondaryPhone,
+              location: pData.location || prev.location,
+              avatarUrl: pData.avatar_url || prev.avatarUrl,
+              publicProfile: pData.public_profile ?? prev.publicProfile,
+              shareSlug: pData.share_slug || prev.shareSlug
+            }));
           }
-          if (currentLocalSkills && currentLocalSkills.length > 0) {
-            setSkills(currentLocalSkills);
-            for (const sk of currentLocalSkills) {
-              const skId = ensureUUID(sk.id);
-              try {
-                await supabase.from('skills').upsert({
-                  id: skId,
-                  user_id: userId,
-                  name: sk.name,
-                  category: sk.category || 'Technical',
-                  proficiency: sk.proficiency || 'Intermediate',
-                  years_of_exp: sk.yearsOfExp || 1,
-                  endorsements: sk.endorsements || 0,
-                  description: sk.description || '',
-                  visibility: sk.visibility || 'public'
-                });
-              } catch (err) {}
+        } catch (err) { console.warn("[Supabase Profiles Load]", err); }
+
+        // 2. Skills
+        try {
+          const sData = sRes.status === 'fulfilled' ? sRes.value.data : null;
+          if (sData && Array.isArray(sData) && sData.length > 0) {
+            const mapped = sData.map(s => ({
+              id: s.id,
+              name: s.name,
+              category: s.category || 'Technical',
+              proficiency: s.proficiency || 'Intermediate',
+              yearsOfExp: s.years_of_exp || 1,
+              endorsements: s.endorsements || 0,
+              description: s.description || '',
+              visibility: s.visibility || 'public'
+            }));
+            setSkills(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(mapped));
+          } else {
+            const emailKey = currentUser?.email?.toLowerCase().trim();
+            let currentLocalSkills: Skill[] = [];
+            if (emailKey) {
+              const raw = localStorage.getItem(`${emailKey}_skills`);
+              if (raw) { try { currentLocalSkills = JSON.parse(raw); } catch (e) {} }
+            }
+            if (currentLocalSkills && currentLocalSkills.length > 0) {
+              setSkills(currentLocalSkills);
+              for (const sk of currentLocalSkills) {
+                const skId = ensureUUID(sk.id);
+                try {
+                  await supabase.from('skills').upsert({
+                    id: skId,
+                    user_id: userId,
+                    name: sk.name,
+                    category: sk.category || 'Technical',
+                    proficiency: sk.proficiency || 'Intermediate',
+                    years_of_exp: sk.yearsOfExp || 1,
+                    endorsements: sk.endorsements || 0,
+                    description: sk.description || '',
+                    visibility: sk.visibility || 'public'
+                  });
+                } catch (err) {}
+              }
             }
           }
-        }
-      } catch (err) { console.warn("[Supabase Skills Load]", err); }
+        } catch (err) { console.warn("[Supabase Skills Load]", err); }
 
-      // 3. Education
-      try {
-        const { data: eData } = await supabase.from('education').select('*').eq('user_id', userId);
-        if (eData && Array.isArray(eData)) {
-          const mapped = eData.map(e => {
-            let extraMeta: any = {};
-            if (e.description && typeof e.description === 'string' && e.description.startsWith('{')) {
-              try { extraMeta = JSON.parse(e.description); } catch (err) {}
-            }
-            return {
-              id: e.id,
-              degree: e.degree,
-              institution: e.institution,
-              fieldOfStudy: e.field_of_study || e.fieldOfStudy || '',
-              startYear: e.start_year || e.startYear || '',
-              endYear: e.end_year || e.endYear || '',
-              grade: e.grade || '',
-              percentage: e.percentage || '',
-              description: e.description || '',
-              enrollmentId: e.enrollment_id || e.enrollmentId || e.enrollment_number || extraMeta.enrollmentId || '',
-              startDate: e.start_date || e.startDate || extraMeta.startDate || '',
-              endDate: e.end_date || e.endDate || extraMeta.endDate || '',
-              isCurrentlyPursuing: e.is_currently_pursuing ?? e.isCurrentlyPursuing ?? extraMeta.isCurrentlyPursuing ?? (e.end_year === 'Present' || e.end_date === 'Present'),
-              activities: e.activities || extraMeta.activities || (e.description && !e.description.startsWith('{') ? e.description : '')
-            };
-          });
-          setEducation(prev => {
-            const merged = mapped.map(item => {
-              const localMatch = prev.find(p => p.id === item.id || (p.degree?.trim().toLowerCase() === item.degree?.trim().toLowerCase() && p.institution?.trim().toLowerCase() === item.institution?.trim().toLowerCase()));
+        // 3. Education
+        try {
+          const eData = eRes.status === 'fulfilled' ? eRes.value.data : null;
+          if (eData && Array.isArray(eData)) {
+            const mapped = eData.map(e => {
+              let extraMeta: any = {};
+              if (e.description && typeof e.description === 'string' && e.description.startsWith('{')) {
+                try { extraMeta = JSON.parse(e.description); } catch (err) {}
+              }
               return {
-                ...item,
-                enrollmentId: item.enrollmentId || localMatch?.enrollmentId || '',
-                startDate: item.startDate || localMatch?.startDate || '',
-                endDate: item.endDate || localMatch?.endDate || '',
-                isCurrentlyPursuing: item.isCurrentlyPursuing ?? localMatch?.isCurrentlyPursuing ?? false,
-                activities: item.activities || localMatch?.activities || ''
+                id: e.id,
+                degree: e.degree,
+                institution: e.institution,
+                fieldOfStudy: e.field_of_study || e.fieldOfStudy || '',
+                startYear: e.start_year || e.startYear || '',
+                endYear: e.end_year || e.endYear || '',
+                grade: e.grade || '',
+                percentage: e.percentage || '',
+                description: e.description || '',
+                enrollmentId: e.enrollment_id || e.enrollmentId || e.enrollment_number || extraMeta.enrollmentId || '',
+                startDate: e.start_date || e.startDate || extraMeta.startDate || '',
+                endDate: e.end_date || e.endDate || extraMeta.endDate || '',
+                isCurrentlyPursuing: e.is_currently_pursuing ?? e.isCurrentlyPursuing ?? extraMeta.isCurrentlyPursuing ?? (e.end_year === 'Present' || e.end_date === 'Present'),
+                activities: e.activities || extraMeta.activities || (e.description && !e.description.startsWith('{') ? e.description : '')
               };
             });
-            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(merged));
-            return merged;
-          });
-        }
-      } catch (err) { console.warn("[Supabase Education Load]", err); }
-
-      // 4. Certifications
-      try {
-        const { data: cData } = await supabase.from('certifications').select('*').eq('user_id', userId);
-        if (cData && Array.isArray(cData) && cData.length > 0) {
-          const mapped = cData.map(c => {
-            const dVal = c.issue_date || c.date_issued || c.dateIssued || c.issueDate || '';
-            return {
-              id: c.id,
-              title: c.title,
-              issuer: c.issuer,
-              credentialId: c.credential_id || c.credentialId,
-              dateIssued: dVal,
-              issueDate: dVal,
-              expirationDate: c.expiry_date || c.expirationDate || '',
-              expiryDate: c.expiry_date || c.expiryDate || '',
-              credentialUrl: c.credential_url || c.credentialUrl,
-              description: c.description,
-              fileName: c.file_name || c.fileName || '',
-              fileUrl: c.file_url || c.fileUrl,
-              storagePath: c.storage_path || c.storagePath,
-              type: c.type || 'study',
-              percentage: c.percentage || '',
-              visibility: c.visibility || 'public'
-            };
-          });
-          setCertifications(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(mapped));
-        } else {
-          const emailKey = currentUser?.email?.toLowerCase().trim();
-          let currentLocalCerts: Certification[] = [];
-          if (emailKey) {
-            const raw = localStorage.getItem(`${emailKey}_certs`);
-            if (raw) { try { currentLocalCerts = JSON.parse(raw); } catch (e) {} }
+            setEducation(prev => {
+              const merged = mapped.map(item => {
+                const localMatch = prev.find(p => p.id === item.id || (p.degree?.trim().toLowerCase() === item.degree?.trim().toLowerCase() && p.institution?.trim().toLowerCase() === item.institution?.trim().toLowerCase()));
+                return {
+                  ...item,
+                  enrollmentId: item.enrollmentId || localMatch?.enrollmentId || '',
+                  startDate: item.startDate || localMatch?.startDate || '',
+                  endDate: item.endDate || localMatch?.endDate || '',
+                  isCurrentlyPursuing: item.isCurrentlyPursuing ?? localMatch?.isCurrentlyPursuing ?? false,
+                  activities: item.activities || localMatch?.activities || ''
+                };
+              });
+              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(merged));
+              return merged;
+            });
           }
-          if (currentLocalCerts && currentLocalCerts.length > 0) {
-            setCertifications(currentLocalCerts);
-            for (const c of currentLocalCerts) {
-              const cId = ensureUUID(c.id);
-              const dVal = c.dateIssued || c.issueDate || '';
-              try {
-                await supabase.from('certifications').upsert({
-                  id: cId,
-                  user_id: userId,
-                  title: c.title,
-                  issuer: c.issuer,
-                  credential_id: c.credentialId,
-                  issue_date: dVal,
-                  expiry_date: c.expirationDate || c.expiryDate,
-                  credential_url: c.credentialUrl,
-                  description: c.description,
-                  file_name: c.fileName,
-                  file_url: c.fileUrl,
-                  storage_path: c.storagePath,
-                  type: c.type || 'study',
-                  percentage: c.percentage,
-                  visibility: c.visibility || 'public'
-                });
-              } catch (err) {}
-            }
-          }
-        }
-      } catch (err) { console.warn("[Supabase Certifications Load]", err); }
+        } catch (err) { console.warn("[Supabase Education Load]", err); }
 
-      // 5. Experience
-      try {
-        const { data: expData } = await supabase.from('experience').select('*').eq('user_id', userId);
-        if (expData && Array.isArray(expData)) {
-          const mapped = expData.map(exp => ({
-            id: exp.id,
-            company: exp.company,
-            role: exp.role,
-            employmentType: exp.employment_type,
-            location: exp.location,
-            startDate: exp.start_date,
-            endDate: exp.end_date,
-            isCurrent: exp.is_current,
-            description: exp.description || [],
-            skillsUsed: exp.skills_used || [],
-            links: exp.links || []
-          }));
-          setExperience(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Experience Load]", err); }
-
-      // 6. Current Job
-      try {
-        const { data: jobData } = await supabase.from('current_jobs').select('*').eq('user_id', userId).maybeSingle();
-        if (jobData) {
-          const loadedJob = {
-            company: jobData.company || '',
-            employer: jobData.company || '',
-            role: jobData.role || '',
-            department: jobData.department || '',
-            employeeId: jobData.employee_id || '',
-            joiningDate: jobData.joining_date || '',
-            startDate: jobData.joining_date || '',
-            location: jobData.location || '',
-            locationType: jobData.location || 'on-site',
-            employmentType: jobData.employment_type || 'full-time',
-            salary: jobData.salary || '',
-            manager: jobData.manager || '',
-            description: jobData.description || ''
-          };
-          setCurrentJob(loadedJob as any);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_current_job`, JSON.stringify(loadedJob));
-        } else if (currentJob && (currentJob.company || currentJob.employer || currentJob.role)) {
-          const empName = currentJob.company || currentJob.employer || 'Photonx Technologies';
-          const roleTitle = currentJob.role || 'Tester';
-          const joinDate = currentJob.joiningDate || currentJob.startDate || '2026-05-14';
-          await supabase.from('current_jobs').upsert({
-            id: generateUUID(),
-            user_id: userId,
-            company: empName,
-            role: roleTitle,
-            department: currentJob.department || 'Testing',
-            employee_id: currentJob.employeeId || '',
-            joining_date: joinDate,
-            location: currentJob.location || currentJob.locationType || 'on-site',
-            employment_type: currentJob.employmentType || 'internship',
-            salary: currentJob.salary || '',
-            manager: currentJob.manager || '',
-            description: currentJob.description || ''
-          }, { onConflict: 'user_id' });
-        }
-      } catch (err) { console.warn("[Supabase Current Job Load]", err); }
-
-      // 7. Projects
-      try {
-        const { data: projData } = await supabase.from('projects').select('*').eq('user_id', userId);
-        if (projData && Array.isArray(projData) && projData.length > 0) {
-          const mapped = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
-            id: p.id,
-            name: p.name,
-            category: p.category,
-            type: 'project' as const,
-            description: p.description,
-            highlights: p.highlights || [],
-            techStack: p.tech_stack || [],
-            liveUrl: p.live_url,
-            githubUrl: p.github_url,
-            pdfUrl: p.pdf_url,
-            imageUrl: p.image_url,
-            isPublic: p.is_public !== false,
-            date: p.date
-          }));
-          setProjects(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_projects`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Projects Load]", err); }
-
-      // 8. Products
-      try {
-        const { data: prodData } = await supabase.from('products').select('*').eq('user_id', userId);
-        if (prodData && Array.isArray(prodData) && prodData.length > 0) {
-          const mapped = prodData.map(p => ({
-            id: p.id,
-            name: p.name,
-            category: p.category,
-            type: 'product' as const,
-            description: p.description,
-            highlights: p.highlights || [],
-            techStack: p.tech_stack || [],
-            liveUrl: p.live_url,
-            githubUrl: p.github_url,
-            pdfUrl: p.pdf_url,
-            imageUrl: p.image_url,
-            isPublic: p.is_public !== false,
-            date: p.date
-          }));
-          setProducts(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_products`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Products Load]", err); }
-
-      // 8.5 Others / Reports
-      try {
-        const { data: othData } = await supabase.from('others').select('*').eq('user_id', userId);
-        if (othData && Array.isArray(othData) && othData.length > 0) {
-          const mapped = othData.map(p => ({
-            id: p.id,
-            name: p.name,
-            category: p.category,
-            type: 'other' as const,
-            docType: p.doc_type || p.category || 'Report',
-            description: p.description,
-            highlights: p.highlights || [],
-            techStack: p.tech_stack || [],
-            liveUrl: p.live_url,
-            githubUrl: p.github_url,
-            pdfUrl: p.pdf_url,
-            imageUrl: p.image_url,
-            isPublic: p.is_public !== false,
-            date: p.date
-          }));
-          setOthers(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Others Load]", err); }
-
-      // 9. Resumes
-      try {
-        const { data: resData } = await supabase.from('resumes').select('*').eq('user_id', userId);
-        if (resData && Array.isArray(resData)) {
-          const mapped = resData.map(r => ({
-            id: r.id,
-            name: r.title || r.file_name,
-            title: r.title,
-            fileName: r.file_name,
-            fileUrl: r.file_url,
-            fileDataUrl: r.file_url,
-            storagePath: r.storage_path,
-            size: r.file_size,
-            fileSize: r.file_size,
-            type: r.file_type || 'Resume',
-            fileType: r.file_type,
-            isPrimary: r.is_primary,
-            visibility: (r.is_public === false || r.is_public === 'false') ? 'private' : 'public',
-            isPublic: r.is_public !== false && r.is_public !== 'false',
-            uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
-            category: 'SUPABASE'
-          }));
-          setResumes(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Resumes Load]", err); }
-
-      // 10. Documents (Vault)
-      try {
-        const { data: docData } = await supabase.from('documents').select('*').eq('user_id', userId);
-        if (docData && Array.isArray(docData)) {
-          const mapped = docData.map(d => ({
-            id: d.id,
-            name: d.file_name || d.title,
-            title: d.title,
-            category: d.category,
-            description: d.description,
-            fileName: d.file_name,
-            fileType: d.file_type,
-            size: d.file_size,
-            fileSize: d.file_size,
-            fileUrl: d.file_url,
-            storagePath: d.storage_path,
-            expiryDate: d.expiry_date,
-            uploadDate: d.created_at ? d.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
-            tags: d.tags || [],
-            visibility: d.visibility || 'private'
-          }));
-          setDocuments(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Documents Load]", err); }
-
-      // 11. Notes
-      try {
-        const { data: nData } = await supabase.from('notes').select('*').eq('user_id', userId);
-        if (nData && Array.isArray(nData)) {
-          const mapped = nData.map(n => ({
-            id: n.id,
-            title: n.title,
-            content: n.content,
-            category: n.tags && n.tags.length > 0 ? n.tags[0] : 'General',
-            tags: n.tags || [],
-            isPublic: n.is_public !== false,
-            updatedAt: n.updated_at || new Date().toISOString()
-          }));
-          setNotes(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Notes Load]", err); }
-
-      // 12. Portfolio Links
-      try {
-        const { data: lData } = await supabase.from('portfolio_links').select('*').eq('user_id', userId);
-        if (lData && Array.isArray(lData)) {
-          const mapped = lData.map(l => ({
-            id: l.id,
-            platform: l.platform,
-            label: l.label,
-            url: l.url,
-            isPublic: l.is_public !== false
-          }));
-          setLinks(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
-
-      // 13. Career Timeline (Milestones)
-      try {
-        const { data: tmData } = await supabase.from('career_timeline').select('*').eq('user_id', userId);
-        if (tmData && Array.isArray(tmData) && tmData.length > 0) {
-          const mapped = tmData.map(m => ({
-            id: m.id,
-            title: m.title,
-            date: m.date,
-            category: m.category || 'experience',
-            type: m.category || 'experience',
-            intensity: m.intensity || 'medium',
-            description: m.description || ''
-          }));
-          setMilestones(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(mapped));
-        } else {
-          const emailKey = currentUser?.email?.toLowerCase().trim();
-          let currentLocalMilestones: TimelineMilestone[] = [];
-          if (emailKey) {
-            const raw = localStorage.getItem(`${emailKey}_milestones`);
-            if (raw) { try { currentLocalMilestones = JSON.parse(raw); } catch (e) {} }
-          }
-          if (currentLocalMilestones && currentLocalMilestones.length > 0) {
-            setMilestones(currentLocalMilestones);
-            for (const m of currentLocalMilestones) {
-              const mId = ensureUUID(m.id);
-              try {
-                await supabase.from('career_timeline').upsert({
-                  id: mId,
-                  user_id: userId,
-                  title: m.title || 'Career Milestone',
-                  date: m.date || new Date().toISOString().substring(0, 7),
-                  category: m.category || m.type || 'experience',
-                  intensity: m.intensity || 'medium',
-                  description: m.description || '',
-                  is_public: true
-                });
-              } catch (err) {}
-            }
+        // 4. Certifications
+        try {
+          const cData = cRes.status === 'fulfilled' ? cRes.value.data : null;
+          if (cData && Array.isArray(cData) && cData.length > 0) {
+            const mapped = cData.map(c => {
+              const dVal = c.issue_date || c.date_issued || c.dateIssued || c.issueDate || '';
+              return {
+                id: c.id,
+                title: c.title,
+                issuer: c.issuer,
+                credentialId: c.credential_id || c.credentialId,
+                dateIssued: dVal,
+                issueDate: dVal,
+                expirationDate: c.expiry_date || c.expirationDate || '',
+                expiryDate: c.expiry_date || c.expiryDate || '',
+                credentialUrl: c.credential_url || c.credentialUrl,
+                description: c.description,
+                fileName: c.file_name || c.fileName || '',
+                fileUrl: c.file_url || c.fileUrl,
+                storagePath: c.storage_path || c.storagePath,
+                type: c.type || 'study',
+                percentage: c.percentage || '',
+                visibility: c.visibility || 'public'
+              };
+            });
+            setCertifications(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(mapped));
           } else {
-            setMilestones([]);
+            const emailKey = currentUser?.email?.toLowerCase().trim();
+            let currentLocalCerts: Certification[] = [];
+            if (emailKey) {
+              const raw = localStorage.getItem(`${emailKey}_certs`);
+              if (raw) { try { currentLocalCerts = JSON.parse(raw); } catch (e) {} }
+            }
+            if (currentLocalCerts && currentLocalCerts.length > 0) {
+              setCertifications(currentLocalCerts);
+              for (const c of currentLocalCerts) {
+                const cId = ensureUUID(c.id);
+                const dVal = c.dateIssued || c.issueDate || '';
+                try {
+                  await supabase.from('certifications').upsert({
+                    id: cId,
+                    user_id: userId,
+                    title: c.title,
+                    issuer: c.issuer,
+                    credential_id: c.credentialId,
+                    issue_date: dVal,
+                    expiry_date: c.expirationDate || c.expiryDate,
+                    credential_url: c.credentialUrl,
+                    description: c.description,
+                    file_name: c.fileName,
+                    file_url: c.fileUrl,
+                    storage_path: c.storagePath,
+                    type: c.type || 'study',
+                    percentage: c.percentage,
+                    visibility: c.visibility || 'public'
+                  });
+                } catch (err) {}
+              }
+            }
           }
-        }
-      } catch (err) { console.warn("[Supabase Timeline Load]", err); }
+        } catch (err) { console.warn("[Supabase Certifications Load]", err); }
 
+        // 5. Experience
+        try {
+          const expData = expRes.status === 'fulfilled' ? expRes.value.data : null;
+          if (expData && Array.isArray(expData)) {
+            const mapped = expData.map(exp => ({
+              id: exp.id,
+              company: exp.company,
+              role: exp.role,
+              employmentType: exp.employment_type,
+              location: exp.location,
+              startDate: exp.start_date,
+              endDate: exp.end_date,
+              isCurrent: exp.is_current,
+              description: exp.description || [],
+              skillsUsed: exp.skills_used || [],
+              links: exp.links || []
+            }));
+            setExperience(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Experience Load]", err); }
 
+        // 6. Current Job
+        try {
+          const jobData = jobRes.status === 'fulfilled' ? jobRes.value.data : null;
+          if (jobData) {
+            const loadedJob = {
+              company: jobData.company || '',
+              employer: jobData.company || '',
+              role: jobData.role || '',
+              department: jobData.department || '',
+              employeeId: jobData.employee_id || '',
+              joiningDate: jobData.joining_date || '',
+              startDate: jobData.joining_date || '',
+              location: jobData.location || '',
+              locationType: jobData.location || 'on-site',
+              employmentType: jobData.employment_type || 'full-time',
+              salary: jobData.salary || '',
+              manager: jobData.manager || '',
+              description: jobData.description || ''
+            };
+            setCurrentJob(loadedJob as any);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_current_job`, JSON.stringify(loadedJob));
+          } else if (currentJob && (currentJob.company || currentJob.employer || currentJob.role)) {
+            const empName = currentJob.company || currentJob.employer || 'Photonx Technologies';
+            const roleTitle = currentJob.role || 'Tester';
+            const joinDate = currentJob.joiningDate || currentJob.startDate || '2026-05-14';
+            await supabase.from('current_jobs').upsert({
+              id: generateUUID(),
+              user_id: userId,
+              company: empName,
+              role: roleTitle,
+              department: currentJob.department || 'Testing',
+              employee_id: currentJob.employeeId || '',
+              joining_date: joinDate,
+              location: currentJob.location || currentJob.locationType || 'on-site',
+              employment_type: currentJob.employmentType || 'internship',
+              salary: currentJob.salary || '',
+              manager: currentJob.manager || '',
+              description: currentJob.description || ''
+            }, { onConflict: 'user_id' });
+          }
+        } catch (err) { console.warn("[Supabase Current Job Load]", err); }
 
-      // 14. Contacts
-      try {
-        const { data: ctData } = await supabase.from('contacts').select('*').eq('user_id', userId);
-        if (ctData && Array.isArray(ctData)) {
-          const mapped = ctData.map(ct => ({
-            id: ct.id,
-            name: ct.name,
-            email: ct.email,
-            phone: ct.phone,
-            role: ct.role,
-            company: ct.company,
-            relationship: ct.category,
-            category: ct.category,
-            location: ct.location,
-            notes: ct.notes,
-            lastInteracted: ct.last_interacted,
-            interactionLogs: ct.interaction_logs || []
-          }));
-          setContacts(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Contacts Load]", err); }
+        // 7. Projects
+        try {
+          const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
+          if (projData && Array.isArray(projData) && projData.length > 0) {
+            const mapped = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
+              id: p.id,
+              name: p.name,
+              category: p.category,
+              type: 'project' as const,
+              description: p.description,
+              highlights: p.highlights || [],
+              techStack: p.tech_stack || [],
+              liveUrl: p.live_url,
+              githubUrl: p.github_url,
+              pdfUrl: p.pdf_url,
+              imageUrl: p.image_url,
+              isPublic: p.is_public !== false,
+              date: p.date
+            }));
+            setProjects(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_projects`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Projects Load]", err); }
 
-      // 15. Calendar Events
-      try {
-        const { data: calData } = await supabase.from('calendar_events').select('*').eq('user_id', userId);
-        if (calData && Array.isArray(calData)) {
-          const mapped = calData.map(cal => ({
-            id: cal.id,
-            title: cal.title,
-            date: cal.date,
-            startTime: cal.start_time,
-            endTime: cal.end_time,
-            type: cal.type,
-            description: cal.description,
-            isPublic: cal.is_public !== false
-          }));
-          setCalendarEvents(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_calendar_events`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Calendar Events Load]", err); }
+        // 8. Products
+        try {
+          const prodData = prodRes.status === 'fulfilled' ? prodRes.value.data : null;
+          if (prodData && Array.isArray(prodData) && prodData.length > 0) {
+            const mapped = prodData.map(p => ({
+              id: p.id,
+              name: p.name,
+              category: p.category,
+              type: 'product' as const,
+              description: p.description,
+              highlights: p.highlights || [],
+              techStack: p.tech_stack || [],
+              liveUrl: p.live_url,
+              githubUrl: p.github_url,
+              pdfUrl: p.pdf_url,
+              imageUrl: p.image_url,
+              isPublic: p.is_public !== false,
+              date: p.date
+            }));
+            setProducts(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_products`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Products Load]", err); }
 
-      // 16. Achievements
-      try {
-        const { data: aData } = await supabase.from('achievements').select('*').eq('user_id', userId);
-        if (aData && Array.isArray(aData)) {
-          const mapped = aData.map(a => ({
-            id: a.id,
-            title: a.title,
-            issuer: a.issuer,
-            date: a.date,
-            description: a.description,
-            badgeUrl: a.badge_url,
-            fileName: a.file_name,
-            fileUrl: a.file_url,
-            isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
-          }));
-          setAchievements(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Achievements Load]", err); }
+        // 8.5 Others / Reports
+        try {
+          const othData = othRes.status === 'fulfilled' ? othRes.value.data : null;
+          if (othData && Array.isArray(othData) && othData.length > 0) {
+            const mapped = othData.map(p => ({
+              id: p.id,
+              name: p.name,
+              category: p.category,
+              type: 'other' as const,
+              docType: p.doc_type || p.category || 'Report',
+              description: p.description,
+              highlights: p.highlights || [],
+              techStack: p.tech_stack || [],
+              liveUrl: p.live_url,
+              githubUrl: p.github_url,
+              pdfUrl: p.pdf_url,
+              imageUrl: p.image_url,
+              isPublic: p.is_public !== false,
+              date: p.date
+            }));
+            setOthers(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Others Load]", err); }
 
-      // 17. Testimonials
-      try {
-        const { data: tData } = await supabase.from('testimonials').select('*').eq('user_id', userId);
-        if (tData && Array.isArray(tData)) {
-          const mapped = tData.map(t => ({
-            id: t.id,
-            name: t.name,
-            company: t.company,
-            role: t.role,
-            text: t.text,
-            relationship: t.relationship,
-            avatarColor: t.avatar_color,
-            isPublic: t.is_public !== false
-          }));
-          setTestimonials(mapped);
-          if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_testimonials`, JSON.stringify(mapped));
-        }
-      } catch (err) { console.warn("[Supabase Testimonials Load]", err); }
+        // 9. Resumes
+        try {
+          const resData = resRes.status === 'fulfilled' ? resRes.value.data : null;
+          if (resData && Array.isArray(resData)) {
+            const mapped = resData.map(r => ({
+              id: r.id,
+              name: r.title || r.file_name,
+              title: r.title,
+              fileName: r.file_name,
+              fileUrl: r.file_url,
+              fileDataUrl: r.file_url,
+              storagePath: r.storage_path,
+              size: r.file_size,
+              fileSize: r.file_size,
+              type: r.file_type || 'Resume',
+              fileType: r.file_type,
+              isPrimary: r.is_primary,
+              visibility: (r.is_public === false || r.is_public === 'false') ? 'private' : 'public',
+              isPublic: r.is_public !== false && r.is_public !== 'false',
+              uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
+              category: 'SUPABASE'
+            }));
+            setResumes(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Resumes Load]", err); }
+
+        // 10. Documents (Vault)
+        try {
+          const docData = docRes.status === 'fulfilled' ? docRes.value.data : null;
+          if (docData && Array.isArray(docData)) {
+            const mapped = docData.map(d => ({
+              id: d.id,
+              name: d.file_name || d.title,
+              title: d.title,
+              category: d.category,
+              description: d.description,
+              fileName: d.file_name,
+              fileType: d.file_type,
+              size: d.file_size,
+              fileSize: d.file_size,
+              fileUrl: d.file_url,
+              storagePath: d.storage_path,
+              expiryDate: d.expiry_date,
+              uploadDate: d.created_at ? d.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
+              tags: d.tags || [],
+              visibility: d.visibility || 'private'
+            }));
+            setDocuments(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Documents Load]", err); }
+
+        // 11. Notes
+        try {
+          const nData = nRes.status === 'fulfilled' ? nRes.value.data : null;
+          if (nData && Array.isArray(nData)) {
+            const mapped = nData.map(n => ({
+              id: n.id,
+              title: n.title,
+              content: n.content,
+              category: n.tags && n.tags.length > 0 ? n.tags[0] : 'General',
+              tags: n.tags || [],
+              isPublic: n.is_public !== false,
+              updatedAt: n.updated_at || new Date().toISOString()
+            }));
+            setNotes(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Notes Load]", err); }
+
+        // 12. Portfolio Links
+        try {
+          const lData = lRes.status === 'fulfilled' ? lRes.value.data : null;
+          if (lData && Array.isArray(lData)) {
+            const mapped = lData.map(l => ({
+              id: l.id,
+              platform: l.platform,
+              label: l.label,
+              url: l.url,
+              isPublic: l.is_public !== false
+            }));
+            setLinks(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
+
+        // 13. Career Timeline (Milestones)
+        try {
+          const tmData = tmRes.status === 'fulfilled' ? tmRes.value.data : null;
+          if (tmData && Array.isArray(tmData) && tmData.length > 0) {
+            const mapped = tmData.map(m => ({
+              id: m.id,
+              title: m.title,
+              date: m.date,
+              category: m.category || 'experience',
+              type: m.category || 'experience',
+              intensity: m.intensity || 'medium',
+              description: m.description || ''
+            }));
+            setMilestones(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(mapped));
+          } else {
+            const emailKey = currentUser?.email?.toLowerCase().trim();
+            let currentLocalMilestones: TimelineMilestone[] = [];
+            if (emailKey) {
+              const raw = localStorage.getItem(`${emailKey}_milestones`);
+              if (raw) { try { currentLocalMilestones = JSON.parse(raw); } catch (e) {} }
+            }
+            if (currentLocalMilestones && currentLocalMilestones.length > 0) {
+              setMilestones(currentLocalMilestones);
+              for (const m of currentLocalMilestones) {
+                const mId = ensureUUID(m.id);
+                try {
+                  await supabase.from('career_timeline').upsert({
+                    id: mId,
+                    user_id: userId,
+                    title: m.title || 'Career Milestone',
+                    date: m.date || new Date().toISOString().substring(0, 7),
+                    category: m.category || m.type || 'experience',
+                    intensity: m.intensity || 'medium',
+                    description: m.description || '',
+                    is_public: true
+                  });
+                } catch (err) {}
+              }
+            } else {
+              setMilestones([]);
+            }
+          }
+        } catch (err) { console.warn("[Supabase Timeline Load]", err); }
+
+        // 14. Contacts
+        try {
+          const ctData = ctRes.status === 'fulfilled' ? ctRes.value.data : null;
+          if (ctData && Array.isArray(ctData)) {
+            const mapped = ctData.map(ct => ({
+              id: ct.id,
+              name: ct.name,
+              email: ct.email,
+              phone: ct.phone,
+              role: ct.role,
+              company: ct.company,
+              relationship: ct.category,
+              category: ct.category,
+              location: ct.location,
+              notes: ct.notes,
+              lastInteracted: ct.last_interacted,
+              interactionLogs: ct.interaction_logs || []
+            }));
+            setContacts(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Contacts Load]", err); }
+
+        // 15. Calendar Events
+        try {
+          const calData = calRes.status === 'fulfilled' ? calRes.value.data : null;
+          if (calData && Array.isArray(calData)) {
+            const mapped = calData.map(cal => ({
+              id: cal.id,
+              title: cal.title,
+              date: cal.date,
+              startTime: cal.start_time,
+              endTime: cal.end_time,
+              type: cal.type,
+              description: cal.description,
+              isPublic: cal.is_public !== false
+            }));
+            setCalendarEvents(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_calendar_events`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Calendar Events Load]", err); }
+
+        // 16. Achievements
+        try {
+          const aData = aRes.status === 'fulfilled' ? aRes.value.data : null;
+          if (aData && Array.isArray(aData)) {
+            const mapped = aData.map(a => ({
+              id: a.id,
+              title: a.title,
+              issuer: a.issuer,
+              date: a.date,
+              description: a.description,
+              badgeUrl: a.badge_url,
+              fileName: a.file_name,
+              fileUrl: a.file_url,
+              isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
+            }));
+            setAchievements(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Achievements Load]", err); }
+
+        // 17. Testimonials
+        try {
+          const tData = tRes.status === 'fulfilled' ? tRes.value.data : null;
+          if (tData && Array.isArray(tData)) {
+            const mapped = tData.map(t => ({
+              id: t.id,
+              name: t.name,
+              company: t.company,
+              role: t.role,
+              text: t.text,
+              relationship: t.relationship,
+              avatarColor: t.avatar_color,
+              isPublic: t.is_public !== false
+            }));
+            setTestimonials(mapped);
+            if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_testimonials`, JSON.stringify(mapped));
+          }
+        } catch (err) { console.warn("[Supabase Testimonials Load]", err); }
+      } catch (globalErr) {
+        console.warn("[Supabase DB] Error in batch loading records:", globalErr);
+      }
     };
 
     loadSupabaseUserData();
@@ -3241,6 +3288,9 @@ export default function App() {
     if (hash.startsWith('#/portfolio/') || hash.startsWith('#/share/') || hash.startsWith('#/public/')) return true;
     if (path.startsWith('/portfolio/') || path.startsWith('/share/') || path.startsWith('/public/')) return true;
     if (window.location.search.includes('share=')) return true;
+
+    // If user is logged in, never treat standard navigation or root path as public share view
+    if (currentUser) return false;
 
     const firstSegment = path.substring(1).split('/')[0];
     if (firstSegment && 
