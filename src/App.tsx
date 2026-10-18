@@ -126,26 +126,20 @@ export const deduplicateCertifications = (items?: Certification[]): Certificatio
   if (!items || !Array.isArray(items)) return [];
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: Certification[] = [];
-  const seenKeys = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
     if (isUserLoggedIn && isDemoItem(item)) continue;
 
-    const rawTitle = (item.title || (item as any).name || '').trim().toLowerCase();
-    const cleanTitle = rawTitle.replace(/[^a-z0-9]/g, '');
-    const cleanIssuer = (item.issuer || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const idKey = item.id ? toUUID(item.id) : '';
+    const rawId = (item.id || '').trim();
+    const idKey = rawId ? toUUID(rawId) : '';
 
     let matchIdx = -1;
-    if (idKey && seenKeys.has(`id:${idKey}`)) {
+    if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
-    } else if (cleanTitle && seenKeys.has(`title:${cleanTitle}`)) {
-      matchIdx = result.findIndex(r => {
-        const rTitle = (r.title || (r as any).name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        const rIssuer = (r.issuer || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        return rTitle === cleanTitle && (!cleanIssuer || !rIssuer || cleanIssuer === rIssuer);
-      });
+    } else if (rawId && seenIds.has(`raw:${rawId}`)) {
+      matchIdx = result.findIndex(r => r.id === rawId);
     }
 
     if (matchIdx >= 0) {
@@ -165,8 +159,8 @@ export const deduplicateCertifications = (items?: Certification[]): Certificatio
         type: item.type || existing.type || 'study'
       };
     } else {
-      if (idKey) seenKeys.add(`id:${idKey}`);
-      if (cleanTitle) seenKeys.add(`title:${cleanTitle}`);
+      if (idKey) seenIds.add(idKey);
+      if (rawId) seenIds.add(`raw:${rawId}`);
       result.push(item);
     }
   }
@@ -311,20 +305,20 @@ export const deduplicateProjects = (items?: Project[]): Project[] => {
   if (!items || !Array.isArray(items)) return [];
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: Project[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
     if (isUserLoggedIn && isDemoItem(item)) continue;
 
-    const nameKey = (item.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const idKey = item.id ? toUUID(item.id) : '';
+    const rawId = (item.id || '').trim();
+    const idKey = rawId ? toUUID(rawId) : '';
 
     let matchIdx = -1;
-    if (idKey && seen.has(`id:${idKey}`)) {
+    if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
-    } else if (nameKey && seen.has(`name:${nameKey}`)) {
-      matchIdx = result.findIndex(r => (r.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') === nameKey);
+    } else if (rawId && seenIds.has(`raw:${rawId}`)) {
+      matchIdx = result.findIndex(r => r.id === rawId);
     }
 
     if (matchIdx >= 0) {
@@ -339,8 +333,8 @@ export const deduplicateProjects = (items?: Project[]): Project[] => {
         techStack: (item.techStack && item.techStack.length > 0) ? item.techStack : existing.techStack
       };
     } else {
-      if (idKey) seen.add(`id:${idKey}`);
-      if (nameKey) seen.add(`name:${nameKey}`);
+      if (idKey) seenIds.add(idKey);
+      if (rawId) seenIds.add(`raw:${rawId}`);
       result.push(item);
     }
   }
@@ -456,30 +450,27 @@ export const deduplicateResumes = (items?: ResumeItem[]): ResumeItem[] => {
   if (!items || !Array.isArray(items)) return [];
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: ResumeItem[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
     if (isUserLoggedIn && isDemoItem(item)) continue;
 
-    const idKey = item.id ? toUUID(item.id) : '';
-    const nameKey = (item.fileName || item.name || item.title || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const rawId = (item.id || '').trim();
+    const idKey = rawId ? toUUID(rawId) : '';
 
     let matchIdx = -1;
-    if (idKey && seen.has(`id:${idKey}`)) {
+    if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
-    } else if (nameKey && seen.has(`name:${nameKey}`)) {
-      matchIdx = result.findIndex(r => {
-        const rName = (r.fileName || r.name || r.title || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        return rName === nameKey;
-      });
+    } else if (rawId && seenIds.has(`raw:${rawId}`)) {
+      matchIdx = result.findIndex(r => r.id === rawId);
     }
 
     if (matchIdx >= 0) {
       result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
     } else {
-      if (idKey) seen.add(`id:${idKey}`);
-      if (nameKey) seen.add(`name:${nameKey}`);
+      if (idKey) seenIds.add(idKey);
+      if (rawId) seenIds.add(`raw:${rawId}`);
       result.push(item);
     }
   }
@@ -1208,7 +1199,14 @@ export default function App() {
       publicProfile: true
     };
 
-    setProfile(getLocal('profile', defaultProfile));
+    const loadedProf = getLocal('profile', defaultProfile);
+    if (!loadedProf.avatarUrl && emailKey) {
+      try {
+        const cachedAv = localStorage.getItem(`${emailKey}_avatar_cache`);
+        if (cachedAv) loadedProf.avatarUrl = cachedAv;
+      } catch (_) {}
+    }
+    setProfile(loadedProf);
     setSkills(deduplicateSkills(getLocal('skills', isUserLoggedIn ? [] : INITIAL_SKILLS)));
     setExperience(deduplicateExperience(getLocal('experience', isUserLoggedIn ? [] : INITIAL_EXPERIENCE)));
     setCertifications(deduplicateCertifications(getLocal('certs', isUserLoggedIn ? [] : INITIAL_CERTIFICATIONS)));
@@ -1309,23 +1307,30 @@ export default function App() {
     let storageValue = value;
     if (parsedData) {
       try {
-        const sanitizeNode = (node: any): any => {
+        const sanitizeNode = (node: any, parentKey?: string): any => {
           if (!node) return node;
           if (typeof node === 'string') {
-            if (node.startsWith('data:') && node.length > 500) return '';
+            if (node.startsWith('data:') && node.length > 500) {
+              if (parentKey === 'avatarUrl' && node.length < 500000) return node;
+              return '';
+            }
             return node;
           }
           if (Array.isArray(node)) {
-            return node.map(sanitizeNode);
+            return node.map(item => sanitizeNode(item, parentKey));
           }
           if (typeof node === 'object') {
             const out: any = {};
             for (const k of Object.keys(node)) {
               const v = node[k];
               if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) {
-                out[k] = '';
+                if (k === 'avatarUrl' && v.length < 500000) {
+                  out[k] = v;
+                } else {
+                  out[k] = '';
+                }
               } else if (v && typeof v === 'object') {
-                out[k] = sanitizeNode(v);
+                out[k] = sanitizeNode(v, k);
               } else {
                 out[k] = v;
               }
@@ -1377,6 +1382,7 @@ export default function App() {
     if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
       safeLocalStorageSetItem(`${email}_profile`, JSON.stringify(profile));
+      heavyStorage.set(`${email}_profile`, profile).catch(e => {});
     }
   }, [profile, currentUser]);
 
@@ -1384,6 +1390,7 @@ export default function App() {
     if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
       safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(skills));
+      heavyStorage.set(`${email}_skills`, skills).catch(e => {});
     }
   }, [skills, currentUser]);
 
@@ -1408,6 +1415,7 @@ export default function App() {
     if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
       safeLocalStorageSetItem(`${email}_experience`, JSON.stringify(experience));
+      heavyStorage.set(`${email}_experience`, experience).catch(e => {});
     }
   }, [experience, currentUser]);
 
@@ -1415,6 +1423,7 @@ export default function App() {
     if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
       safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(currentJob));
+      heavyStorage.set(`${email}_current_job`, currentJob).catch(e => {});
     }
   }, [currentJob, currentUser]);
 
@@ -1423,6 +1432,7 @@ export default function App() {
       const email = currentUser.email.toLowerCase().trim();
       if (isProjsRestoringRef.current) return;
       safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(projects));
+      heavyStorage.set(`${email}_projects`, projects).catch(e => {});
     }
   }, [projects, currentUser]);
 
@@ -1431,6 +1441,7 @@ export default function App() {
       const email = currentUser.email.toLowerCase().trim();
       if (isProjsRestoringRef.current) return;
       safeLocalStorageSetItem(`${email}_products`, JSON.stringify(products));
+      heavyStorage.set(`${email}_products`, products).catch(e => {});
     }
   }, [products, currentUser]);
 
@@ -1439,9 +1450,18 @@ export default function App() {
       const email = currentUser.email.toLowerCase().trim();
       if (!isProjsRestoringRef.current) {
         safeLocalStorageSetItem(`${email}_others`, JSON.stringify(others));
+        heavyStorage.set(`${email}_others`, others).catch(e => {});
       }
     }
   }, [others, currentUser]);
+
+  useEffect(() => {
+    if (currentUser?.email) {
+      const email = currentUser.email.toLowerCase().trim();
+      safeLocalStorageSetItem(`${email}_nexus_vault_resumes`, JSON.stringify(resumes));
+      heavyStorage.set(`${email}_nexus_vault_resumes`, resumes).catch(e => {});
+    }
+  }, [resumes, currentUser]);
 
   useEffect(() => {
     if (currentUser?.email) {
@@ -1537,14 +1557,13 @@ export default function App() {
         const dDocs = await heavyStorage.get(`${email}_documents`);
         if (dDocs && Array.isArray(dDocs) && dDocs.length > 0) {
           setDocuments(prev => {
-            if (prev && prev.length > 0) {
-              return prev.map(pDoc => {
-                if (pDoc.fileDataUrl) return pDoc;
-                const match = dDocs.find((d: any) => d.id === pDoc.id || d.fileName === pDoc.fileName || d.name === pDoc.name);
-                return match?.fileDataUrl ? { ...pDoc, fileDataUrl: match.fileDataUrl } : pDoc;
-              });
-            }
-            return deduplicateDocuments(dDocs);
+            const existing = prev || [];
+            const merged = existing.map(pDoc => {
+              const match = dDocs.find((d: any) => d.id === pDoc.id || d.fileName === pDoc.fileName || d.name === pDoc.name);
+              return match?.fileDataUrl && !pDoc.fileDataUrl ? { ...pDoc, fileDataUrl: match.fileDataUrl } : pDoc;
+            });
+            const extra = dDocs.filter(d => !existing.some(p => p.id === d.id));
+            return deduplicateDocuments([...merged, ...extra]);
           });
         }
       } catch (err) {
@@ -1554,141 +1573,129 @@ export default function App() {
       }
 
       try {
-        const dCerts = await heavyStorage.get(`${email}_certs`);
+        const [
+          dProf, dJob, dCerts, dProjs, dProds, dOthers,
+          dEdu, dSkills, dExp, dCt, dCal, dNotes,
+          dRes, dLinks, dMil, dAch, dTest
+        ] = await Promise.all([
+          heavyStorage.get(`${email}_profile`).catch(() => null),
+          heavyStorage.get(`${email}_current_job`).catch(() => null),
+          heavyStorage.get(`${email}_certs`).catch(() => null),
+          heavyStorage.get(`${email}_projects`).catch(() => null),
+          heavyStorage.get(`${email}_products`).catch(() => null),
+          heavyStorage.get(`${email}_others`).catch(() => null),
+          heavyStorage.get(`${email}_education`).catch(() => null),
+          heavyStorage.get(`${email}_skills`).catch(() => null),
+          heavyStorage.get(`${email}_experience`).catch(() => null),
+          heavyStorage.get(`${email}_contacts`).catch(() => null),
+          heavyStorage.get(`${email}_calendar_events`).catch(() => null),
+          heavyStorage.get(`${email}_notepad_notes`).catch(() => null),
+          heavyStorage.get(`${email}_nexus_vault_resumes`).catch(() => null),
+          heavyStorage.get(`${email}_links`).catch(() => null),
+          heavyStorage.get(`${email}_milestones`).catch(() => null),
+          heavyStorage.get(`${email}_achievements`).catch(() => null),
+          heavyStorage.get(`${email}_testimonials`).catch(() => null)
+        ]);
+
+        if (dProf && typeof dProf === 'object') {
+          setProfile(prev => ({
+            ...prev,
+            ...dProf,
+            avatarUrl: dProf.avatarUrl || prev.avatarUrl
+          }));
+        }
+
+        if (dJob && typeof dJob === 'object') {
+          setCurrentJob(prev => ({
+            ...prev,
+            ...dJob,
+            weeklyGoals: Array.isArray(dJob.weeklyGoals) ? dJob.weeklyGoals : (prev.weeklyGoals || []),
+            currentProjects: Array.isArray(dJob.currentProjects) ? dJob.currentProjects : (prev.currentProjects || [])
+          }));
+        }
+
         if (dCerts && Array.isArray(dCerts) && dCerts.length > 0) {
           setCertifications(prev => {
-            if (prev && prev.length > 0) {
-              return prev.map(pCert => {
-                if ((pCert as any).fileDataUrl) return pCert;
-                const match = dCerts.find((d: any) => d.id === pCert.id || d.title === pCert.title || (d as any).name === (pCert as any).name);
-                return match?.fileDataUrl ? { ...pCert, fileDataUrl: match.fileDataUrl } : pCert;
-              });
-            }
-            return deduplicateCertifications(dCerts);
+            const existing = prev || [];
+            const merged = existing.map(pCert => {
+              const match = dCerts.find((d: any) => d.id === pCert.id || d.title === pCert.title || (d as any).name === (pCert as any).name);
+              return match?.fileDataUrl && !(pCert as any).fileDataUrl ? { ...pCert, fileDataUrl: match.fileDataUrl } : pCert;
+            });
+            const extra = dCerts.filter(d => !existing.some(p => p.id === d.id));
+            return deduplicateCertifications([...merged, ...extra]);
           });
         }
-      } catch (err) {
-        console.warn("Async restoration of certifications deferred:", err);
-      } finally {
-        isCertsRestoringRef.current = false;
-      }
 
-      try {
-        const dProjs = await heavyStorage.get(`${email}_projects`);
         if (dProjs && Array.isArray(dProjs) && dProjs.length > 0) {
-          setProjects(prev => (prev && prev.length > 0 ? prev : deduplicateProjects(dProjs)));
+          setProjects(prev => deduplicateProjects([...(prev || []), ...dProjs]));
         }
-      } catch (err) {
-        console.warn("Async restoration of projects deferred:", err);
-      }
 
-      try {
-        const dProds = await heavyStorage.get(`${email}_products`);
         if (dProds && Array.isArray(dProds) && dProds.length > 0) {
-          setProducts(prev => (prev && prev.length > 0 ? prev : deduplicateProjects(dProds)));
+          setProducts(prev => deduplicateProjects([...(prev || []), ...dProds]));
         }
-      } catch (err) {
-        console.warn("Async restoration of products deferred:", err);
-      }
 
-      try {
-        const dOthers = await heavyStorage.get(`${email}_others`);
         if (dOthers && Array.isArray(dOthers) && dOthers.length > 0) {
-          setOthers(prev => (prev && prev.length > 0 ? prev : deduplicateProjects(dOthers)));
+          setOthers(prev => deduplicateProjects([...(prev || []), ...dOthers]));
         }
-      } catch (err) {
-        console.warn("Async restoration of others deferred:", err);
-      }
 
-      try {
-        const dEdu = await heavyStorage.get(`${email}_education`);
         if (dEdu && Array.isArray(dEdu) && dEdu.length > 0) {
-          setEducation(prev => (prev && prev.length > 0 ? prev : deduplicateEducation(dEdu)));
+          setEducation(prev => deduplicateEducation([...(prev || []), ...dEdu]));
         }
-      } catch (err) {
-        console.warn("Async restoration of education deferred:", err);
-      } finally {
-        isProjsRestoringRef.current = false;
-      }
 
-      try {
-        const dSkills = await heavyStorage.get(`${email}_skills`);
         if (dSkills && Array.isArray(dSkills) && dSkills.length > 0) {
-          setSkills(prev => (prev && prev.length > 0 ? prev : deduplicateSkills(dSkills)));
+          setSkills(prev => deduplicateSkills([...(prev || []), ...dSkills]));
         }
-      } catch (err) {}
 
-      try {
-        const dExp = await heavyStorage.get(`${email}_experience`);
         if (dExp && Array.isArray(dExp) && dExp.length > 0) {
-          setExperience(prev => (prev && prev.length > 0 ? prev : deduplicateExperience(dExp)));
+          setExperience(prev => deduplicateExperience([...(prev || []), ...dExp]));
         }
-      } catch (err) {}
 
-      try {
-        const dCt = await heavyStorage.get(`${email}_contacts`);
         if (dCt && Array.isArray(dCt) && dCt.length > 0) {
           setContacts(prev => deduplicateContacts([...(prev || []), ...dCt]));
         }
-      } catch (err) {}
 
-      try {
-        const dCal = await heavyStorage.get(`${email}_calendar_events`);
         if (dCal && Array.isArray(dCal) && dCal.length > 0) {
           setCalendarEvents(prev => deduplicateCalendarEvents([...(prev || []), ...dCal]));
         }
-      } catch (err) {}
 
-      try {
-        const dNotes = await heavyStorage.get(`${email}_notepad_notes`);
         if (dNotes && Array.isArray(dNotes) && dNotes.length > 0) {
           setNotes(prev => deduplicateNotes([...(prev || []), ...dNotes]));
         }
-      } catch (err) {}
 
-      try {
-        const dRes = await heavyStorage.get(`${email}_nexus_vault_resumes`);
         if (dRes && Array.isArray(dRes) && dRes.length > 0) {
           setResumes(prev => {
-            if (prev && prev.length > 0) {
-              return prev.map(pRes => {
-                if (pRes.fileDataUrl) return pRes;
-                const match = dRes.find((d: any) => d.id === pRes.id || d.fileName === pRes.fileName || d.name === pRes.name);
-                return match?.fileDataUrl ? { ...pRes, fileDataUrl: match.fileDataUrl } : pRes;
-              });
-            }
-            return deduplicateResumes(dRes);
+            const existing = prev || [];
+            const merged = existing.map(pRes => {
+              const match = dRes.find((d: any) => d.id === pRes.id || d.fileName === pRes.fileName || d.name === pRes.name);
+              return match?.fileDataUrl && !pRes.fileDataUrl ? { ...pRes, fileDataUrl: match.fileDataUrl } : pRes;
+            });
+            const extra = dRes.filter(d => !existing.some(p => p.id === d.id));
+            return deduplicateResumes([...merged, ...extra]);
           });
         }
-      } catch (err) {}
 
-      try {
-        const dLinks = await heavyStorage.get(`${email}_links`);
         if (dLinks && Array.isArray(dLinks) && dLinks.length > 0) {
           setLinks(prev => deduplicateLinks([...(prev || []), ...dLinks]));
         }
-      } catch (err) {}
 
-      try {
-        const dMil = await heavyStorage.get(`${email}_milestones`);
         if (dMil && Array.isArray(dMil) && dMil.length > 0) {
           setMilestones(prev => deduplicateMilestones([...(prev || []), ...dMil]));
         }
-      } catch (err) {}
 
-      try {
-        const dAch = await heavyStorage.get(`${email}_achievements`);
         if (dAch && Array.isArray(dAch) && dAch.length > 0) {
-          setAchievements(prev => (prev && prev.length > 0 ? prev : deduplicateAchievements(dAch)));
+          setAchievements(prev => deduplicateAchievements([...(prev || []), ...dAch]));
         }
-      } catch (err) {}
 
-      try {
-        const dTest = await heavyStorage.get(`${email}_testimonials`);
         if (dTest && Array.isArray(dTest) && dTest.length > 0) {
-          setTestimonials(prev => (prev && prev.length > 0 ? prev : deduplicateTestimonials(dTest)));
+          setTestimonials(prev => deduplicateTestimonials([...(prev || []), ...dTest]));
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn("Async restoration of heavy storage data deferred:", err);
+      } finally {
+        isDocsRestoringRef.current = false;
+        isCertsRestoringRef.current = false;
+        isProjsRestoringRef.current = false;
+      }
     };
 
     fetchHeavyData();
@@ -1773,6 +1780,13 @@ export default function App() {
         try {
           const pData = pRes.status === 'fulfilled' ? pRes.value.data : null;
           if (pData) {
+            let restoredAvatar = pData.avatar_url || '';
+            if (!restoredAvatar && email) {
+              try {
+                const cached = localStorage.getItem(`${email}_avatar_cache`);
+                if (cached) restoredAvatar = cached;
+              } catch (_) {}
+            }
             setProfile(prev => ({
               ...prev,
               name: pData.name || prev.name,
@@ -1785,7 +1799,7 @@ export default function App() {
               secondaryEmail: pData.secondary_email || prev.secondaryEmail,
               secondaryPhone: pData.secondary_phone || prev.secondaryPhone,
               location: pData.location || prev.location,
-              avatarUrl: pData.avatar_url || prev.avatarUrl,
+              avatarUrl: restoredAvatar || prev.avatarUrl || '',
               publicProfile: pData.public_profile ?? prev.publicProfile,
               shareSlug: pData.share_slug || prev.shareSlug
             }));
@@ -1807,8 +1821,12 @@ export default function App() {
               visibility: s.visibility || 'public'
             }));
             setSkills(prev => {
-              const merged = deduplicateSkills(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_skills`, JSON.stringify(merged));
+              const merged = deduplicateSkills([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_skills`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_skills`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -1841,8 +1859,12 @@ export default function App() {
               };
             });
             setEducation(prev => {
-              const merged = deduplicateEducation(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(merged));
+              const merged = deduplicateEducation([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_education`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_education`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -1897,7 +1919,7 @@ export default function App() {
               };
             });
             setCertifications(prev => {
-              const merged = deduplicateCertifications(mapped);
+              const merged = deduplicateCertifications([...mapped, ...(prev || [])]);
               if (currentUser?.email) {
                 safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(merged));
                 heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, merged).catch(() => {});
@@ -1925,8 +1947,12 @@ export default function App() {
               links: exp.links || []
             }));
             setExperience(prev => {
-              const merged = deduplicateExperience(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(merged));
+              const merged = deduplicateExperience([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_experience`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_experience`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -1936,7 +1962,7 @@ export default function App() {
         try {
           const jobData = jobRes.status === 'fulfilled' ? jobRes.value.data : null;
           if (jobData) {
-            const loadedJob = {
+            const loadedJob: CurrentJob = {
               company: jobData.company || '',
               employer: jobData.company || '',
               role: jobData.role || '',
@@ -1949,7 +1975,10 @@ export default function App() {
               employmentType: jobData.employment_type || 'full-time',
               salary: jobData.salary || '',
               manager: jobData.manager || '',
-              description: jobData.description || ''
+              description: jobData.description || '',
+              weeklyGoals: Array.isArray(jobData.weekly_goals) ? jobData.weekly_goals : [],
+              currentProjects: Array.isArray(jobData.current_projects) ? jobData.current_projects : [],
+              dailyStandupText: jobData.daily_standup_text || ''
             };
             setCurrentJob(loadedJob as any);
           } else if (currentJob && (currentJob.company || currentJob.employer) && !isDemoItem(currentJob)) {
@@ -1994,8 +2023,12 @@ export default function App() {
               date: p.date
             }));
             setProjects(prev => {
-              const merged = deduplicateProjects(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_projects`, JSON.stringify(merged));
+              const merged = deduplicateProjects([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_projects`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_projects`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -2021,8 +2054,12 @@ export default function App() {
               date: p.date
             }));
             setProducts(prev => {
-              const merged = deduplicateProjects(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_products`, JSON.stringify(merged));
+              const merged = deduplicateProjects([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_products`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_products`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -2049,8 +2086,12 @@ export default function App() {
               date: p.date
             }));
             setOthers(prev => {
-              const merged = deduplicateProjects(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(merged));
+              const merged = deduplicateProjects([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_others`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_others`, merged).catch(() => {});
+              }
               return merged;
             });
           } else {
@@ -2075,8 +2116,12 @@ export default function App() {
               }));
               if (fallbackOthers.length > 0) {
                 setOthers(prev => {
-                  const merged = deduplicateProjects(fallbackOthers);
-                  if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_others`, JSON.stringify(merged));
+                  const merged = deduplicateProjects([...fallbackOthers, ...(prev || [])]);
+                  if (currentUser?.email) {
+                    const em = currentUser.email.toLowerCase().trim();
+                    safeLocalStorageSetItem(`${em}_others`, JSON.stringify(merged));
+                    heavyStorage.set(`${em}_others`, merged).catch(() => {});
+                  }
                   return merged;
                 });
               }
@@ -2107,8 +2152,12 @@ export default function App() {
               category: 'SUPABASE'
             }));
             setResumes(prev => {
-              const merged = deduplicateResumes(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(merged));
+              const merged = deduplicateResumes([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_nexus_vault_resumes`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_nexus_vault_resumes`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -2504,7 +2553,13 @@ export default function App() {
     setProfile(newProfile);
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     if (email) {
+      if (newProfile.avatarUrl) {
+        try {
+          safeLocalStorageSetItem(`${email}_avatar_cache`, newProfile.avatarUrl);
+        } catch (_) {}
+      }
       safeLocalStorageSetItem(`${email}_profile`, JSON.stringify(newProfile));
+      heavyStorage.set(`${email}_profile`, newProfile).catch(() => {});
       if (newProfile.shareSlug) {
         safeLocalStorageSetItem(`nexus_cache_profile_${newProfile.shareSlug}`, JSON.stringify(newProfile));
       }
@@ -2757,10 +2812,10 @@ export default function App() {
     const id = generateUUID();
     const dVal = newCert.dateIssued || newCert.issueDate || '';
     const cert: Certification = { ...newCert, id, dateIssued: dVal, issueDate: dVal };
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     setCertifications(prev => {
       const updatedCerts = deduplicateCertifications([cert, ...prev]);
-      if (currentUser?.email) {
-        const email = currentUser.email.toLowerCase().trim();
+      if (email) {
         safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
         heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
       }
@@ -2768,10 +2823,11 @@ export default function App() {
     });
     triggerToast(`Added credential: ${newCert.title}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       const payload: any = {
         id,
-        user_id: currentUser.id,
+        user_id: userId,
         title: newCert.title,
         issuer: newCert.issuer,
         credential_id: newCert.credentialId,
@@ -2791,19 +2847,19 @@ export default function App() {
         insertPayload.file_url = '';
       }
       try {
-        const { error: insErr } = await supabase.from('certifications').insert(insertPayload);
+        const { error: insErr } = await supabase.from('certifications').upsert(insertPayload);
         if (insErr) {
           console.warn("[Supabase Add Cert Warning]", insErr);
           let retryPayload = { ...insertPayload };
           if (retryPayload.file_url) retryPayload.file_url = '';
-          const { error: retryErr } = await supabase.from('certifications').insert(retryPayload);
+          const { error: retryErr } = await supabase.from('certifications').upsert(retryPayload);
           if (retryErr) {
             // If schema lacks type or percentage columns, stash in description JSON
             const meta = { type: newCert.type || 'study', percentage: newCert.percentage || '', desc: newCert.description || '' };
             delete retryPayload.type;
             delete retryPayload.percentage;
             retryPayload.description = JSON.stringify(meta);
-            await supabase.from('certifications').insert(retryPayload);
+            await supabase.from('certifications').upsert(retryPayload);
           }
         }
       } catch (err) {
@@ -2814,10 +2870,10 @@ export default function App() {
 
   const handleDeleteCert = async (id: string) => {
     const targetId = toUUID(id);
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     setCertifications(prev => {
       const updated = prev.filter(c => c.id !== id && c.id !== targetId);
-      if (currentUser?.email) {
-        const email = currentUser.email.toLowerCase().trim();
+      if (email) {
         safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updated));
         heavyStorage.set(`${email}_certs`, updated).catch(e => {});
       }
@@ -2825,11 +2881,12 @@ export default function App() {
     });
     triggerToast(`Wiped credential clearance.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        await supabase.from('certifications').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('certifications').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('certifications').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('certifications').delete().eq('id', id).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Cert Error]", err); }
     }
@@ -2839,10 +2896,10 @@ export default function App() {
     const targetId = ensureUUID(updatedCert.id);
     const dVal = updatedCert.dateIssued || updatedCert.issueDate || '';
     const item = { ...updatedCert, id: targetId, dateIssued: dVal, issueDate: dVal };
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     setCertifications(prev => {
       const updatedCerts = prev.map(c => (c.id === updatedCert.id || c.id === targetId) ? item : c);
-      if (currentUser?.email) {
-        const email = currentUser.email.toLowerCase().trim();
+      if (email) {
         safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
         heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
       }
@@ -2850,10 +2907,11 @@ export default function App() {
     });
     triggerToast(`Updated file attachment for: ${updatedCert.title}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       const payload: any = {
         id: targetId,
-        user_id: currentUser.id,
+        user_id: userId,
         title: updatedCert.title,
         issuer: updatedCert.issuer,
         credential_id: updatedCert.credentialId,
@@ -2993,7 +3051,7 @@ export default function App() {
   const handleAddProj = async (newPr: Omit<Project, 'id'>) => {
     const id = generateUUID();
     const proj: Project = { ...newPr, id };
-    const email = currentUser?.email?.toLowerCase().trim();
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     const userId = await getActiveUserId();
 
     const cleanPdf = (newPr.pdfUrl && newPr.pdfUrl.startsWith('data:') && newPr.pdfUrl.length > 50000) ? '' : (newPr.pdfUrl || '');
@@ -3002,7 +3060,10 @@ export default function App() {
     if (newPr.type === 'product') {
       const updatedProducts = deduplicateProjects([proj, ...products]);
       setProducts(updatedProducts);
-      if (email) safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
+      if (email) {
+        safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
+        heavyStorage.set(`${email}_products`, updatedProducts).catch(() => {});
+      }
       triggerToast(`Published product assets: ${newPr.name}`);
       if (userId) {
         try {
@@ -3031,7 +3092,10 @@ export default function App() {
     } else if (newPr.type === 'other') {
       const updatedOthers = deduplicateProjects([proj, ...others]);
       setOthers(updatedOthers);
-      if (email) safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
+      if (email) {
+        safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
+        heavyStorage.set(`${email}_others`, updatedOthers).catch(() => {});
+      }
       triggerToast(`Added document: ${newPr.name}`);
       if (userId) {
         try {
@@ -3062,7 +3126,10 @@ export default function App() {
     } else {
       const updatedProjects = deduplicateProjects([proj, ...projects]);
       setProjects(updatedProjects);
-      if (email) safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
+      if (email) {
+        safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
+        heavyStorage.set(`${email}_projects`, updatedProjects).catch(() => {});
+      }
       triggerToast(`Published project assets: ${newPr.name}`);
       if (userId) {
         try {
@@ -3102,11 +3169,14 @@ export default function App() {
     setProducts(updatedProd);
     setOthers(updatedOth);
 
-    if (currentUser?.email) {
-      const email = currentUser.email.toLowerCase().trim();
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
       safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProj));
       safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProd));
       safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOth));
+      heavyStorage.set(`${email}_projects`, updatedProj).catch(() => {});
+      heavyStorage.set(`${email}_products`, updatedProd).catch(() => {});
+      heavyStorage.set(`${email}_others`, updatedOth).catch(() => {});
     }
     triggerToast(`Archived record.`);
 
@@ -3128,7 +3198,7 @@ export default function App() {
   const handleUpdateProj = async (updatedPr: Project) => {
     const targetId = ensureUUID(updatedPr.id);
     const item = { ...updatedPr, id: targetId };
-    const email = currentUser?.email?.toLowerCase().trim();
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     const userId = await getActiveUserId();
 
     const cleanPdf = (updatedPr.pdfUrl && updatedPr.pdfUrl.startsWith('data:') && updatedPr.pdfUrl.length > 50000) ? '' : (updatedPr.pdfUrl || '');
@@ -3139,7 +3209,10 @@ export default function App() {
       setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setProducts(updatedProducts);
-      if (email) safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
+      if (email) {
+        safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
+        heavyStorage.set(`${email}_products`, updatedProducts).catch(() => {});
+      }
       triggerToast(`Updated product assets: ${updatedPr.name}`);
       if (userId) {
         try {
@@ -3168,7 +3241,10 @@ export default function App() {
       setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setOthers(updatedOthers);
-      if (email) safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
+      if (email) {
+        safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
+        heavyStorage.set(`${email}_others`, updatedOthers).catch(() => {});
+      }
       triggerToast(`Updated document: ${updatedPr.name}`);
       if (userId) {
         try {
@@ -3204,7 +3280,10 @@ export default function App() {
       setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
       setProjects(updatedProjects);
-      if (email) safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
+      if (email) {
+        safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
+        heavyStorage.set(`${email}_projects`, updatedProjects).catch(() => {});
+      }
       triggerToast(`Updated project assets: ${updatedPr.name}`);
       if (userId) {
         try {
@@ -5109,10 +5188,10 @@ export default function App() {
               education={education}
               certifications={certifications}
               experience={experience}
-              links={resumeLinks}
-              onAddLink={handleAddResumeLink}
-              onDeleteLink={handleDeleteResumeLink}
-              onUpdateLink={handleUpdateResumeLink}
+              links={links}
+              onAddLink={handleAddLink}
+              onDeleteLink={handleDeleteLink}
+              onUpdateLink={handleUpdateLink}
               resumes={resumes}
               onUpdateResumes={handleUpdateResumes}
             />

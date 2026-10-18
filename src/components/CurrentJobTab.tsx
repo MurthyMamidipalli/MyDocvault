@@ -94,50 +94,53 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
     setShowDeleteConfirm(false);
   };
 
+  const weeklyGoals = Array.isArray(currentJob?.weeklyGoals) ? currentJob.weeklyGoals : [];
+  const currentProjects = Array.isArray(currentJob?.currentProjects) ? currentJob.currentProjects : [];
+
   // Keep original goal handlers
   const handleToggleGoal = (id: string) => {
-    const nextGoals = currentJob.weeklyGoals.map(g => {
+    const nextGoals = weeklyGoals.map(g => {
       if (g.id === id) return { ...g, completed: !g.completed };
       return g;
     });
-    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals });
+    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects });
   };
 
   const handleAddGoal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGoal.trim()) return;
     const nextGoals = [
-      ...currentJob.weeklyGoals,
+      ...weeklyGoals,
       { id: `goal-${Date.now()}`, text: newGoal.trim(), completed: false }
     ];
-    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals });
+    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects });
     setNewGoal('');
   };
 
   const handleDeleteGoal = (id: string) => {
-    const nextGoals = currentJob.weeklyGoals.filter(g => g.id !== id);
-    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals });
+    const nextGoals = weeklyGoals.filter(g => g.id !== id);
+    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects });
   };
 
   const handleAddProject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjName.trim()) return;
     const nextProjects = [
-      ...currentJob.currentProjects,
+      ...currentProjects,
       { id: `proj-${Date.now()}`, name: newProjName.trim(), status: 'planning' as const, desc: newProjDesc.trim() }
     ];
-    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects });
+    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects, weeklyGoals });
     setNewProjName('');
     setNewProjDesc('');
   };
 
   const handleDeleteProject = (id: string) => {
-    const nextProjects = currentJob.currentProjects.filter(p => p.id !== id);
-    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects });
+    const nextProjects = currentProjects.filter(p => p.id !== id);
+    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects, weeklyGoals });
   };
 
   const handleSaveStandup = () => {
-    onUpdateCurrentJob({ ...currentJob, dailyStandupText });
+    onUpdateCurrentJob({ ...currentJob, dailyStandupText, weeklyGoals, currentProjects });
   };
 
   const formatDisplayDate = (dateStr?: string) => {
@@ -317,10 +320,10 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                   </form>
 
                   <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                    {currentJob.weeklyGoals.length === 0 ? (
+                    {weeklyGoals.length === 0 ? (
                       <p className="text-gray-600 text-[11px] font-sans py-2 text-center select-none">No active milestones.</p>
                     ) : (
-                      currentJob.weeklyGoals.map(g => (
+                      weeklyGoals.map(g => (
                         <div key={g.id} className="flex items-center justify-between gap-1.5 text-xs bg-[#09090b]/40 p-2.5 rounded-lg border border-slate-850/60 transition hover:border-slate-800">
                           <button 
                             onClick={() => handleToggleGoal(g.id)}
@@ -383,10 +386,10 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                   </form>
 
                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {currentJob.currentProjects.length === 0 ? (
+                    {currentProjects.length === 0 ? (
                       <p className="text-gray-600 text-[11px] font-sans py-2 text-center select-none">No active initiatives listed.</p>
                     ) : (
-                      currentJob.currentProjects.map(p => (
+                      currentProjects.map(p => (
                         <div key={p.id} className="text-xs bg-[#09090b]/40 p-2.5 border border-slate-850/50 rounded-xl relative group hover:border-slate-800 transition">
                           <div className="flex justify-between items-start gap-2">
                             <div>

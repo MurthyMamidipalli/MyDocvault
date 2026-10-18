@@ -320,21 +320,57 @@ export default function DigitalVisitingCardTab({
                 : 'bg-slate-950 text-gray-400 border-slate-800 hover:text-white'
             }`}
           >
-            Custom Logo URL
+            Custom Logo
           </button>
         </div>
       </div>
 
       {logoOption === 'custom' && (
-        <div className="max-w-md mx-auto space-y-1.5 animate-fade-in">
-          <label className="text-[11px] font-mono text-gray-400">Custom Logo Image URL</label>
-          <input
-            type="url"
-            placeholder="https://example.com/logo.png"
-            value={customLogoUrl}
-            onChange={(e) => setCustomLogoUrl(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500"
-          />
+        <div className="max-w-md mx-auto space-y-2 animate-fade-in">
+          <label className="text-[11px] font-mono text-gray-400 block">Custom Logo Image File</label>
+          <div className="flex items-center gap-3 bg-slate-950 border border-slate-800 rounded-xl p-3">
+            {customLogoUrl ? (
+              <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-emerald-500/40 shrink-0 bg-slate-900 flex items-center justify-center">
+                <img src={customLogoUrl} alt="Custom Logo" className="w-full h-full object-contain" />
+              </div>
+            ) : (
+              <div className="w-12 h-12 rounded-lg border border-dashed border-slate-700 shrink-0 bg-slate-900 flex items-center justify-center text-gray-500">
+                <ImageIcon className="w-6 h-6" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-semibold cursor-pointer transition select-none">
+                <span>{customLogoUrl ? 'Change Image File' : 'Upload Image File'}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === 'string') {
+                          setCustomLogoUrl(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+              </label>
+              {customLogoUrl && (
+                <button
+                  type="button"
+                  onClick={() => setCustomLogoUrl('')}
+                  className="ml-2 text-[11px] text-gray-500 hover:text-rose-400 transition cursor-pointer select-none"
+                >
+                  Remove
+                </button>
+              )}
+              <p className="text-[10px] text-gray-500 mt-1 truncate">Upload any image file (PNG, JPG, SVG, WebP)</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -524,7 +560,7 @@ export default function DigitalVisitingCardTab({
         </h4>
         <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
           <li>Displays Name, Email (fully visible), Mobile, and Current Designation directly from your profile data.</li>
-          <li>Choose between your Profile Photo, Custom Logo URL, or MyDocVault Badge.</li>
+          <li>Choose between your Profile Photo, Custom Logo, or MyDocVault Badge.</li>
           <li>QR Code encodes your existing MyDocVault public share URL without exposing raw URLs on the back card.</li>
         </ul>
       </div>

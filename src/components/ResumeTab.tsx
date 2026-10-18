@@ -27,7 +27,8 @@ import {
   Certification, 
   Experience,
   PortfolioLink,
-  ResumeItem
+  ResumeItem,
+  generateUUID
 } from '../types';
 import { heavyStorage } from '../lib/heavyStorage';
 import { openPdfInNewTab, downloadFileUrl, dataUrlToBlobUrl } from '../lib/pdfUtils';
@@ -182,7 +183,7 @@ export default function ResumeTab({
     }
 
     const newResume: ResumeItem = {
-      id: editingResume ? editingResume.id : `res-${Date.now()}`,
+      id: editingResume ? editingResume.id : generateUUID(),
       name: recordName.trim(),
       type: documentType,
       visibility: visibility,
@@ -242,7 +243,7 @@ export default function ResumeTab({
     e.preventDefault();
     if (!linkUrl.trim()) return;
 
-    const finalPlatform = (linkPlatform || 'Resume Link').trim();
+    const finalPlatform = (linkPlatform || 'Link').trim();
     const finalLabel = linkLabel.trim() || linkUrl.replace(/(^\w+:|^)\/\//, '');
     const finalUrl = linkUrl.trim().startsWith('http') ? linkUrl.trim() : `https://${linkUrl.trim()}`;
 
@@ -891,28 +892,28 @@ export default function ResumeTab({
 
           <form onSubmit={handleSaveLink} className="space-y-5">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Resume Name</label>
+              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Name</label>
               <input 
                 type="text"
                 required
                 value={linkLabel}
                 onChange={e => {
                   setLinkLabel(e.target.value);
-                  if (!linkPlatform) setLinkPlatform('Resume Link');
+                  if (!linkPlatform) setLinkPlatform('Link');
                 }}
-                placeholder="Enter resume name"
+                placeholder="Enter link name"
                 className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none placeholder-gray-600 select-text"
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Resume Link</label>
+              <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Link</label>
               <input 
                 type="text"
                 required
                 value={linkUrl}
                 onChange={e => setLinkUrl(e.target.value)}
-                placeholder="Enter resume link (e.g. https://drive.google.com/...)"
+                placeholder="Enter link (e.g. https://...)"
                 className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none placeholder-gray-650 select-text"
               />
             </div>
