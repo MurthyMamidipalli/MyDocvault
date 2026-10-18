@@ -158,11 +158,14 @@ export default function PublicPortfolioView({
       const id = item.id ? String(item.id).trim() : '';
       const fallbackKey = getFallbackKey(item) ? getFallbackKey(item).toLowerCase().trim().replace(/\/+$/, '') : '';
 
-      if (id && seenIds.has(id)) continue;
-      if (fallbackKey && seenKeys.has(fallbackKey)) continue;
+      if (id) {
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+      } else if (fallbackKey) {
+        if (seenKeys.has(fallbackKey)) continue;
+        seenKeys.add(fallbackKey);
+      }
 
-      if (id) seenIds.add(id);
-      if (fallbackKey) seenKeys.add(fallbackKey);
       result.push(item);
     }
     return result;

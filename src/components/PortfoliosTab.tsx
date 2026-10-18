@@ -35,7 +35,7 @@ export default function PortfoliosTab({
     e.preventDefault();
     if (!url || !label) return;
     
-    const finalPlatform = platform || 'Resume Link';
+    const finalPlatform = platform || 'Link';
     if (editingLink) {
       onUpdateLink({ id: editingLink.id, platform: finalPlatform, url, label, isPublic });
     } else {
@@ -69,7 +69,7 @@ export default function PortfoliosTab({
           className="bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition shrink-0"
         >
           <Plus className="w-4 h-4" />
-          <span>Publish Node Coordinate</span>
+          <span>Add Link</span>
         </button>
       </div>
 
@@ -77,26 +77,26 @@ export default function PortfoliosTab({
         <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 max-w-xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Resume Name</label>
+              <label className="text-xs font-mono text-gray-400">Name</label>
               <input 
                 type="text" required
                 value={label}
                 onChange={e=>{
                   setLabel(e.target.value);
-                  if (!platform) setPlatform('Resume Link');
+                  if (!platform) setPlatform('Link');
                 }}
-                placeholder="Enter resume name"
+                placeholder="Enter link name"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs font-mono text-gray-400">Resume Link</label>
+              <label className="text-xs font-mono text-gray-400">Link</label>
               <input 
                 type="url" required
                 value={url}
                 onChange={e=>setUrl(e.target.value)}
-                placeholder="Enter resume link (e.g. https://drive.google.com/...)"
+                placeholder="Enter link (e.g. https://...)"
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
               />
             </div>
@@ -143,7 +143,7 @@ export default function PortfoliosTab({
               type="submit" 
               className="bg-emerald-500 text-slate-950 px-5 py-2 rounded-xl cursor-pointer font-bold"
             >
-              {editingLink ? 'Update Link' : 'Publish Link'}
+              {editingLink ? 'Update Link' : 'Add Link'}
             </button>
           </div>
         </form>

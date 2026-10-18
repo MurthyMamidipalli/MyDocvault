@@ -15,7 +15,7 @@ import {
   AlertCircle,
   Hash
 } from 'lucide-react';
-import { NotepadNote } from '../types';
+import { NotepadNote, generateUUID } from '../types';
 
 interface NotepadTabProps {
   currentUserEmail?: string;
@@ -61,7 +61,7 @@ export default function NotepadTab({
   // 2. Notepad actions
   const handleCreateNote = () => {
     const newNote: NotepadNote = {
-      id: `note-${Date.now()}`,
+      id: generateUUID(),
       title: 'Untitled Document',
       content: '',
       updatedAt: new Date().toISOString(),

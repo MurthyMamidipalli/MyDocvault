@@ -351,37 +351,27 @@ export const deduplicateContacts = (items?: Contact[]): Contact[] => {
   if (!items || !Array.isArray(items)) return [];
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: Contact[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
     if (isUserLoggedIn && isDemoItem(item)) continue;
 
-    const idKey = item.id ? toUUID(item.id) : '';
-    const emailKey = item.email ? item.email.trim().toLowerCase() : '';
-    const nameKey = (item.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const compKey = (item.company || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const nameCompKey = `${nameKey}__${compKey}`;
+    const rawId = (item.id || '').trim();
+    const idKey = rawId ? toUUID(rawId) : '';
 
     let matchIdx = -1;
-    if (idKey && seen.has(`id:${idKey}`)) {
+    if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
-    } else if (emailKey && seen.has(`email:${emailKey}`)) {
-      matchIdx = result.findIndex(r => r.email && r.email.trim().toLowerCase() === emailKey);
-    } else if (nameKey && seen.has(`name:${nameCompKey}`)) {
-      matchIdx = result.findIndex(r => {
-        const rName = (r.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        const rComp = (r.company || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        return rName === nameKey && rComp === compKey;
-      });
+    } else if (rawId && seenIds.has(`raw:${rawId}`)) {
+      matchIdx = result.findIndex(r => r.id === rawId);
     }
 
     if (matchIdx >= 0) {
       result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
     } else {
-      if (idKey) seen.add(`id:${idKey}`);
-      if (emailKey) seen.add(`email:${emailKey}`);
-      if (nameKey) seen.add(`name:${nameCompKey}`);
+      if (idKey) seenIds.add(idKey);
+      if (rawId) seenIds.add(`raw:${rawId}`);
       result.push(item);
     }
   }
@@ -430,34 +420,32 @@ export const deduplicateCalendarEvents = (items?: CalendarEvent[]): CalendarEven
 export const deduplicateNotes = (items?: NotepadNote[]): NotepadNote[] => {
   if (!items || !Array.isArray(items)) return [];
   const result: NotepadNote[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
-    const idKey = item.id ? toUUID(item.id) : '';
-    const cleanTitle = (item.title || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-    const cleanContent = (item.content || '').trim().toLowerCase().substring(0, 80).replace(/[^a-z0-9]/g, '');
-    const noteKey = cleanTitle ? `${cleanTitle}__${cleanContent}` : `empty__${cleanContent}`;
+    const rawId = (item.id || '').trim();
+    const idKey = rawId ? toUUID(rawId) : '';
 
     let matchIdx = -1;
-    if (idKey && seen.has(`id:${idKey}`)) {
+    if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
-    } else if (seen.has(noteKey)) {
-      matchIdx = result.findIndex(r => {
-        const rTitle = (r.title || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        const rContent = (r.content || '').trim().toLowerCase().substring(0, 80).replace(/[^a-z0-9]/g, '');
-        const rKey = rTitle ? `${rTitle}__${rContent}` : `empty__${rContent}`;
-        return rKey === noteKey;
-      });
+    } else if (rawId && seenIds.has(`raw:${rawId}`)) {
+      matchIdx = result.findIndex(r => r.id === rawId);
     }
 
     if (matchIdx >= 0) {
       const existing = result[matchIdx];
-      const useIncoming = (item.content || '').length > (existing.content || '').length;
-      result[matchIdx] = useIncoming ? { ...existing, ...item } : { ...item, ...existing };
+      result[matchIdx] = {
+        ...existing,
+        ...item,
+        id: existing.id || item.id,
+        content: (item.content || '').length >= (existing.content || '').length ? item.content : existing.content,
+        title: item.title || existing.title
+      };
     } else {
-      if (idKey) seen.add(`id:${idKey}`);
-      seen.add(noteKey);
+      if (idKey) seenIds.add(idKey);
+      if (rawId) seenIds.add(`raw:${rawId}`);
       result.push(item);
     }
   }
@@ -502,34 +490,27 @@ export const deduplicateLinks = (items?: PortfolioLink[]): PortfolioLink[] => {
   if (!items || !Array.isArray(items)) return [];
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: PortfolioLink[] = [];
-  const seen = new Set<string>();
+  const seenIds = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
     if (isUserLoggedIn && isDemoItem(item)) continue;
 
-    const idKey = item.id ? toUUID(item.id) : '';
-    const urlKey = (item.url || '').trim().toLowerCase();
-    const platKey = `${(item.platform || '').trim().toLowerCase()}__${(item.label || '').trim().toLowerCase()}`;
+    const rawId = (item.id || '').trim();
+    const idKey = rawId ? toUUID(rawId) : '';
 
     let matchIdx = -1;
-    if (idKey && seen.has(`id:${idKey}`)) {
+    if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
-    } else if (urlKey && seen.has(`url:${urlKey}`)) {
-      matchIdx = result.findIndex(r => (r.url || '').trim().toLowerCase() === urlKey);
-    } else if (seen.has(`plat:${platKey}`)) {
-      matchIdx = result.findIndex(r => {
-        const rPlat = `${(r.platform || '').trim().toLowerCase()}__${(r.label || '').trim().toLowerCase()}`;
-        return rPlat === platKey;
-      });
+    } else if (rawId && seenIds.has(`raw:${rawId}`)) {
+      matchIdx = result.findIndex(r => r.id === rawId);
     }
 
     if (matchIdx >= 0) {
       result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
     } else {
-      if (idKey) seen.add(`id:${idKey}`);
-      if (urlKey) seen.add(`url:${urlKey}`);
-      seen.add(`plat:${platKey}`);
+      if (idKey) seenIds.add(idKey);
+      if (rawId) seenIds.add(`raw:${rawId}`);
       result.push(item);
     }
   }
@@ -1180,6 +1161,9 @@ export default function App() {
   }, []);
 
   const handleUserLogin = (user: { id?: string; email: string; firstName?: string; lastName?: string }) => {
+    if (user?.email) {
+      lastLoadedEmailRef.current = user.email.toLowerCase().trim();
+    }
     setCurrentUser(user);
     localStorage.setItem('nexus_current_user', JSON.stringify(user));
     setActiveTab('overview');
@@ -1192,6 +1176,9 @@ export default function App() {
   const resetUserDataState = (userEmail?: string, userName?: string) => {
     const emailKey = userEmail ? userEmail.toLowerCase().trim() : '';
     const isUserLoggedIn = Boolean(emailKey);
+    if (emailKey) {
+      lastLoadedEmailRef.current = emailKey;
+    }
 
     const getLocal = <T,>(key: string, fallback: T): T => {
       if (emailKey) {
@@ -1448,89 +1435,85 @@ export default function App() {
   }, [products, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        if (isProjsRestoringRef.current) {
-          return;
-        }
+      if (!isProjsRestoringRef.current) {
         safeLocalStorageSetItem(`${email}_others`, JSON.stringify(others));
       }
     }
   }, [others, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_links`, JSON.stringify(links));
-      }
+      safeLocalStorageSetItem(`${email}_links`, JSON.stringify(links));
+      heavyStorage.set(`${email}_links`, links).catch(e => {});
     }
   }, [links, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_resume_links`, JSON.stringify(resumeLinks));
-      }
+      safeLocalStorageSetItem(`${email}_resume_links`, JSON.stringify(resumeLinks));
+      heavyStorage.set(`${email}_resume_links`, resumeLinks).catch(e => {});
     }
   }, [resumeLinks, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_milestones`, JSON.stringify(milestones));
-      }
+      safeLocalStorageSetItem(`${email}_milestones`, JSON.stringify(milestones));
+      heavyStorage.set(`${email}_milestones`, milestones).catch(e => {});
     }
   }, [milestones, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_contacts`, JSON.stringify(contacts));
-      }
+      safeLocalStorageSetItem(`${email}_contacts`, JSON.stringify(contacts));
+      heavyStorage.set(`${email}_contacts`, contacts).catch(e => {});
     }
   }, [contacts, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_achievements`, JSON.stringify(achievements));
-      }
+      safeLocalStorageSetItem(`${email}_notepad_notes`, JSON.stringify(notes));
+      heavyStorage.set(`${email}_notepad_notes`, notes).catch(e => {});
+    }
+  }, [notes, currentUser]);
+
+  useEffect(() => {
+    if (currentUser?.email) {
+      const email = currentUser.email.toLowerCase().trim();
+      safeLocalStorageSetItem(`${email}_achievements`, JSON.stringify(achievements));
+      heavyStorage.set(`${email}_achievements`, achievements).catch(e => {});
     }
   }, [achievements, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_testimonials`, JSON.stringify(testimonials));
-      }
+      safeLocalStorageSetItem(`${email}_testimonials`, JSON.stringify(testimonials));
+      heavyStorage.set(`${email}_testimonials`, testimonials).catch(e => {});
     }
   }, [testimonials, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        if (isDocsRestoringRef.current) {
-          return;
-        }
+      if (!isDocsRestoringRef.current) {
         safeLocalStorageSetItem(`${email}_documents`, JSON.stringify(documents));
+        heavyStorage.set(`${email}_documents`, documents).catch(e => {});
       }
     }
   }, [documents, currentUser]);
 
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
-      if (lastLoadedEmailRef.current === email) {
-        safeLocalStorageSetItem(`${email}_calendar_events`, JSON.stringify(calendarEvents));
-      }
+      safeLocalStorageSetItem(`${email}_calendar_events`, JSON.stringify(calendarEvents));
+      heavyStorage.set(`${email}_calendar_events`, calendarEvents).catch(e => {});
     }
   }, [calendarEvents, currentUser]);
 
@@ -1645,21 +1628,21 @@ export default function App() {
       try {
         const dCt = await heavyStorage.get(`${email}_contacts`);
         if (dCt && Array.isArray(dCt) && dCt.length > 0) {
-          setContacts(prev => (prev && prev.length > 0 ? prev : deduplicateContacts(dCt)));
+          setContacts(prev => deduplicateContacts([...(prev || []), ...dCt]));
         }
       } catch (err) {}
 
       try {
         const dCal = await heavyStorage.get(`${email}_calendar_events`);
         if (dCal && Array.isArray(dCal) && dCal.length > 0) {
-          setCalendarEvents(prev => (prev && prev.length > 0 ? prev : deduplicateCalendarEvents(dCal)));
+          setCalendarEvents(prev => deduplicateCalendarEvents([...(prev || []), ...dCal]));
         }
       } catch (err) {}
 
       try {
         const dNotes = await heavyStorage.get(`${email}_notepad_notes`);
         if (dNotes && Array.isArray(dNotes) && dNotes.length > 0) {
-          setNotes(prev => (prev && prev.length > 0 ? prev : deduplicateNotes(dNotes)));
+          setNotes(prev => deduplicateNotes([...(prev || []), ...dNotes]));
         }
       } catch (err) {}
 
@@ -1682,14 +1665,14 @@ export default function App() {
       try {
         const dLinks = await heavyStorage.get(`${email}_links`);
         if (dLinks && Array.isArray(dLinks) && dLinks.length > 0) {
-          setLinks(prev => (prev && prev.length > 0 ? prev : deduplicateLinks(dLinks)));
+          setLinks(prev => deduplicateLinks([...(prev || []), ...dLinks]));
         }
       } catch (err) {}
 
       try {
         const dMil = await heavyStorage.get(`${email}_milestones`);
         if (dMil && Array.isArray(dMil) && dMil.length > 0) {
-          setMilestones(prev => (prev && prev.length > 0 ? prev : deduplicateMilestones(dMil)));
+          setMilestones(prev => deduplicateMilestones([...(prev || []), ...dMil]));
         }
       } catch (err) {}
 
@@ -1738,6 +1721,7 @@ export default function App() {
       email = 'ramachandramurthymamidipalli@gmail.com';
     }
 
+    lastLoadedEmailRef.current = email;
     resetUserDataState(email, `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim());
 
     const loadSupabaseUserData = async () => {
@@ -2173,14 +2157,11 @@ export default function App() {
               updatedAt: n.updated_at || new Date().toISOString()
             }));
             setNotes(prev => {
-              const merged = deduplicateNotes(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(merged));
-              // Clean up duplicate notes in cloud if redundant
-              const keptIds = new Set(merged.map(n => n.id));
-              for (const n of mapped) {
-                if (!keptIds.has(n.id)) {
-                  supabase.from('notes').delete().eq('id', n.id).then(() => {}, () => {});
-                }
+              const merged = deduplicateNotes([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_notepad_notes`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_notepad_notes`, merged).catch(() => {});
               }
               return merged;
             });
@@ -2199,8 +2180,12 @@ export default function App() {
               isPublic: l.is_public !== false
             }));
             setLinks(prev => {
-              const merged = deduplicateLinks(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(merged));
+              const merged = deduplicateLinks([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_links`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_links`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -2254,8 +2239,12 @@ export default function App() {
               interactionLogs: ct.interaction_logs || []
             }));
             setContacts(prev => {
-              const merged = deduplicateContacts(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(merged));
+              const merged = deduplicateContacts([...mapped, ...(prev || [])]);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_contacts`, JSON.stringify(merged));
+                heavyStorage.set(`${em}_contacts`, merged).catch(() => {});
+              }
               return merged;
             });
           }
@@ -3245,16 +3234,24 @@ export default function App() {
   // Portfolio Links
   const handleAddLink = async (newLk: Omit<PortfolioLink, 'id'>) => {
     const id = generateUUID();
-    const link: PortfolioLink = { ...newLk, id };
-    setLinks(prev => deduplicateLinks([link, ...prev]));
+    const link: PortfolioLink = { ...newLk, id, platform: newLk.platform || 'Link' };
+    const updated = deduplicateLinks([link, ...links]);
+    setLinks(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_links`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_links`, updated).catch(() => {});
+    }
     triggerToast(`Published portal entry: ${newLk.label}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('portfolio_links').insert({
           id,
-          user_id: currentUser.id,
-          platform: newLk.platform,
+          user_id: userId,
+          platform: newLk.platform || 'Link',
           label: newLk.label,
           url: newLk.url,
           is_public: newLk.isPublic !== false
@@ -3268,16 +3265,19 @@ export default function App() {
     const updated = links.filter(l => l.id !== id && l.id !== targetId);
     setLinks(updated);
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_links`, JSON.stringify(updated));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_links`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_links`, updated).catch(() => {});
     }
     triggerToast(`Closed link coordinates.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        await supabase.from('portfolio_links').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('portfolio_links').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Link Error]", err); }
     }
@@ -3285,16 +3285,24 @@ export default function App() {
 
   const handleUpdateLink = async (updatedLk: PortfolioLink) => {
     const targetId = ensureUUID(updatedLk.id);
-    const item = { ...updatedLk, id: targetId };
-    setLinks(prev => deduplicateLinks(prev.map(l => l.id === updatedLk.id ? item : l)));
+    const item = { ...updatedLk, id: targetId, platform: updatedLk.platform || 'Link' };
+    const updated = deduplicateLinks(links.map(l => (l.id === updatedLk.id || l.id === targetId) ? item : l));
+    setLinks(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_links`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_links`, updated).catch(() => {});
+    }
     triggerToast(`Updated portal entry: ${updatedLk.label}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('portfolio_links').upsert({
           id: targetId,
-          user_id: currentUser.id,
-          platform: updatedLk.platform,
+          user_id: userId,
+          platform: updatedLk.platform || 'Link',
           label: updatedLk.label,
           url: updatedLk.url,
           is_public: updatedLk.isPublic !== false
@@ -3346,14 +3354,22 @@ export default function App() {
   const handleAddContact = async (newCt: Omit<Contact, 'id' | 'interactionLogs'>) => {
     const id = generateUUID();
     const contact: Contact = { ...newCt, id, interactionLogs: [] };
-    setContacts(prev => deduplicateContacts([contact, ...prev]));
+    const updated = deduplicateContacts([contact, ...contacts]);
+    setContacts(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_contacts`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_contacts`, updated).catch(() => {});
+    }
     triggerToast(`Added pipeline network coordinate: ${newCt.name}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         const { error } = await supabase.from('contacts').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           name: newCt.name,
           email: newCt.email || '',
           phone: newCt.phone || '',
@@ -3376,16 +3392,19 @@ export default function App() {
     const updated = contacts.filter(c => c.id !== id && c.id !== targetId);
     setContacts(updated);
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_contacts`, JSON.stringify(updated));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_contacts`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_contacts`, updated).catch(() => {});
     }
     triggerToast(`Transferred contact records off-grid.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        await supabase.from('contacts').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('contacts').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('contacts').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('contacts').delete().eq('id', id).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Contact Error]", err); }
     }
@@ -3394,14 +3413,22 @@ export default function App() {
   const handleUpdateContact = async (updatedCt: Contact) => {
     const targetId = ensureUUID(updatedCt.id);
     const item = { ...updatedCt, id: targetId };
-    setContacts(prev => deduplicateContacts(prev.map(c => c.id === updatedCt.id ? item : c)));
+    const updated = deduplicateContacts(contacts.map(c => (c.id === updatedCt.id || c.id === targetId) ? item : c));
+    setContacts(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_contacts`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_contacts`, updated).catch(() => {});
+    }
     triggerToast(`Updated connection coordinates for: ${updatedCt.name}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         const { error } = await supabase.from('contacts').upsert({
           id: targetId,
-          user_id: currentUser.id,
+          user_id: userId,
           name: updatedCt.name,
           email: updatedCt.email || '',
           phone: updatedCt.phone || '',
@@ -3409,6 +3436,8 @@ export default function App() {
           company: updatedCt.company || '',
           relationship: updatedCt.relationship || updatedCt.category || 'Professional',
           category: updatedCt.category || updatedCt.relationship || 'Professional',
+          relationship_strength: updatedCt.relationshipStrength ?? 3,
+          status: updatedCt.status || 'active',
           location: updatedCt.location || '',
           notes: updatedCt.notes || '',
           last_interacted: updatedCt.lastInteracted || '',
@@ -3421,8 +3450,8 @@ export default function App() {
 
   const handleAddInteraction = async (contactId: string, log: { type: 'email' | 'call' | 'meeting' | 'note'; summary: string }) => {
     let updatedContact: Contact | null = null;
-    setContacts(prev => deduplicateContacts(prev.map(ct => {
-      if (ct.id === contactId) {
+    const updatedContacts = contacts.map(ct => {
+      if (ct.id === contactId || (ct.id && toUUID(ct.id) === toUUID(contactId))) {
         const fullLog = {
           id: `log-${Date.now()}`,
           timestamp: new Date().toISOString(),
@@ -3436,15 +3465,23 @@ export default function App() {
         return updatedContact;
       }
       return ct;
-    })));
+    });
+    setContacts(updatedContacts);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_contacts`, JSON.stringify(updatedContacts));
+      heavyStorage.set(`${email}_contacts`, updatedContacts).catch(() => {});
+    }
     triggerToast(`Logged connection sync transaction.`);
 
-    if (currentUser?.id && updatedContact) {
+    const userId = await getActiveUserId();
+    if (userId && updatedContact) {
       const targetId = ensureUUID((updatedContact as Contact).id);
       try {
         const { error } = await supabase.from('contacts').upsert({
           id: targetId,
-          user_id: currentUser.id,
+          user_id: userId,
           name: (updatedContact as Contact).name,
           email: (updatedContact as Contact).email || '',
           phone: (updatedContact as Contact).phone || '',
@@ -3452,6 +3489,8 @@ export default function App() {
           company: (updatedContact as Contact).company || '',
           relationship: (updatedContact as Contact).relationship || (updatedContact as Contact).category || 'Professional',
           category: (updatedContact as Contact).category || (updatedContact as Contact).relationship || 'Professional',
+          relationship_strength: (updatedContact as Contact).relationshipStrength ?? 3,
+          status: (updatedContact as Contact).status || 'active',
           location: (updatedContact as Contact).location || '',
           notes: (updatedContact as Contact).notes || '',
           last_interacted: (updatedContact as Contact).lastInteracted || '',
@@ -3723,17 +3762,20 @@ export default function App() {
     const deletedResumes = resumes.filter(oldR => !cleanResumes.some(newR => newR.id === oldR.id));
     setResumes(cleanResumes);
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_nexus_vault_resumes`, JSON.stringify(cleanResumes));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_nexus_vault_resumes`, JSON.stringify(cleanResumes));
+      heavyStorage.set(`${email}_nexus_vault_resumes`, cleanResumes).catch(() => {});
     }
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       for (const del of deletedResumes) {
         const targetId = toUUID(del.id);
         try {
-          await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
           if (del.id && del.id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(del.id)) {
-            await supabase.from('resumes').delete().eq('id', del.id).eq('user_id', currentUser.id);
+            await supabase.from('resumes').delete().eq('id', del.id).eq('user_id', userId);
           }
         } catch (err) { console.warn("[Supabase Delete Resume Error]", err); }
       }
@@ -3759,7 +3801,7 @@ export default function App() {
 
             const { error } = await supabase.from('resumes').upsert({
               id: targetId,
-              user_id: currentUser.id,
+              user_id: userId,
               title: r.name || r.title || 'Resume',
               file_name: r.fileName || r.name || 'resume.pdf',
               file_url: cleanUrl,
@@ -3784,17 +3826,20 @@ export default function App() {
     const deletedNotes = notes.filter(oldN => !cleanNotes.some(newN => newN.id === oldN.id));
     setNotes(cleanNotes);
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_notepad_notes`, JSON.stringify(cleanNotes));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_notepad_notes`, JSON.stringify(cleanNotes));
+      heavyStorage.set(`${email}_notepad_notes`, cleanNotes).catch(() => {});
     }
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       for (const del of deletedNotes) {
         const targetId = toUUID(del.id);
         try {
-          await supabase.from('notes').delete().eq('id', targetId).eq('user_id', currentUser.id);
+          await supabase.from('notes').delete().eq('id', targetId).eq('user_id', userId);
           if (del.id && del.id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(del.id)) {
-            await supabase.from('notes').delete().eq('id', del.id).eq('user_id', currentUser.id);
+            await supabase.from('notes').delete().eq('id', del.id).eq('user_id', userId);
           }
         } catch (err) { console.warn("[Supabase Delete Note Error]", err); }
       }
@@ -3805,7 +3850,7 @@ export default function App() {
           try {
             await supabase.from('notes').upsert({
               id: targetId,
-              user_id: currentUser.id,
+              user_id: userId,
               title: n.title || 'Untitled Document',
               content: n.content || '',
               tags: n.category ? [n.category] : [],
