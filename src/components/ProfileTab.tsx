@@ -109,7 +109,21 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
   };
 
   const handleChange = (field: keyof PersonalProfile, value: any) => {
-    const updated = { ...formData, [field]: value };
+    let updated = { ...formData, [field]: value };
+    if (field === 'name') {
+      const parts = String(value || '').trim().split(/\s+/);
+      if (parts.length > 0 && parts[0]) {
+        updated.firstName = parts[0];
+        updated.lastName = parts.slice(1).join(' ');
+      } else {
+        updated.firstName = '';
+        updated.lastName = '';
+      }
+    } else if (field === 'firstName' || field === 'lastName') {
+      const first = field === 'firstName' ? String(value || '') : String(updated.firstName || '');
+      const last = field === 'lastName' ? String(value || '') : String(updated.lastName || '');
+      updated.name = [first, last].filter(Boolean).join(' ').trim();
+    }
     setFormData(updated);
     onUpdateProfile(updated);
   };

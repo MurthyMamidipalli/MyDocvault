@@ -27,7 +27,7 @@ import {
   Download,
   File
 } from 'lucide-react';
-import { Project } from '../types';
+import { Project, isDemoItem } from '../types';
 import { openPdfInNewTab, downloadFileUrl } from '../lib/pdfUtils';
 import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from '../lib/supabase';
 
@@ -83,49 +83,61 @@ export default function ProjectsTab({
   const coverInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
 
+  const isUserLoggedIn = typeof window !== 'undefined' && Boolean(localStorage.getItem('nexus_current_user'));
+
   // 1. Projects: ONLY project records
   const projectItems = useMemo(() => {
-    return projects.filter(p => {
+    const list: Project[] = [];
+    const seen = new Set<string>();
+
+    const candidateProjects = projects.filter(p => {
+      if (!p) return false;
+      if (isUserLoggedIn && isDemoItem(p)) return false;
       if (p.type === 'product' || p.type === 'other') return false;
       if (products && products.some(prod => Boolean(prod.id && p.id && prod.id === p.id))) return false;
       if (others && others.some(oth => Boolean(oth.id && p.id && oth.id === p.id))) return false;
       return true;
     });
-  }, [projects, products, others]);
+
+    for (const p of candidateProjects) {
+      const idKey = p.id ? p.id.toLowerCase().trim() : '';
+      const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (idKey && seen.has(`id:${idKey}`)) continue;
+      if (nameKey && seen.has(`name:${nameKey}`)) continue;
+
+      if (idKey) seen.add(`id:${idKey}`);
+      if (nameKey) seen.add(`name:${nameKey}`);
+      list.push(p);
+    }
+    return list;
+  }, [projects, products, others, isUserLoggedIn]);
 
   // 2. Products: ONLY product records
   const productItems = useMemo(() => {
     const list: Project[] = [];
     const seen = new Set<string>();
 
-    if (products && Array.isArray(products)) {
-      for (const p of products) {
-        if (p.type === 'product' || !p.type) {
-          const key = p.id || (p.name ? p.name.toLowerCase().trim() : '');
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            list.push(p);
-          } else if (!key) {
-            list.push(p);
-          }
-        }
-      }
-    }
-    if (projects && Array.isArray(projects)) {
-      for (const p of projects) {
-        if (p.type === 'product') {
-          const key = p.id || (p.name ? p.name.toLowerCase().trim() : '');
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            list.push(p);
-          } else if (!key) {
-            list.push(p);
-          }
-        }
-      }
+    const allCandidates = [
+      ...(products && Array.isArray(products) ? products : []),
+      ...(projects && Array.isArray(projects) ? projects.filter(p => p.type === 'product') : [])
+    ];
+
+    for (const p of allCandidates) {
+      if (!p) continue;
+      if (isUserLoggedIn && isDemoItem(p)) continue;
+      if (p.type && p.type !== 'product') continue;
+
+      const idKey = p.id ? p.id.toLowerCase().trim() : '';
+      const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (idKey && seen.has(`id:${idKey}`)) continue;
+      if (nameKey && seen.has(`name:${nameKey}`)) continue;
+
+      if (idKey) seen.add(`id:${idKey}`);
+      if (nameKey) seen.add(`name:${nameKey}`);
+      list.push(p);
     }
     return list;
-  }, [projects, products]);
+  }, [projects, products, isUserLoggedIn]);
 
   // 3. Others: ONLY other documents/files (excluding certificates)
   const otherItems = useMemo(() => {
@@ -137,34 +149,28 @@ export default function ProjectsTab({
       return dt !== 'certificate';
     };
 
-    if (others && Array.isArray(others)) {
-      for (const p of others) {
-        if ((p.type === 'other' || !p.type) && isNonCertificate(p)) {
-          const key = p.id || (p.name ? p.name.toLowerCase().trim() : '');
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            list.push(p);
-          } else if (!key) {
-            list.push(p);
-          }
-        }
-      }
-    }
-    if (projects && Array.isArray(projects)) {
-      for (const p of projects) {
-        if (p.type === 'other' && isNonCertificate(p)) {
-          const key = p.id || (p.name ? p.name.toLowerCase().trim() : '');
-          if (key && !seen.has(key)) {
-            seen.add(key);
-            list.push(p);
-          } else if (!key) {
-            list.push(p);
-          }
-        }
-      }
+    const allCandidates = [
+      ...(others && Array.isArray(others) ? others : []),
+      ...(projects && Array.isArray(projects) ? projects.filter(p => p.type === 'other') : [])
+    ];
+
+    for (const p of allCandidates) {
+      if (!p) continue;
+      if (isUserLoggedIn && isDemoItem(p)) continue;
+      if (p.type && p.type !== 'other') continue;
+      if (!isNonCertificate(p)) continue;
+
+      const idKey = p.id ? p.id.toLowerCase().trim() : '';
+      const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (idKey && seen.has(`id:${idKey}`)) continue;
+      if (nameKey && seen.has(`name:${nameKey}`)) continue;
+
+      if (idKey) seen.add(`id:${idKey}`);
+      if (nameKey) seen.add(`name:${nameKey}`);
+      list.push(p);
     }
     return list;
-  }, [projects, others]);
+  }, [projects, others, isUserLoggedIn]);
 
   // Active items based on selected tab
   const currentItems = useMemo(() => {

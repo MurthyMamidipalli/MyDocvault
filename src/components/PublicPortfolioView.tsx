@@ -168,11 +168,11 @@ export default function PublicPortfolioView({
     return result;
   };
 
-  const cleanSkills = deduplicateByUniqueKey(skills || [], sk => sk.name || '');
-  const cleanExperience = deduplicateByUniqueKey(experience || [], exp => `${exp.role || ''}-${exp.company || ''}`);
-  const cleanCerts = deduplicateByUniqueKey(certifications || [], c => c.id || `${c.title || ''}-${c.issuer || ''}-${c.dateIssued || ''}`);
-  const cleanEducation = deduplicateByUniqueKey(education || [], edu => `${edu.degree || ''}-${edu.institution || ''}`);
-  const cleanAchievements = deduplicateByUniqueKey(achievements || [], ach => ach.title || '');
+  const cleanSkills = deduplicateByUniqueKey(skills || [], sk => (sk.name || '').toLowerCase().trim());
+  const cleanExperience = deduplicateByUniqueKey(experience || [], exp => `${(exp.role || '').toLowerCase().trim()}-${(exp.company || '').toLowerCase().trim()}`);
+  const cleanCerts = deduplicateByUniqueKey(certifications || [], c => `${(c.title || (c as any).name || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '')}-${(c.issuer || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '')}`);
+  const cleanEducation = deduplicateByUniqueKey(education || [], edu => `${(edu.degree || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '')}-${(edu.institution || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '')}`);
+  const cleanAchievements = deduplicateByUniqueKey(achievements || [], ach => (ach.title || '').toLowerCase().trim());
   // Strict Testimonials / Peer Endorsements deduplication by text & name
   const cleanTestimonials = (() => {
     const seenTexts = new Set<string>();
@@ -193,9 +193,9 @@ export default function PublicPortfolioView({
     return result;
   })();
 
-  const cleanLinks = deduplicateByUniqueKey(links || [], lk => (lk.url || lk.label || ''));
-  const cleanResumes = deduplicateByUniqueKey(resumes || [], res => res.name || res.title || res.fileName || res.id || '');
-  const cleanDocuments = deduplicateByUniqueKey(documents || [], doc => doc.name || doc.title || '');
+  const cleanLinks = deduplicateByUniqueKey(links || [], lk => (lk.url || lk.label || '').toLowerCase().trim());
+  const cleanResumes = deduplicateByUniqueKey(resumes || [], res => (res.name || res.title || res.fileName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
+  const cleanDocuments = deduplicateByUniqueKey(documents || [], doc => (doc.name || doc.title || doc.fileName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, ''));
 
   // Filter skills to show all public/unflagged ones
   const publicSkills = cleanSkills.filter(sk => sk.visibility !== 'private');
@@ -216,8 +216,6 @@ export default function PublicPortfolioView({
   );
   // Filter public resumes
   const publicResumes = cleanResumes.filter(res => res && res.visibility !== 'private' && (res as any).isPublic !== false && (res as any).isPublic !== 'false');
-  // Filter public documents
-  const publicDocuments = cleanDocuments.filter(doc => doc.visibility === 'public');
 
   // Categorize Projects, Products, and Others (Reports) cleanly without duplicate entries
   const allPublicItems = (projects || []).filter(p => p && p.isPublic !== false);
@@ -235,15 +233,55 @@ export default function PublicPortfolioView({
     (p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product')
   );
   const productsList = deduplicateByUniqueKey(rawProducts, p => (p.name || '').toLowerCase().trim());
-  const productNames = new Set(productsList.map(p => (p.name || '').toLowerCase().trim()));
+  const productNames = new Set([...projectNames, ...productsList.map(p => (p.name || '').toLowerCase().trim())]);
 
   // 3. Others: type === 'other' OR category === 'others' OR category === 'other' OR docType
   const rawOthers = allPublicItems.filter(p => 
-    !projectNames.has((p.name || '').toLowerCase().trim()) &&
     !productNames.has((p.name || '').toLowerCase().trim()) &&
     (p.type === 'other' || (p.category as any) === 'others' || (p.category as any) === 'other' || !!p.docType)
   );
   const othersList = deduplicateByUniqueKey(rawOthers, p => (p.name || '').toLowerCase().trim());
+
+  // Filter out documents from publicDocuments that are already shown under Resumes, Certifications, or Others
+  const existingDocNames = new Set<string>();
+  for (const r of publicResumes) {
+    const k = (r.fileName || r.name || r.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    if (k) existingDocNames.add(k);
+    if (r.fileUrl) existingDocNames.add(r.fileUrl.trim());
+  }
+  for (const c of publicCerts) {
+    const k = (c.fileName || c.title || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    if (k) existingDocNames.add(k);
+    if (c.fileUrl) existingDocNames.add(c.fileUrl.trim());
+  }
+  for (const o of othersList) {
+    const k = (o.name || o.pdfName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    if (k) existingDocNames.add(k);
+    if (o.pdfUrl) existingDocNames.add(o.pdfUrl.trim());
+  }
+
+  const distinctPublicDocuments = cleanDocuments.filter(doc => {
+    if (doc.visibility !== 'public') return false;
+    const nameKey = (doc.name || doc.title || doc.fileName || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+    const urlKey = (doc.fileUrl || '').trim();
+    if (nameKey && existingDocNames.has(nameKey)) return false;
+    if (urlKey && existingDocNames.has(urlKey)) return false;
+    return true;
+  });
+
+  // Filter experience so current job role & company are not duplicated
+  const currentJobCompany = (currentJob?.company || currentJob?.employer || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+  const currentJobRole = (currentJob?.role || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+  const filteredExperience = cleanExperience.filter(exp => {
+    if (currentJob && (currentJob.role || currentJob.company || currentJob.employer) && currentJob.isPublic !== false) {
+      const expComp = (exp.company || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      const expRole = (exp.role || '').toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+      if (expComp && currentJobCompany && expComp === currentJobCompany && (!currentJobRole || expRole === currentJobRole)) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-[#07080b] text-gray-305 flex flex-col font-sans selection:bg-emerald-500/20 antialiased" id="public-live-portfolio">
@@ -424,14 +462,14 @@ export default function PublicPortfolioView({
 
 
             {/* Public Vault Documents Section */}
-            {publicDocuments.length > 0 && (
+            {distinctPublicDocuments.length > 0 && (
               <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
                 <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
                   <Folder className={`w-4 h-4 ${getThemeTextGlow()}`} />
                   Public Documents & Files
                 </h3>
                 <div className="space-y-3 pt-1">
-                  {publicDocuments.map(doc => (
+                  {distinctPublicDocuments.map(doc => (
                     <div key={doc.id} className="bg-slate-950/45 p-3.5 rounded-xl border border-slate-900 space-y-2.5 hover:bg-slate-900/30 transition">
                       <div className="flex items-center justify-between">
                         <span className="text-[9px] font-mono text-emerald-400 uppercase font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
@@ -588,7 +626,7 @@ export default function PublicPortfolioView({
             )}
 
             {/* Enterprise tenure timeline */}
-            {cleanExperience.length > 0 && (
+            {filteredExperience.length > 0 && (
               <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-6">
                 <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
                   <Briefcase className={`w-4 h-4 ${getThemeTextGlow()}`} />
@@ -596,7 +634,7 @@ export default function PublicPortfolioView({
                 </h3>
 
                 <div className="space-y-6 pl-4 border-l border-slate-800">
-                  {cleanExperience.map(exp => (
+                  {filteredExperience.map(exp => (
                     <div key={exp.id} className="relative space-y-2">
                       {/* Connection node point */}
                       <span className={`absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-slate-950 ${getThemeBg()}`} />

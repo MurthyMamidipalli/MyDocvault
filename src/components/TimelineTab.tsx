@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Calendar, Star, Trash2, Award, Briefcase, GraduationCap, LayoutGrid, Cpu } from 'lucide-react';
-import { TimelineMilestone, Experience, Education, CurrentJob } from '../types';
+import { TimelineMilestone, Experience, Education, CurrentJob, isDemoId, isDemoTitle, isDemoItem } from '../types';
 
 interface TimelineTabProps {
   milestones: TimelineMilestone[];
@@ -37,8 +37,8 @@ export default function TimelineTab({
     setShowForm(false);
   };
 
-  // Convert education items to timeline milestones
-  const educationMilestones = (education || []).map(edu => ({
+  // Convert education items to timeline milestones (excluding demo items)
+  const educationMilestones = (education || []).filter(edu => !isDemoItem(edu)).map(edu => ({
     id: `auto-edu-${edu.id}`,
     date: edu.startYear || edu.startDate || (edu.endYear ? `${edu.endYear}-05` : new Date().toISOString().substring(0, 7)),
     title: `${edu.degree}${edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : ''} at ${edu.institution}`,
@@ -48,8 +48,8 @@ export default function TimelineTab({
     isAuto: true
   }));
 
-  // Convert experience items to timeline milestones
-  const experienceMilestones = (experience || []).map(exp => ({
+  // Convert experience items to timeline milestones (excluding demo items)
+  const experienceMilestones = (experience || []).filter(exp => !isDemoItem(exp)).map(exp => ({
     id: `auto-exp-${exp.id}`,
     date: exp.startDate || new Date().toISOString().substring(0, 7),
     title: `${exp.role} at ${exp.company}`,
@@ -61,9 +61,9 @@ export default function TimelineTab({
     isAuto: true
   }));
 
-  // Convert currentJob if employer or role is specified and not already in experience
+  // Convert currentJob if employer or role is specified, not demo, and not already in experience
   const currentJobMilestones = [];
-  if (currentJob && (currentJob.employer || currentJob.company) && currentJob.role) {
+  if (currentJob && (currentJob.employer || currentJob.company) && currentJob.role && !isDemoItem(currentJob)) {
     const emp = (currentJob.employer || currentJob.company).trim().toLowerCase();
     const rol = currentJob.role.trim().toLowerCase();
     const alreadyInExp = (experience || []).some(exp => 
@@ -75,7 +75,7 @@ export default function TimelineTab({
       currentJobMilestones.push({
         id: 'auto-current-job',
         date: jobDate,
-        title: `${currentJob.role} (Active Engagement) at ${currentJob.employer || currentJob.company}`,
+        title: `${currentJob.role} at ${currentJob.employer || currentJob.company}`,
         category: 'experience' as const,
         description: currentJob.description || `Active role in ${currentJob.department || 'the organization'}.`,
         intensity: 'high' as const,
@@ -84,18 +84,12 @@ export default function TimelineTab({
     }
   }
 
-  const DEMO_TITLES = [
-    'admitted to b.tech at kl university',
-    'graduated with 8.5 cgpa',
-    'commenced mba at amity university',
-    'joined photonx technologies as qa intern'
-  ];
-
   // Filter out any static milestones that match demo titles or demo IDs
   const cleanUserMilestones = (milestones || []).filter(m => {
-    if (m.id === 'mil-1' || m.id === 'mil-2' || m.id === 'mil-3' || m.id === 'mil-4') return false;
+    if (!m) return false;
+    if (isDemoId(m.id) || isDemoTitle(m.title) || isDemoItem(m)) return false;
     const cleanTitle = (m.title || '').toLowerCase().trim();
-    if (DEMO_TITLES.includes(cleanTitle)) return false;
+    if (cleanTitle.includes('photonx')) return false;
     return true;
   });
 
@@ -110,8 +104,13 @@ export default function TimelineTab({
   // Distinct list by YYYY-MM date + normalized title to prevent duplicate timeline items
   const seenKeys = new Set<string>();
   const uniqMilestones = combined.filter(m => {
-    const cleanTitle = m.title.toLowerCase().replace(/\(current job engagement\)/gi, '').replace(/\s+/g, ' ').trim();
-    const key = `${(m.date || '').substring(0, 7)}-${cleanTitle}`;
+    const cleanTitle = (m.title || '')
+      .toLowerCase()
+      .replace(/\(active engagement\)/gi, '')
+      .replace(/\(current job engagement\)/gi, '')
+      .replace(/[^a-z0-9]/g, '');
+    const datePrefix = (m.date || '').substring(0, 7);
+    const key = `${datePrefix}_${cleanTitle}`;
     if (seenKeys.has(key)) return false;
     seenKeys.add(key);
     return true;

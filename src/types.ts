@@ -291,6 +291,89 @@ export const generateUUID = (): string => {
   });
 };
 
+export const DEMO_IDS = new Set<string>([
+  'sk-1', 'sk-2', 'sk-3', 'sk-4', 'sk-5', 'sk-6', 'sk-7', 'sk-8', 'sk-9', 'sk-10',
+  'edu-1', 'edu-2', 'edu-3', 'edu-4', 'ed-1', 'ed-2', 'ed-3', 'ed-4',
+  'cert-1', 'cert-2', 'cert-3', 'cert-4', 'cert-5', 'cert-6', 'cert-7', 'cert-8', 'cert-9', 'cert-10', 'cert-11', 'cert-12', 'cert-13', 'cert-14', 'cert-15',
+  'exp-1', 'exp-2',
+  'proj-1', 'proj-2', 'proj-3', 'proj-4',
+  'mil-1', 'mil-2', 'mil-3', 'mil-4',
+  'ct-1', 'ct-2', 'ct-3', 'ct-4',
+  'ach-1', 'ach-2',
+  'test-1', 'test-2',
+  'lk-1', 'lk-2',
+  'cp-1', 'cp-2', 'wg-1', 'wg-2',
+  'doc-1', 'doc-2', 'doc-3'
+]);
+
+export const DEMO_UUIDS = new Set<string>(Array.from(DEMO_IDS).map(id => toUUID(id)));
+
+export const isDemoId = (id?: string): boolean => {
+  if (!id) return false;
+  const clean = id.trim().toLowerCase();
+  return DEMO_IDS.has(clean) || DEMO_UUIDS.has(clean) || DEMO_UUIDS.has(toUUID(clean));
+};
+
+export const DEMO_TITLES = new Set<string>([
+  'power bi & tableau',
+  'sql database querying',
+  'excel advanced analytics',
+  'business intelligence reporting',
+  'data modeling & etl',
+  'python for data science',
+  'process mapping & optimization',
+  'manual & automated qa testing',
+  'requirements engineering',
+  'agile & scrum delivery',
+  'dean\'s merit scholarship award',
+  'first runner up - national analytics hackathon',
+  'qa automation & testing intern',
+  'business analytics team lead (academic)',
+  'operations process optimizer',
+  'executive financial dashboard',
+  'supply chain optimization model',
+  'hr analytics dashboard',
+  'customer retention & churn prediction model',
+  'admitted to b.tech at kl university',
+  'graduated with 8.5 cgpa',
+  'commenced mba at amity university',
+  'joined photonx technologies as qa intern',
+  'marcus vance',
+  'dr. srinivas prasad',
+  'sarah jenkins',
+  'business analytics hackathon finalist',
+  'kl university cse special distinction'
+]);
+
+export const isDemoTitle = (title?: string): boolean => {
+  if (!title) return false;
+  return DEMO_TITLES.has(title.trim().toLowerCase());
+};
+
+export const isDemoItem = (item?: any): boolean => {
+  if (!item || typeof item !== 'object') return false;
+  if (item.id && isDemoId(item.id)) return true;
+
+  // Only check titles if item has no id or a demo id
+  if (!item.id || isDemoId(item.id)) {
+    if (item.name && isDemoTitle(item.name)) return true;
+    if (item.title && isDemoTitle(item.title)) return true;
+  }
+
+  const comp = (item.company || item.employer || '').trim().toLowerCase();
+  const role = (item.role || '').trim().toLowerCase();
+  if (comp.includes('photonx') && (role.includes('tester') || role.includes('qa') || role.includes('intern'))) {
+    return true;
+  }
+  if (comp.includes('amity analytics group')) {
+    return true;
+  }
+
+  return false;
+};
+
+
+
 export const INITIAL_SKILLS: Skill[] = [
   { id: toUUID('sk-1'), name: 'Power BI & Tableau', visibility: 'public', yearsOfExp: 3, endorsements: 24 },
   { id: toUUID('sk-2'), name: 'SQL Database Querying', visibility: 'public', yearsOfExp: 4, endorsements: 29 },
