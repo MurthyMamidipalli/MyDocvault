@@ -1150,6 +1150,11 @@ export default function App() {
           firstName: u.user_metadata?.first_name || u.email?.split('@')[0],
           lastName: u.user_metadata?.last_name || ''
         };
+        const email = mappedUser.email.toLowerCase().trim();
+        if (email) {
+          lastLoadedEmailRef.current = email;
+          resetUserDataState(email, `${mappedUser.firstName || ''} ${mappedUser.lastName || ''}`.trim());
+        }
         setCurrentUser(mappedUser);
         localStorage.setItem('nexus_current_user', JSON.stringify(mappedUser));
       }
@@ -1164,6 +1169,11 @@ export default function App() {
           firstName: u.user_metadata?.first_name || u.email?.split('@')[0],
           lastName: u.user_metadata?.last_name || ''
         };
+        const email = mappedUser.email.toLowerCase().trim();
+        if (email) {
+          lastLoadedEmailRef.current = email;
+          resetUserDataState(email, `${mappedUser.firstName || ''} ${mappedUser.lastName || ''}`.trim());
+        }
         setCurrentUser(mappedUser);
         localStorage.setItem('nexus_current_user', JSON.stringify(mappedUser));
       } else if (_event === 'SIGNED_OUT') {
@@ -1181,8 +1191,11 @@ export default function App() {
   }, []);
 
   const handleUserLogin = (user: { id?: string; email: string; firstName?: string; lastName?: string }) => {
-    if (user?.email) {
-      lastLoadedEmailRef.current = user.email.toLowerCase().trim();
+    const email = user?.email ? user.email.toLowerCase().trim() : '';
+    if (email) {
+      lastLoadedEmailRef.current = email;
+      // Immediately hydrate all user states from local cache in 0ms!
+      resetUserDataState(email, `${user.firstName || ''} ${user.lastName || ''}`.trim());
     }
     setCurrentUser(user);
     localStorage.setItem('nexus_current_user', JSON.stringify(user));
@@ -4609,13 +4622,10 @@ export default function App() {
     if (path.startsWith('/portfolio/') || path.startsWith('/share/') || path.startsWith('/public/')) return true;
     if (window.location.search.includes('share=')) return true;
 
-    // If user is logged in, never treat standard navigation or root path as public share view
-    if (currentUser) return false;
-
     const firstSegment = path.substring(1).split('/')[0];
     if (firstSegment && 
         !VALID_APP_TABS.includes(firstSegment) && 
-        !['api', 'assets', 'vite', 'index.html', 'favicon.ico'].includes(firstSegment)) {
+        !['api', 'assets', 'vite', 'index.html', 'favicon.ico', 'login', 'register'].includes(firstSegment)) {
       return true;
     }
     return false;

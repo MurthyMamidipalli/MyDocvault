@@ -330,15 +330,17 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
       const user = data.user;
       if (!user) throw new Error('Authentication succeeded but no user session returned.');
 
-      // Fetch user profile from Supabase
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      const userFirstName = profile?.first_name || user.user_metadata?.first_name || trimmedEmail.split('@')[0];
-      const userLastName = profile?.last_name || user.user_metadata?.last_name || '';
+      // Check local cached profile first for instantaneous 0ms login display
+      let userFirstName = user.user_metadata?.first_name || trimmedEmail.split('@')[0];
+      let userLastName = user.user_metadata?.last_name || '';
+      try {
+        const cachedP = localStorage.getItem(`${trimmedEmail}_profile`);
+        if (cachedP) {
+          const parsed = JSON.parse(cachedP);
+          if (parsed.firstName) userFirstName = parsed.firstName;
+          if (parsed.lastName) userLastName = parsed.lastName;
+        }
+      } catch (_) {}
 
       triggerToast(`Signed in successfully as ${userFirstName}!`);
       onLoginSuccess({

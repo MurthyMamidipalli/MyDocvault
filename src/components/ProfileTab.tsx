@@ -734,11 +734,24 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                         href={shareUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        title="Open public live link"
-                        className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-2 rounded-lg transition inline-flex items-center gap-1.5 text-xs font-bold active:scale-95 cursor-pointer"
+                        title={formData.publicProfile === false ? "Preview private profile lock screen" : "Open public live link"}
+                        className={`${
+                          formData.publicProfile === false
+                            ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        } px-3 py-2 rounded-lg transition inline-flex items-center gap-1.5 text-xs font-bold active:scale-95 cursor-pointer`}
                       >
-                        <ExternalLink className="w-4 h-4" />
-                        <span>Open Profile</span>
+                        {formData.publicProfile === false ? (
+                          <>
+                            <Lock className="w-4 h-4" />
+                            <span>Preview (Private)</span>
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="w-4 h-4" />
+                            <span>Open Profile</span>
+                          </>
+                        )}
                       </a>
                     </div>
                   </div>
