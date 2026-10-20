@@ -661,6 +661,23 @@ export const deduplicateDocuments = (items?: VaultDocument[]): VaultDocument[] =
   return result;
 };
 
+export const parseFileSizeToBytes = (sizeVal?: string | number): number => {
+  if (typeof sizeVal === 'number') return Math.round(sizeVal);
+  if (!sizeVal) return 0;
+  const str = String(sizeVal).trim();
+  const match = str.match(/^([\d.]+)\s*(B|KB|MB|GB)?$/i);
+  if (!match) {
+    const num = parseInt(str.replace(/[^\d]/g, ''), 10);
+    return isNaN(num) ? 0 : num;
+  }
+  const val = parseFloat(match[1]);
+  const unit = (match[2] || 'B').toUpperCase();
+  if (unit === 'KB') return Math.round(val * 1024);
+  if (unit === 'MB') return Math.round(val * 1024 * 1024);
+  if (unit === 'GB') return Math.round(val * 1024 * 1024 * 1024);
+  return Math.round(val);
+};
+
 export default function App() {
   
   // Helper to merge array records by ID or unique key without dropping any records
@@ -1230,7 +1247,7 @@ export default function App() {
     setTestimonials(deduplicateTestimonials(getLocal('testimonials', isUserLoggedIn ? [] : INITIAL_TESTIMONIALS)));
     setLinks(deduplicateLinks(getLocal('links', isUserLoggedIn ? [] : INITIAL_LINKS)));
     setResumes(deduplicateResumes(getLocal('nexus_vault_resumes', [])));
-    setDocuments(deduplicateDocuments(getLocal('documents', [])));
+    setDocuments(deduplicateDocuments(getLocal('documents', INITIAL_DOCUMENTS)));
     setCalendarEvents(deduplicateCalendarEvents(getLocal('calendar_events', [])));
     setNotes(deduplicateNotes(getLocal('notepad_notes', [])));
     setMilestones(deduplicateMilestones(getLocal('milestones', isUserLoggedIn ? [] : INITIAL_TIMELINE)));
@@ -1754,20 +1771,23 @@ export default function App() {
     resetUserDataState(email, `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim());
 
     const loadSupabaseUserData = async () => {
-      let userId = (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) ? currentUser.id : null;
+      // Ensure Supabase Auth session is active so auth token is attached to requests
+      let userId: string | null = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.id) userId = session.user.id;
+      } catch (e) {}
+
+      if (!userId && currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
+        userId = currentUser.id;
+      }
+
       if (!userId && email) {
         try {
           const { data: p } = await supabase.from('profiles').select('user_id').eq('email', email).maybeSingle();
           if (p?.user_id) {
             userId = p.user_id;
           }
-        } catch (e) {}
-      }
-
-      if (!userId) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user?.id) userId = session.user.id;
         } catch (e) {}
       }
 
@@ -1783,7 +1803,8 @@ export default function App() {
         const [
           pRes, sRes, eRes, cRes, expRes, jobRes,
           projRes, prodRes, othRes, resRes, docRes,
-          nRes, lRes, tmRes, ctRes, calRes, aRes, tRes
+          nRes, lRes, tmRes, ctRes, calRes, aRes, tRes,
+          docCatRes, rlkRes
         ] = await Promise.allSettled([
           supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
           supabase.from('skills').select('*').eq('user_id', userId),
@@ -1802,7 +1823,9 @@ export default function App() {
           supabase.from('contacts').select('*').eq('user_id', userId),
           supabase.from('calendar_events').select('*').eq('user_id', userId),
           supabase.from('achievements').select('*').eq('user_id', userId),
-          supabase.from('testimonials').select('*').eq('user_id', userId)
+          supabase.from('testimonials').select('*').eq('user_id', userId),
+          supabase.from('document_categories').select('*').eq('user_id', userId),
+          supabase.from('resume_links').select('*').eq('user_id', userId)
         ]);
 
         // 1. Profile
@@ -2269,20 +2292,54 @@ export default function App() {
           }
         } catch (err) { console.warn("[Supabase Resumes Load]", err); }
 
-        // 10. Documents (Vault)
+        // 10. Documents & Document Categories (Vault)
         try {
+          // A. Document Categories
+          const DEFAULT_DOC_CATEGORIES = [
+            { id: 'cat-resume', name: 'Resume', icon: 'FileText', color: 'emerald' },
+            { id: 'cat-transcript', name: 'Transcript', icon: 'GraduationCap', color: 'blue' },
+            { id: 'cat-certificate', name: 'Certificate', icon: 'Award', color: 'purple' },
+            { id: 'cat-identity', name: 'Identity', icon: 'Shield', color: 'amber' },
+            { id: 'cat-educational', name: 'Educational', icon: 'BookOpen', color: 'cyan' },
+            { id: 'cat-financial', name: 'Financial', icon: 'DollarSign', color: 'teal' },
+            { id: 'cat-legal', name: 'Legal', icon: 'Scale', color: 'indigo' },
+            { id: 'cat-medical', name: 'Medical', icon: 'Activity', color: 'rose' },
+            { id: 'cat-other', name: 'Other', icon: 'Folder', color: 'slate' }
+          ];
+
+          if (userId) {
+            for (const cat of DEFAULT_DOC_CATEGORIES) {
+              const targetId = ensureUUID(cat.id);
+              supabase.from('document_categories').upsert({
+                id: targetId,
+                user_id: userId,
+                name: cat.name,
+                icon: cat.icon,
+                color: cat.color
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Category Error]", error);
+              }, (e) => console.warn("[Supabase Sync Category]", e));
+            }
+          }
+
+          // B. Documents
           const docData = docRes.status === 'fulfilled' ? docRes.value.data : null;
+          let remoteDocs: VaultDocument[] = [];
           if (docData && Array.isArray(docData) && docData.length > 0) {
-            const mapped = docData.map(d => ({
+            remoteDocs = docData.map(d => ({
               id: d.id,
               name: d.file_name || d.title,
               title: d.title,
-              category: d.category,
-              description: d.description,
+              category: d.category || 'other',
+              description: d.description || '',
               fileName: d.file_name,
               fileType: d.file_type,
-              size: d.file_size,
-              fileSize: d.file_size,
+              size: typeof d.file_size === 'number' && d.file_size > 0 
+                ? (d.file_size > 1048576 ? `${(d.file_size / 1048576).toFixed(1)} MB` : `${Math.round(d.file_size / 1024)} KB`)
+                : (d.file_size || '210 KB'),
+              fileSize: typeof d.file_size === 'number' && d.file_size > 0 
+                ? `${Math.round(d.file_size / 1024)} KB` 
+                : (d.file_size || '210 KB'),
               fileUrl: d.file_url,
               storagePath: d.storage_path,
               expiryDate: d.expiry_date,
@@ -2290,11 +2347,52 @@ export default function App() {
               tags: d.tags || [],
               visibility: d.visibility || 'private'
             }));
-            setDocuments(prev => {
-              const merged = deduplicateDocuments(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(merged));
-              return merged;
-            });
+          }
+
+          let localDocs: VaultDocument[] = [];
+          try {
+            const raw = localStorage.getItem(`${email}_documents`);
+            if (raw) localDocs = JSON.parse(raw);
+          } catch (_) {}
+
+          if ((!localDocs || localDocs.length === 0) && remoteDocs.length === 0) {
+            localDocs = INITIAL_DOCUMENTS;
+          }
+
+          const allDocs = deduplicateDocuments([...remoteDocs, ...localDocs, ...(documents || [])]);
+          setDocuments(allDocs);
+          if (currentUser?.email) {
+            const em = currentUser.email.toLowerCase().trim();
+            safeLocalStorageSetItem(`${em}_documents`, JSON.stringify(allDocs));
+            heavyStorage.set(`${em}_documents`, allDocs).catch(() => {});
+          }
+
+          // Bidirectional sync: Push all documents to Supabase documents table
+          if (userId && allDocs.length > 0) {
+            for (const d of allDocs) {
+              const targetId = ensureUUID(d.id);
+              const cleanUrl = (d.fileUrl && d.fileUrl.startsWith('data:') && d.fileUrl.length > 50000)
+                ? ''
+                : (d.fileUrl || `vault://${encodeURIComponent(d.name || d.fileName || 'document.pdf')}`);
+              const byteSize = parseFileSizeToBytes(d.size || d.fileSize);
+              supabase.from('documents').upsert({
+                id: targetId,
+                user_id: userId,
+                title: d.title || d.name || 'Document',
+                category: d.category || 'other',
+                description: d.description || '',
+                file_name: d.name || d.fileName || 'document.pdf',
+                file_type: d.fileType || 'application/pdf',
+                file_size: byteSize,
+                file_url: cleanUrl,
+                storage_path: d.storagePath || '',
+                expiry_date: d.expiryDate || null,
+                tags: d.tags || [d.category || 'vault'],
+                visibility: d.visibility || 'private'
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Document Error]", error);
+              }, (e) => console.warn("[Supabase Sync Document]", e));
+            }
           }
         } catch (err) { console.warn("[Supabase Documents Load]", err); }
 
@@ -2323,9 +2421,10 @@ export default function App() {
           }
         } catch (err) { console.warn("[Supabase Notes Load]", err); }
 
-        // 12. Portfolio Links
+        // 12. Portfolio Links & Resume Links
         try {
           const lData = lRes.status === 'fulfilled' ? lRes.value.data : null;
+          const rlkData = rlkRes.status === 'fulfilled' ? rlkRes.value.data : null;
           let remoteLinks: PortfolioLink[] = [];
           if (lData && Array.isArray(lData) && lData.length > 0) {
             remoteLinks = lData.map(l => ({
@@ -2335,6 +2434,16 @@ export default function App() {
               url: l.url,
               isPublic: l.is_public !== false
             }));
+          }
+          if (rlkData && Array.isArray(rlkData) && rlkData.length > 0) {
+            const rlkMapped = rlkData.map(l => ({
+              id: l.id,
+              platform: l.platform || 'Link',
+              label: l.label,
+              url: l.url,
+              isPublic: l.is_public !== false
+            }));
+            remoteLinks = deduplicateLinks([...remoteLinks, ...rlkMapped]);
           }
           if (resumeLinksFromDb.length > 0) {
             remoteLinks = deduplicateLinks([...remoteLinks, ...resumeLinksFromDb]);
@@ -2346,15 +2455,24 @@ export default function App() {
             if (raw) localLinks = JSON.parse(raw);
           } catch (_) {}
 
-          const allLinks = deduplicateLinks([...remoteLinks, ...localLinks, ...(links || [])]);
+          let localResumeLinks: PortfolioLink[] = [];
+          try {
+            const rawR = localStorage.getItem(`${email}_resume_links`);
+            if (rawR) localResumeLinks = JSON.parse(rawR);
+          } catch (_) {}
+
+          const allLinks = deduplicateLinks([...remoteLinks, ...localLinks, ...localResumeLinks, ...(links || []), ...(resumeLinks || [])]);
           setLinks(allLinks);
+          setResumeLinks(allLinks);
           if (currentUser?.email) {
             const em = currentUser.email.toLowerCase().trim();
             safeLocalStorageSetItem(`${em}_links`, JSON.stringify(allLinks));
+            safeLocalStorageSetItem(`${em}_resume_links`, JSON.stringify(allLinks));
             heavyStorage.set(`${em}_links`, allLinks).catch(() => {});
+            heavyStorage.set(`${em}_resume_links`, allLinks).catch(() => {});
           }
 
-          // Bidirectional sync: Push all links to Supabase portfolio_links table and resumes table
+          // Bidirectional sync: Push all links to Supabase portfolio_links, resume_links, and resumes tables
           if (userId && allLinks.length > 0) {
             for (const lk of allLinks) {
               const targetId = ensureUUID(lk.id);
@@ -2365,7 +2483,20 @@ export default function App() {
                 label: lk.label || lk.platform || 'Link',
                 url: lk.url,
                 is_public: lk.isPublic !== false
-              }).then(() => {}, (e) => console.warn("[Supabase Sync Link]", e));
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Link Error]", error);
+              }, (e) => console.warn("[Supabase Sync Link]", e));
+
+              supabase.from('resume_links').upsert({
+                id: targetId,
+                user_id: userId,
+                platform: lk.platform || 'Link',
+                label: lk.label || lk.platform || 'Link',
+                url: lk.url,
+                is_public: lk.isPublic !== false
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync resume_links Error]", error);
+              }, (e) => console.warn("[Supabase Sync resume_links]", e));
 
               supabase.from('resumes').upsert({
                 id: targetId,
@@ -2378,7 +2509,9 @@ export default function App() {
                 file_type: 'Link',
                 is_primary: false,
                 is_public: lk.isPublic !== false
-              }).then(() => {}, (e) => console.warn("[Supabase Sync Resume Link]", e));
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Resume Link Error]", error);
+              }, (e) => console.warn("[Supabase Sync Resume Link]", e));
             }
           }
         } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
@@ -2418,7 +2551,7 @@ export default function App() {
           const eduTimeline = eduList.filter((ed: any) => !isDemoItem(ed)).map((ed: any) => ({
             id: `auto-edu-${ed.id}`,
             title: `${ed.degree || 'Degree'}${ed.field_of_study || ed.fieldOfStudy ? ` in ${ed.field_of_study || ed.fieldOfStudy}` : ''} at ${ed.institution || 'University'}`,
-            date: ed.start_date || ed.startDate || ed.start_year || ed.startYear || (ed.end_year || ed.endYear ? `${ed.end_year || ed.endYear}-05` : new Date().toISOString().substring(0, 7)),
+            date: ed.start_date || ed.startDate || (ed.start_year || ed.startYear ? `${ed.start_year || ed.startYear}-06` : (ed.end_year || ed.endYear ? `${ed.end_year || ed.endYear}-05` : new Date().toISOString().substring(0, 7))),
             category: 'education' as const,
             type: 'education' as const,
             intensity: 'medium' as const,
@@ -2470,16 +2603,19 @@ export default function App() {
           if (userId && allMilestones.length > 0) {
             for (const m of allMilestones) {
               const targetId = ensureUUID(m.id);
+              const mDate = m.date || new Date().toISOString().substring(0, 7);
               supabase.from('career_timeline').upsert({
                 id: targetId,
                 user_id: userId,
                 title: m.title || 'Career Milestone',
-                date: m.date || new Date().toISOString().substring(0, 7),
+                date: mDate.length === 4 ? `${mDate}-06` : mDate,
                 category: m.category || m.type || 'experience',
                 intensity: m.intensity || 'medium',
                 description: m.description || '',
                 is_public: true
-              }).then(() => {}, (e) => console.warn("[Supabase Sync Milestone]", e));
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Milestone Error]", error);
+              }, (e) => console.warn("[Supabase Sync Milestone]", e));
             }
           }
         } catch (err) { console.warn("[Supabase Timeline Load]", err); }
@@ -2589,6 +2725,35 @@ export default function App() {
 
     loadSupabaseUserData();
   }, [currentUser]);
+
+  const getActiveUserId = async (): Promise<string | null> => {
+    if (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
+      return currentUser.id;
+    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.id) return session.user.id;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) return user.id;
+    } catch (e) {}
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail()?.toLowerCase().trim();
+    if (email) {
+      try {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('email', email)
+          .maybeSingle();
+        if (p?.user_id) return p.user_id;
+      } catch (e) {}
+    }
+
+    if (email === 'ramachandramurthymamidipalli@gmail.com') {
+      return 'f2efad04-8105-4169-8dcb-c9411e553cc0';
+    }
+    return currentUser?.id || null;
+  };
 
   // Current Job
   const handleUpdateCurrentJob = async (newJob: CurrentJob) => {
@@ -2711,6 +2876,18 @@ export default function App() {
         } else {
           triggerToast("Current Job synchronized with Supabase!");
         }
+
+        const curJobMilestoneId = ensureUUID('auto-current-job');
+        await supabase.from('career_timeline').upsert({
+          id: curJobMilestoneId,
+          user_id: userId,
+          title: `${roleTitle} at ${empName}`,
+          date: joinDate.substring(0, 7),
+          category: 'experience',
+          intensity: 'high',
+          description: newJob.description || `Active role in ${newJob.department || 'the organization'}.`,
+          is_public: true
+        });
       } catch (err) { console.warn("[Supabase Current Job Exception]", err); }
     } else {
       triggerToast("Job updated locally (Sign in to sync with Supabase)");
@@ -2899,7 +3076,8 @@ export default function App() {
     });
     triggerToast(`Appended academic credential: ${newEd.degree}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       const descPayload = JSON.stringify({
         activities: newEd.activities || '',
         enrollmentId: newEd.enrollmentId || '',
@@ -2909,7 +3087,7 @@ export default function App() {
       });
       const cleanPayload: any = {
         id,
-        user_id: currentUser.id,
+        user_id: userId,
         degree: newEd.degree,
         institution: newEd.institution,
         field_of_study: newEd.fieldOfStudy,
@@ -2941,6 +3119,21 @@ export default function App() {
           await supabase.from('education').insert(cleanPayload);
         } catch (e) { console.warn("[Supabase Add Edu Error]", e); }
       }
+
+      // Sync milestone to career_timeline
+      try {
+        const milestoneDate = newEd.startDate || (newEd.startYear ? `${newEd.startYear}-06` : (newEd.endYear ? `${newEd.endYear}-05` : new Date().toISOString().substring(0, 7)));
+        await supabase.from('career_timeline').upsert({
+          id: ensureUUID(`auto-edu-${id}`),
+          user_id: userId,
+          title: `${newEd.degree}${newEd.fieldOfStudy ? ` in ${newEd.fieldOfStudy}` : ''} at ${newEd.institution}`,
+          date: milestoneDate.length === 4 ? `${milestoneDate}-06` : milestoneDate,
+          category: 'education',
+          intensity: 'medium',
+          description: `${newEd.degree} program at ${newEd.institution}${newEd.grade ? ` (Score: ${newEd.grade})` : ''}.`,
+          is_public: true
+        });
+      } catch (mErr) { console.warn("[Supabase Career Timeline Edu Sync Error]", mErr); }
     }
   };
 
@@ -2955,12 +3148,15 @@ export default function App() {
     }
     triggerToast(`Removed academic snapshot.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        await supabase.from('education').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('education').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('education').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('education').delete().eq('id', id).eq('user_id', userId);
         }
+        await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-edu-${id}`)).eq('user_id', userId);
+        if (targetId) await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-edu-${targetId}`)).eq('user_id', userId);
       } catch (err) { console.warn("[Supabase Delete Edu Error]", err); }
     }
   };
@@ -2979,7 +3175,8 @@ export default function App() {
     });
     triggerToast(`Updated academic credential: ${updatedEd.degree}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       const descPayload = JSON.stringify({
         activities: updatedEd.activities || '',
         enrollmentId: updatedEd.enrollmentId || '',
@@ -2989,7 +3186,7 @@ export default function App() {
       });
       const cleanPayload: any = {
         id: targetId,
-        user_id: currentUser.id,
+        user_id: userId,
         degree: updatedEd.degree,
         institution: updatedEd.institution,
         field_of_study: updatedEd.fieldOfStudy,
@@ -3021,6 +3218,21 @@ export default function App() {
           await supabase.from('education').upsert(cleanPayload);
         } catch (e) { console.warn("[Supabase Update Edu Error]", e); }
       }
+
+      // Sync updated milestone to career_timeline
+      try {
+        const milestoneDate = updatedEd.startDate || (updatedEd.startYear ? `${updatedEd.startYear}-06` : (updatedEd.endYear ? `${updatedEd.endYear}-05` : new Date().toISOString().substring(0, 7)));
+        await supabase.from('career_timeline').upsert({
+          id: ensureUUID(`auto-edu-${targetId}`),
+          user_id: userId,
+          title: `${updatedEd.degree}${updatedEd.fieldOfStudy ? ` in ${updatedEd.fieldOfStudy}` : ''} at ${updatedEd.institution}`,
+          date: milestoneDate.length === 4 ? `${milestoneDate}-06` : milestoneDate,
+          category: 'education',
+          intensity: 'medium',
+          description: `${updatedEd.degree} program at ${updatedEd.institution}${updatedEd.grade ? ` (Score: ${updatedEd.grade})` : ''}.`,
+          is_public: true
+        });
+      } catch (mErr) { console.warn("[Supabase Career Timeline Edu Sync Error]", mErr); }
     }
   };
 
@@ -3175,11 +3387,19 @@ export default function App() {
     setExperience(prev => deduplicateExperience([exp, ...prev]));
     triggerToast(`Registered employment tenure: ${newExp.role}`);
 
-    if (currentUser?.id) {
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      const updated = deduplicateExperience([exp, ...experience]);
+      safeLocalStorageSetItem(`${email}_experience`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_experience`, updated).catch(e => {});
+    }
+
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('experience').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           company: newExp.company,
           role: newExp.role,
           employment_type: newExp.employmentType,
@@ -3191,6 +3411,18 @@ export default function App() {
           skills_used: newExp.skillsUsed || [],
           links: newExp.links || []
         });
+
+        // Sync milestone to career_timeline
+        await supabase.from('career_timeline').upsert({
+          id: ensureUUID(`auto-exp-${id}`),
+          user_id: userId,
+          title: `${newExp.role} at ${newExp.company}`,
+          date: (newExp.startDate || new Date().toISOString().substring(0, 7)),
+          category: 'experience',
+          intensity: newExp.isCurrent ? 'high' : 'medium',
+          description: Array.isArray(newExp.description) && newExp.description.length > 0 ? newExp.description.join(' ') : `${newExp.role} role at ${newExp.company}.`,
+          is_public: true
+        });
       } catch (err) { console.warn("[Supabase Add Exp Error]", err); }
     }
   };
@@ -3200,48 +3432,24 @@ export default function App() {
     const updated = experience.filter(e => e.id !== id && e.id !== targetId);
     setExperience(updated);
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_experience`, JSON.stringify(updated));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${currentUser?.email?.toLowerCase().trim() || email}_experience`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_experience`, updated).catch(e => {});
     }
     triggerToast(`Cleared historic experience milestone.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        await supabase.from('experience').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('experience').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('experience').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('experience').delete().eq('id', id).eq('user_id', userId);
         }
+        await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-exp-${id}`)).eq('user_id', userId);
+        if (targetId) await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-exp-${targetId}`)).eq('user_id', userId);
       } catch (err) { console.warn("[Supabase Delete Exp Error]", err); }
     }
-  };
-
-  const getActiveUserId = async (): Promise<string | null> => {
-    if (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
-      return currentUser.id;
-    }
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.id) return session.user.id;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) return user.id;
-    } catch (e) {}
-
-    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail()?.toLowerCase().trim();
-    if (email) {
-      try {
-        const { data: p } = await supabase
-          .from('profiles')
-          .select('user_id')
-          .eq('email', email)
-          .maybeSingle();
-        if (p?.user_id) return p.user_id;
-      } catch (e) {}
-    }
-
-    if (email === 'ramachandramurthymamidipalli@gmail.com') {
-      return 'f2efad04-8105-4169-8dcb-c9411e553cc0';
-    }
-    return currentUser?.id || null;
   };
 
   // Milestones / Career Timeline
@@ -3578,6 +3786,16 @@ export default function App() {
           triggerToast(`Link Sync: ${pErr.message}`);
         }
 
+        const { error: rlkErr } = await supabase.from('resume_links').upsert({
+          id,
+          user_id: userId,
+          platform: newLk.platform || 'Link',
+          label: newLk.label,
+          url: newLk.url,
+          is_public: newLk.isPublic !== false
+        });
+        if (rlkErr) console.warn("[Supabase Add resume_links Error]", rlkErr);
+
         const { error: rErr } = await supabase.from('resumes').upsert({
           id,
           user_id: userId,
@@ -3611,9 +3829,11 @@ export default function App() {
     if (userId) {
       try {
         await supabase.from('portfolio_links').delete().eq('id', targetId).eq('user_id', userId);
+        await supabase.from('resume_links').delete().eq('id', targetId).eq('user_id', userId);
         await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', userId);
+          await supabase.from('resume_links').delete().eq('id', id).eq('user_id', userId);
           await supabase.from('resumes').delete().eq('id', id).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Link Error]", err); }
@@ -3648,6 +3868,16 @@ export default function App() {
           console.error("[Supabase Update Link Error]", pErr);
           triggerToast(`Link Sync: ${pErr.message}`);
         }
+
+        const { error: rlkErr } = await supabase.from('resume_links').upsert({
+          id: targetId,
+          user_id: userId,
+          platform: updatedLk.platform || 'Link',
+          label: updatedLk.label,
+          url: updatedLk.url,
+          is_public: updatedLk.isPublic !== false
+        });
+        if (rlkErr) console.warn("[Supabase Update resume_links Error]", rlkErr);
 
         const { error: rErr } = await supabase.from('resumes').upsert({
           id: targetId,
@@ -3968,23 +4198,45 @@ export default function App() {
     setDocuments(prev => deduplicateDocuments([doc, ...prev]));
     triggerToast(`Secured vault backup file: ${newDoc.name}`);
 
-    if (currentUser?.id) {
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      const updated = deduplicateDocuments([doc, ...documents]);
+      safeLocalStorageSetItem(`${email}_documents`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_documents`, updated).catch(() => {});
+    }
+
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        const cleanFileUrl = (newDoc.fileUrl && newDoc.fileUrl.startsWith('data:') && newDoc.fileUrl.length > 50000) ? '' : (newDoc.fileUrl || '');
-        await supabase.from('documents').insert({
+        const cleanFileUrl = (newDoc.fileUrl && newDoc.fileUrl.startsWith('data:') && newDoc.fileUrl.length > 50000) 
+          ? '' 
+          : (newDoc.fileUrl || `vault://${encodeURIComponent(newDoc.name || 'document.pdf')}`);
+        const byteSize = parseFileSizeToBytes(newDoc.size || newDoc.fileSize);
+        const { error } = await supabase.from('documents').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           title: newDoc.title || newDoc.name,
           category: newDoc.category || 'other',
           description: newDoc.description || '',
           file_name: newDoc.name,
           file_type: newDoc.fileType || 'application/pdf',
-          file_size: newDoc.size || newDoc.fileSize || '',
+          file_size: byteSize,
           file_url: cleanFileUrl,
           storage_path: newDoc.storagePath || '',
           expiry_date: newDoc.expiryDate || null,
           tags: newDoc.tags || [newDoc.category || 'vault'],
           visibility: newDoc.visibility || 'private'
+        });
+        if (error) console.error("[Supabase Add Document Error]", error);
+
+        // Also ensure category is stored in document_categories
+        const catName = (newDoc.category || 'Other').charAt(0).toUpperCase() + (newDoc.category || 'Other').slice(1);
+        await supabase.from('document_categories').upsert({
+          id: ensureUUID('doc-cat-' + (newDoc.category || 'other').toLowerCase()),
+          user_id: userId,
+          name: catName,
+          icon: 'Folder',
+          color: 'emerald'
         });
       } catch (err) { console.warn("[Supabase Add Document Error]", err); }
     }
@@ -3997,43 +4249,60 @@ export default function App() {
     const updated = documents.filter(d => d.id !== id && d.id !== targetId);
     setDocuments(updated);
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_documents`, JSON.stringify(updated));
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${currentUser?.email?.toLowerCase().trim() || email}_documents`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_documents`, updated).catch(() => {});
     }
     triggerToast(`Removed "${docName}" from document vault.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        await supabase.from('documents').delete().eq('id', targetId).eq('user_id', currentUser.id);
+        await supabase.from('documents').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('documents').delete().eq('id', id).eq('user_id', currentUser.id);
+          await supabase.from('documents').delete().eq('id', id).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Document Error]", err); }
     }
   };
 
   const handleUpdateDocument = async (updatedDoc: VaultDocument) => {
-    setDocuments(prev => deduplicateDocuments(prev.map(d => d.id === updatedDoc.id ? updatedDoc : d)));
+    const targetId = ensureUUID(updatedDoc.id);
+    const item = { ...updatedDoc, id: targetId };
+    setDocuments(prev => deduplicateDocuments(prev.map(d => (d.id === updatedDoc.id || d.id === targetId) ? item : d)));
     triggerToast(`Updated visibility for document: ${updatedDoc.name}`);
 
-    if (currentUser?.id) {
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      const updated = deduplicateDocuments(documents.map(d => (d.id === updatedDoc.id || d.id === targetId) ? item : d));
+      safeLocalStorageSetItem(`${email}_documents`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_documents`, updated).catch(() => {});
+    }
+
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
-        const cleanFileUrl = (updatedDoc.fileUrl && updatedDoc.fileUrl.startsWith('data:') && updatedDoc.fileUrl.length > 50000) ? '' : (updatedDoc.fileUrl || '');
-        await supabase.from('documents').upsert({
-          id: updatedDoc.id,
-          user_id: currentUser.id,
+        const cleanFileUrl = (updatedDoc.fileUrl && updatedDoc.fileUrl.startsWith('data:') && updatedDoc.fileUrl.length > 50000) 
+          ? '' 
+          : (updatedDoc.fileUrl || `vault://${encodeURIComponent(updatedDoc.name || 'document.pdf')}`);
+        const byteSize = parseFileSizeToBytes(updatedDoc.size || updatedDoc.fileSize);
+        const { error } = await supabase.from('documents').upsert({
+          id: targetId,
+          user_id: userId,
           title: updatedDoc.title || updatedDoc.name,
           category: updatedDoc.category || 'other',
           description: updatedDoc.description || '',
           file_name: updatedDoc.name,
           file_type: updatedDoc.fileType || 'application/pdf',
-          file_size: updatedDoc.size || updatedDoc.fileSize || '',
+          file_size: byteSize,
           file_url: cleanFileUrl,
           storage_path: updatedDoc.storagePath || '',
           expiry_date: updatedDoc.expiryDate || null,
           tags: updatedDoc.tags || [updatedDoc.category || 'vault'],
           visibility: updatedDoc.visibility || 'private'
         });
+        if (error) console.error("[Supabase Update Document Error]", error);
       } catch (err) { console.warn("[Supabase Update Document Error]", err); }
     }
   };
