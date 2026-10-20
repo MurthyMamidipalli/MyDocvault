@@ -413,9 +413,57 @@ export default function PublicPortfolioView({
         {/* Dynamic Column Grid System for Resume Portions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Left Column blocks (Capabilities / Certifications / Portfolio Registries / Resumes) */}
+          {/* Left Column blocks (Resumes on left side, Skills, Links, Public Documents) */}
           <div className="space-y-8 lg:col-span-1">
             
+            {/* Resume / CV Section (LEFT SIDE) */}
+            {publicResumes.length > 0 && (
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
+                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                  <FileText className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                  Resumes & Curriculum Vitae
+                </h3>
+                <div className="grid grid-cols-1 gap-4">
+                  {publicResumes.map(res => {
+                    const pdfUrl = res.fileUrl || res.fileDataUrl || res.linkUrl;
+                    return (
+                      <div key={res.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-3 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="bg-slate-950 text-emerald-400 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
+                              {res.type || res.category || 'Resume'}
+                            </span>
+                            {res.uploadDate && <span className="text-[10px] font-mono text-gray-400">{res.uploadDate}</span>}
+                          </div>
+                          <h4 className="text-white font-bold text-[13px] tracking-tight">{res.name || res.title || res.fileName}</h4>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
+                          {pdfUrl && (
+                            <>
+                              <button
+                                onClick={() => openPdfInNewTab(pdfUrl, res.fileName || `${res.name || 'resume'}.pdf`)}
+                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>View PDF</span>
+                              </button>
+                              <button
+                                onClick={() => downloadFileUrl(pdfUrl, res.fileName || `${res.name || 'resume'}.pdf`)}
+                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Download</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Technical Capabilities Tab Section */}
             {publicSkills.length > 0 && (
               <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
@@ -512,6 +560,36 @@ export default function PublicPortfolioView({
               </div>
             )}
 
+          </div>
+
+          {/* Middle Column blocks (Education, Certifications, Achievements, Testimonials) */}
+          <div className="space-y-8 lg:col-span-1">
+
+            {/* Academic Credentials (MIDDLE) */}
+            {cleanEducation.length > 0 && (
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
+                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                  <GraduationCap className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                  Academics & Education
+                </h3>
+                <div className="space-y-3.5 pt-1">
+                  {cleanEducation.map(edu => (
+                    <div key={edu.id} className="relative pl-3 border-l-2 border-slate-850">
+                      <div className="space-y-1">
+                        <strong className="text-white text-xs block leading-tight">{edu.degree}</strong>
+                        <span className="text-[10px] text-gray-500 font-mono block">{edu.fieldOfStudy}</span>
+                        <span className="text-[11px] text-gray-400 font-sans font-medium block mt-1">{edu.institution}</span>
+                        <div className="flex justify-between font-mono text-[9px] text-gray-500 pt-0.5 mt-1">
+                          <span>{edu.startYear} – {edu.endYear}</span>
+                          {edu.grade && <span className="text-emerald-400">Score: {edu.grade}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Certifications Block */}
             {publicCerts.length > 0 && (
               <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
@@ -571,23 +649,77 @@ export default function PublicPortfolioView({
               </div>
             )}
 
-            {/* Academic Credentials */}
-            {cleanEducation.length > 0 && (
+            {/* Achievements and awards */}
+            {publicAchievements.length > 0 && (
               <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
                 <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                  <GraduationCap className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Academics & Education
+                  <Star className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                  Achievements & Awards
                 </h3>
-                <div className="space-y-3.5 pt-1">
-                  {cleanEducation.map(edu => (
-                    <div key={edu.id} className="relative pl-3 border-l-2 border-slate-850">
-                      <div className="space-y-1">
-                        <strong className="text-white text-xs block leading-tight">{edu.degree}</strong>
-                        <span className="text-[10px] text-gray-500 font-mono block">{edu.fieldOfStudy}</span>
-                        <span className="text-[11px] text-gray-400 font-sans font-medium block mt-1">{edu.institution}</span>
-                        <div className="flex justify-between font-mono text-[9px] text-gray-500 pt-0.5 mt-1">
-                          <span>{edu.startYear} – {edu.endYear}</span>
-                          {edu.grade && <span className="text-emerald-400">Score: {edu.grade}</span>}
+
+                <div className="grid grid-cols-1 gap-4">
+                  {publicAchievements.map(ach => (
+                    <div key={ach.id} className="bg-slate-950/40 p-4 rounded-xl border border-slate-900 space-y-2 flex flex-col justify-between">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/15 px-1.5 py-0.5 rounded text-[8px] font-bold font-mono uppercase tracking-wider">
+                            Award
+                          </span>
+                          <span className="text-[9px] font-mono text-gray-550">{ach.date}</span>
+                        </div>
+                        <h4 className="text-white font-bold text-xs">{ach.title}</h4>
+                        <p className="text-[11px] text-gray-400 font-mono leading-relaxed">{ach.issuer}</p>
+                        <p className="text-xs text-gray-400 font-sans leading-relaxed pt-1">{ach.description}</p>
+                      </div>
+
+                      {ach.fileUrl && (
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
+                          <button
+                            onClick={() => openPdfInNewTab(ach.fileUrl!, ach.fileName || `${ach.title}_Achievement.pdf`)}
+                            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>View Document</span>
+                          </button>
+                          <button
+                            onClick={() => downloadFileUrl(ach.fileUrl!, ach.fileName || `${ach.title}_Achievement.pdf`)}
+                            className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Download</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Testimonials Block */}
+            {cleanTestimonials.length > 0 && (
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
+                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                  <MessageSquare className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                  Peer Endorsements
+                </h3>
+
+                <div className="grid grid-cols-1 gap-4">
+                  {cleanTestimonials.map(rec => (
+                    <div key={rec.id} className="bg-slate-950/30 p-5 rounded-xl border border-slate-900/60 flex flex-col justify-between gap-4">
+                      <p className="text-xs text-gray-300 leading-relaxed italic">
+                        "{rec.text}"
+                      </p>
+                      
+                      <div className="flex items-center gap-3 border-t border-slate-900/40 pt-3">
+                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white select-none ${rec.avatarColor || 'bg-slate-800'}`}>
+                          {rec.name.split(' ').map(n=>n[0]).join('')}
+                        </div>
+                        <div>
+                          <strong className="text-white font-semibold text-xs block leading-none">{rec.name}</strong>
+                          <span className="text-[10px] text-gray-500 font-mono mt-1 block">
+                            {rec.role} at {rec.company} ({rec.relationship})
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -598,12 +730,12 @@ export default function PublicPortfolioView({
 
           </div>
 
-          {/* Right Column blocks (Timeline and Tenures, Projects, Products, Others, Testimonials) */}
-          <div className="space-y-8 lg:col-span-2">
+          {/* Right Column blocks (Current Job, Experience Timeline, Projects, Products, Others) */}
+          <div className="space-y-8 lg:col-span-1">
             
             {/* Current Job / Employment Card */}
             {currentJob && (currentJob.role || currentJob.employer || currentJob.company) && currentJob.isPublic !== false && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-4">
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
                     <Briefcase className={`w-4 h-4 ${getThemeTextGlow()}`} />
@@ -630,7 +762,7 @@ export default function PublicPortfolioView({
 
             {/* Enterprise tenure timeline */}
             {filteredExperience.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-6">
+              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-6">
                 <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
                   <Briefcase className={`w-4 h-4 ${getThemeTextGlow()}`} />
                   Experience Timeline
@@ -712,54 +844,6 @@ export default function PublicPortfolioView({
               </div>
             )}
 
-            {/* Resume / CV Category */}
-            {publicResumes.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-4">
-                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                  <FileText className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Resumes & Curriculum Vitae
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {publicResumes.map(res => {
-                    const pdfUrl = res.fileUrl || res.fileDataUrl || res.linkUrl;
-                    return (
-                      <div key={res.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-3 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="bg-slate-950 text-emerald-400 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
-                              {res.type || res.category || 'Resume'}
-                            </span>
-                            {res.uploadDate && <span className="text-[10px] font-mono text-gray-400">{res.uploadDate}</span>}
-                          </div>
-                          <h4 className="text-white font-bold text-[13px] tracking-tight">{res.name || res.title || res.fileName}</h4>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
-                          {pdfUrl && (
-                            <>
-                              <button
-                                onClick={() => openPdfInNewTab(pdfUrl, res.fileName || `${res.name || 'resume'}.pdf`)}
-                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>View PDF</span>
-                              </button>
-                              <button
-                                onClick={() => downloadFileUrl(pdfUrl, res.fileName || `${res.name || 'resume'}.pdf`)}
-                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
-                              >
-                                <Download className="w-3 h-3" />
-                                <span>Download</span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* Projects Category */}
             {projectsList.length > 0 && (
               <div className="space-y-4">
@@ -768,9 +852,9 @@ export default function PublicPortfolioView({
                   Projects
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {projectsList.map(proj => (
-                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-6 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="bg-slate-950 text-gray-500 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
@@ -844,9 +928,9 @@ export default function PublicPortfolioView({
                   Products
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {productsList.map(proj => (
-                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-6 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="bg-slate-950 text-gray-500 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
@@ -910,9 +994,9 @@ export default function PublicPortfolioView({
                   Others (Documents & Files)
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {othersList.map(proj => (
-                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-6 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="bg-slate-950 text-emerald-400 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
@@ -955,87 +1039,6 @@ export default function PublicPortfolioView({
                 </div>
               </div>
             )}
-
-            {/* Testimonials Block */}
-            {cleanTestimonials.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-6">
-                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                  <MessageSquare className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Peer Endorsements
-                </h3>
-
-                <div className="grid grid-cols-1 gap-4">
-                  {cleanTestimonials.map(rec => (
-                    <div key={rec.id} className="bg-slate-950/30 p-5 rounded-xl border border-slate-900/60 flex flex-col justify-between gap-4">
-                      <p className="text-xs text-gray-300 leading-relaxed italic">
-                        "{rec.text}"
-                      </p>
-                      
-                      <div className="flex items-center gap-3 border-t border-slate-900/40 pt-3">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-[10px] text-white select-none ${rec.avatarColor || 'bg-slate-800'}`}>
-                          {rec.name.split(' ').map(n=>n[0]).join('')}
-                        </div>
-                        <div>
-                          <strong className="text-white font-semibold text-xs block leading-none">{rec.name}</strong>
-                          <span className="text-[10px] text-gray-500 font-mono mt-1 block">
-                            {rec.role} at {rec.company} ({rec.relationship})
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Achievements and awards */}
-            {publicAchievements.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 md:p-8 rounded-2xl space-y-6">
-                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                  <Star className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Achievements & Awards
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {publicAchievements.map(ach => (
-                    <div key={ach.id} className="bg-slate-950/40 p-4 rounded-xl border border-slate-900 space-y-2 flex flex-col justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/15 px-1.5 py-0.5 rounded text-[8px] font-bold font-mono uppercase tracking-wider">
-                            Award
-                          </span>
-                          <span className="text-[9px] font-mono text-gray-550">{ach.date}</span>
-                        </div>
-                        <h4 className="text-white font-bold text-xs">{ach.title}</h4>
-                        <p className="text-[11px] text-gray-400 font-mono leading-relaxed">{ach.issuer}</p>
-                        <p className="text-xs text-gray-400 font-sans leading-relaxed pt-1">{ach.description}</p>
-                      </div>
-
-                      {ach.fileUrl && (
-                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-900/60 font-mono text-[10px]">
-                          <button
-                            onClick={() => openPdfInNewTab(ach.fileUrl!, ach.fileName || `${ach.title}_Achievement.pdf`)}
-                            className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>View Document</span>
-                          </button>
-                          <button
-                            onClick={() => downloadFileUrl(ach.fileUrl!, ach.fileName || `${ach.title}_Achievement.pdf`)}
-                            className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
-                          >
-                            <Download className="w-3 h-3" />
-                            <span>Download</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-
 
           </div>
 

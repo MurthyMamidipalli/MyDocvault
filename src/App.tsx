@@ -2074,7 +2074,6 @@ export default function App() {
               if (isDemoItem(pr)) continue;
               const targetId = ensureUUID(pr.id);
               const cleanPdf = (pr.pdfUrl && pr.pdfUrl.startsWith('data:') && pr.pdfUrl.length > 50000) ? '' : (pr.pdfUrl || '');
-              const cleanImg = (pr.imageUrl && pr.imageUrl.startsWith('data:') && pr.imageUrl.length > 50000) ? '' : (pr.imageUrl || pr.coverUrl || '');
               supabase.from('projects').upsert({
                 id: targetId,
                 user_id: userId,
@@ -2087,7 +2086,7 @@ export default function App() {
                 live_url: pr.liveUrl || '',
                 github_url: pr.githubUrl || '',
                 pdf_url: cleanPdf,
-                image_url: cleanImg,
+                pdf_name: pr.pdfName || '',
                 is_public: pr.isPublic !== false,
                 date: pr.date || ''
               }).then(() => {}, (e) => console.warn("[Supabase Sync Project]", e));
@@ -2194,9 +2193,23 @@ export default function App() {
         try {
           const resData = resRes.status === 'fulfilled' ? resRes.value.data : null;
           let remoteResumes: ResumeItem[] = [];
+          const resumeLinksFromDb: PortfolioLink[] = [];
           if (resData && Array.isArray(resData) && resData.length > 0) {
-            // Filter out simulated / AI generated items from Supabase
+            for (const r of resData) {
+              if (r.file_type === 'Link' || r.type === 'Link') {
+                resumeLinksFromDb.push({
+                  id: r.id,
+                  platform: r.file_name || 'Link',
+                  label: r.title || 'Link',
+                  url: r.file_url || '',
+                  isPublic: r.is_public !== false
+                });
+              }
+            }
+
+            // Filter out simulated / AI generated items from Supabase and links
             const userRes = resData.filter(r => {
+              if (r.file_type === 'Link' || r.type === 'Link') return false;
               if (r.file_name === 'Simulated_Document.pdf') return false;
               const clean = (r.title || r.file_name || '').toLowerCase();
               return !clean.includes('simulated') && !clean.includes('ai-generated');
@@ -2323,6 +2336,9 @@ export default function App() {
               isPublic: l.is_public !== false
             }));
           }
+          if (resumeLinksFromDb.length > 0) {
+            remoteLinks = deduplicateLinks([...remoteLinks, ...resumeLinksFromDb]);
+          }
 
           let localLinks: PortfolioLink[] = [];
           try {
@@ -2338,7 +2354,7 @@ export default function App() {
             heavyStorage.set(`${em}_links`, allLinks).catch(() => {});
           }
 
-          // Bidirectional sync: Push all links to Supabase portfolio_links table
+          // Bidirectional sync: Push all links to Supabase portfolio_links table and resumes table
           if (userId && allLinks.length > 0) {
             for (const lk of allLinks) {
               const targetId = ensureUUID(lk.id);
@@ -2350,6 +2366,19 @@ export default function App() {
                 url: lk.url,
                 is_public: lk.isPublic !== false
               }).then(() => {}, (e) => console.warn("[Supabase Sync Link]", e));
+
+              supabase.from('resumes').upsert({
+                id: targetId,
+                user_id: userId,
+                title: lk.label || lk.platform || 'Link',
+                file_name: lk.platform || 'Link',
+                file_url: lk.url,
+                storage_path: '',
+                file_size: 0,
+                file_type: 'Link',
+                is_primary: false,
+                is_public: lk.isPublic !== false
+              }).then(() => {}, (e) => console.warn("[Supabase Sync Resume Link]", e));
             }
           }
         } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
@@ -2382,8 +2411,54 @@ export default function App() {
             if (raw) localMilestones = JSON.parse(raw);
           } catch (_) {}
 
-          const allMilestones = deduplicateMilestones([...remoteMilestones, ...localMilestones, ...(milestones || [])])
-            .filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m));
+          // Convert education items to timeline milestones
+          const eduList = (eduRes.status === 'fulfilled' && Array.isArray(eduRes.value?.data) && eduRes.value.data.length > 0)
+            ? eduRes.value.data
+            : (education || []);
+          const eduTimeline = eduList.filter((ed: any) => !isDemoItem(ed)).map((ed: any) => ({
+            id: `auto-edu-${ed.id}`,
+            title: `${ed.degree || 'Degree'}${ed.field_of_study || ed.fieldOfStudy ? ` in ${ed.field_of_study || ed.fieldOfStudy}` : ''} at ${ed.institution || 'University'}`,
+            date: ed.start_date || ed.startDate || ed.start_year || ed.startYear || (ed.end_year || ed.endYear ? `${ed.end_year || ed.endYear}-05` : new Date().toISOString().substring(0, 7)),
+            category: 'education' as const,
+            type: 'education' as const,
+            intensity: 'medium' as const,
+            description: `${ed.degree || 'Degree'} program at ${ed.institution || 'Institution'}${ed.grade ? ` (Score: ${ed.grade})` : ''}.`
+          }));
+
+          // Convert experience items to timeline milestones
+          const expList = (expRes.status === 'fulfilled' && Array.isArray(expRes.value?.data) && expRes.value.data.length > 0)
+            ? expRes.value.data
+            : (experience || []);
+          const expTimeline = expList.filter((e: any) => !isDemoItem(e)).map((e: any) => ({
+            id: `auto-exp-${e.id}`,
+            title: `${e.role || 'Role'} at ${e.company || 'Company'}`,
+            date: e.start_date || e.startDate || new Date().toISOString().substring(0, 7),
+            category: 'experience' as const,
+            type: 'experience' as const,
+            intensity: (e.is_current || e.isCurrent ? 'high' : 'medium') as 'high' | 'medium' | 'low',
+            description: Array.isArray(e.description) && e.description.length > 0 ? e.description.join(' ') : (e.role ? `${e.role} role at ${e.company || 'Company'}.` : '')
+          }));
+
+          // Current Job timeline
+          const activeJob = (jobRes.status === 'fulfilled' && jobRes.value?.data) ? jobRes.value.data : currentJob;
+          const curJobTimeline = (activeJob && (activeJob.company || activeJob.employer) && activeJob.role && !isDemoItem(activeJob)) ? [{
+            id: 'auto-current-job',
+            title: `${activeJob.role} at ${activeJob.company || activeJob.employer}`,
+            date: activeJob.joining_date || activeJob.joiningDate || activeJob.startDate || new Date().toISOString().substring(0, 7),
+            category: 'experience' as const,
+            type: 'experience' as const,
+            intensity: 'high' as const,
+            description: activeJob.description || `Active role in ${activeJob.department || 'the organization'}.`
+          }] : [];
+
+          const allMilestones = deduplicateMilestones([
+            ...remoteMilestones,
+            ...localMilestones,
+            ...(milestones || []),
+            ...expTimeline,
+            ...eduTimeline,
+            ...curJobTimeline
+          ]).filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m));
 
           setMilestones(allMilestones);
           if (currentUser?.email) {
@@ -3278,7 +3353,8 @@ export default function App() {
           const { error } = await supabase.from('others').upsert(payload);
           if (error) {
             console.warn("[Supabase Add Other Fallback to projects]", error);
-            await supabase.from('projects').upsert(payload);
+            const { image_url, ...projPayload } = payload;
+            await supabase.from('projects').upsert(projPayload);
           }
         } catch (err) { console.warn("[Supabase Add Other Error]", err); }
       }
@@ -3304,7 +3380,7 @@ export default function App() {
             live_url: newPr.liveUrl || '',
             github_url: newPr.githubUrl || '',
             pdf_url: cleanPdf,
-            image_url: cleanImg,
+            pdf_name: newPr.pdfName || '',
             is_public: newPr.isPublic !== false,
             date: newPr.date || ''
           };
@@ -3428,7 +3504,8 @@ export default function App() {
           const { error: othErr } = await supabase.from('others').upsert(payload);
           if (othErr) {
             console.warn("[Supabase Update Other Fallback to projects]", othErr);
-            await supabase.from('projects').upsert(payload);
+            const { image_url, ...projPayload } = payload;
+            await supabase.from('projects').upsert(projPayload);
           } else {
             await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
           }
@@ -3459,7 +3536,7 @@ export default function App() {
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
             pdf_url: cleanPdf,
-            image_url: cleanImg,
+            pdf_name: updatedPr.pdfName || '',
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -3496,6 +3573,19 @@ export default function App() {
           url: newLk.url,
           is_public: newLk.isPublic !== false
         });
+
+        await supabase.from('resumes').upsert({
+          id,
+          user_id: userId,
+          title: newLk.label || newLk.platform || 'Link',
+          file_name: newLk.platform || 'Link',
+          file_url: newLk.url,
+          storage_path: '',
+          file_size: 0,
+          file_type: 'Link',
+          is_primary: false,
+          is_public: newLk.isPublic !== false
+        });
       } catch (err) { console.warn("[Supabase Add Link Error]", err); }
     }
   };
@@ -3516,8 +3606,10 @@ export default function App() {
     if (userId) {
       try {
         await supabase.from('portfolio_links').delete().eq('id', targetId).eq('user_id', userId);
+        await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', userId);
+          await supabase.from('resumes').delete().eq('id', id).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Link Error]", err); }
     }
@@ -3547,25 +3639,34 @@ export default function App() {
           url: updatedLk.url,
           is_public: updatedLk.isPublic !== false
         });
+
+        await supabase.from('resumes').upsert({
+          id: targetId,
+          user_id: userId,
+          title: updatedLk.label || updatedLk.platform || 'Link',
+          file_name: updatedLk.platform || 'Link',
+          file_url: updatedLk.url,
+          storage_path: '',
+          file_size: 0,
+          file_type: 'Link',
+          is_primary: false,
+          is_public: updatedLk.isPublic !== false
+        });
       } catch (err) { console.warn("[Supabase Update Link Error]", err); }
     }
   };
 
   // Resume Links Handlers
-  const handleAddResumeLink = (newLk: Omit<PortfolioLink, 'id'>) => {
-    const link: PortfolioLink = { ...newLk, id: generateUUID() };
-    setResumeLinks(prev => deduplicateLinks([link, ...prev]));
-    triggerToast(`Added resume link: ${newLk.label}`);
+  const handleAddResumeLink = async (newLk: Omit<PortfolioLink, 'id'>) => {
+    await handleAddLink(newLk);
   };
 
-  const handleDeleteResumeLink = (id: string) => {
-    setResumeLinks(prev => prev.filter(l => l.id !== id));
-    triggerToast(`Removed resume link.`);
+  const handleDeleteResumeLink = async (id: string) => {
+    await handleDeleteLink(id);
   };
 
-  const handleUpdateResumeLink = (updatedLk: PortfolioLink) => {
-    setResumeLinks(prev => deduplicateLinks(prev.map(l => l.id === updatedLk.id ? updatedLk : l)));
-    triggerToast(`Updated resume link: ${updatedLk.label}`);
+  const handleUpdateResumeLink = async (updatedLk: PortfolioLink) => {
+    await handleUpdateLink(updatedLk);
   };
 
   const handleDeleteMilestone = async (id: string) => {
