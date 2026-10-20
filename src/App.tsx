@@ -1018,7 +1018,19 @@ export default function App() {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) return deduplicateResumes(parsed);
+          if (Array.isArray(parsed)) {
+            const sanitized = parsed.filter((r: any) => {
+              if (!r) return false;
+              if (r.fileName === 'Simulated_Document.pdf') return false;
+              const nameLower = (r.name || r.fileName || '').toLowerCase();
+              return !nameLower.includes('simulated') && !nameLower.includes('ai-generated');
+            }).map((r: any) => ({
+              ...r,
+              fileUrl: (r.fileUrl && !r.fileUrl.includes('example.com')) ? r.fileUrl : '',
+              fileDataUrl: (r.fileDataUrl && !r.fileDataUrl.includes('example.com')) ? r.fileDataUrl : ''
+            }));
+            return deduplicateResumes(sanitized);
+          }
         } catch (e) {}
       }
     }
@@ -1665,11 +1677,21 @@ export default function App() {
         if (dRes && Array.isArray(dRes) && dRes.length > 0) {
           setResumes(prev => {
             const existing = prev || [];
+            const sanitizedDRes = dRes.filter((d: any) => {
+              if (!d) return false;
+              if (d.fileName === 'Simulated_Document.pdf') return false;
+              const nameLower = (d.name || d.fileName || '').toLowerCase();
+              return !nameLower.includes('simulated') && !nameLower.includes('ai-generated');
+            }).map((d: any) => ({
+              ...d,
+              fileUrl: (d.fileUrl && !d.fileUrl.includes('example.com')) ? d.fileUrl : '',
+              fileDataUrl: (d.fileDataUrl && !d.fileDataUrl.includes('example.com')) ? d.fileDataUrl : ''
+            }));
             const merged = existing.map(pRes => {
-              const match = dRes.find((d: any) => d.id === pRes.id || d.fileName === pRes.fileName || d.name === pRes.name);
+              const match = sanitizedDRes.find((d: any) => d.id === pRes.id || d.fileName === pRes.fileName || d.name === pRes.name);
               return match?.fileDataUrl && !pRes.fileDataUrl ? { ...pRes, fileDataUrl: match.fileDataUrl } : pRes;
             });
-            const extra = dRes.filter(d => !existing.some(p => p.id === d.id));
+            const extra = sanitizedDRes.filter((d: any) => !existing.some(p => p.id === d.id));
             return deduplicateResumes([...merged, ...extra]);
           });
         }
@@ -1732,13 +1754,20 @@ export default function App() {
     resetUserDataState(email, `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim());
 
     const loadSupabaseUserData = async () => {
-      let userId = currentUser.id;
+      let userId = (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) ? currentUser.id : null;
       if (!userId && email) {
         try {
           const { data: p } = await supabase.from('profiles').select('user_id').eq('email', email).maybeSingle();
           if (p?.user_id) {
             userId = p.user_id;
           }
+        } catch (e) {}
+      }
+
+      if (!userId) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user?.id) userId = session.user.id;
         } catch (e) {}
       }
 
@@ -2006,8 +2035,9 @@ export default function App() {
         // 7. Projects
         try {
           const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
+          let remoteProjects: Project[] = [];
           if (projData && Array.isArray(projData) && projData.length > 0) {
-            const mapped = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
+            remoteProjects = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
               id: p.id,
               name: p.name,
               category: p.category,
@@ -2022,15 +2052,46 @@ export default function App() {
               isPublic: p.is_public !== false,
               date: p.date
             }));
-            setProjects(prev => {
-              const merged = deduplicateProjects([...mapped, ...(prev || [])]);
-              if (currentUser?.email) {
-                const em = currentUser.email.toLowerCase().trim();
-                safeLocalStorageSetItem(`${em}_projects`, JSON.stringify(merged));
-                heavyStorage.set(`${em}_projects`, merged).catch(() => {});
-              }
-              return merged;
-            });
+          }
+
+          let localStoredProjs: Project[] = [];
+          try {
+            const raw = localStorage.getItem(`${email}_projects`);
+            if (raw) localStoredProjs = JSON.parse(raw);
+          } catch (_) {}
+
+          const allProjs = deduplicateProjects([...remoteProjects, ...localStoredProjs, ...(projects || [])]);
+          setProjects(allProjs);
+          if (currentUser?.email) {
+            const em = currentUser.email.toLowerCase().trim();
+            safeLocalStorageSetItem(`${em}_projects`, JSON.stringify(allProjs));
+            heavyStorage.set(`${em}_projects`, allProjs).catch(() => {});
+          }
+
+          // Bidirectional sync: Push all local projects up to Supabase projects table
+          if (userId && allProjs.length > 0) {
+            for (const pr of allProjs) {
+              if (isDemoItem(pr)) continue;
+              const targetId = ensureUUID(pr.id);
+              const cleanPdf = (pr.pdfUrl && pr.pdfUrl.startsWith('data:') && pr.pdfUrl.length > 50000) ? '' : (pr.pdfUrl || '');
+              const cleanImg = (pr.imageUrl && pr.imageUrl.startsWith('data:') && pr.imageUrl.length > 50000) ? '' : (pr.imageUrl || pr.coverUrl || '');
+              supabase.from('projects').upsert({
+                id: targetId,
+                user_id: userId,
+                name: pr.name,
+                category: pr.category || 'projects',
+                type: 'project',
+                description: pr.description || '',
+                highlights: pr.highlights || [],
+                tech_stack: pr.techStack || [],
+                live_url: pr.liveUrl || '',
+                github_url: pr.githubUrl || '',
+                pdf_url: cleanPdf,
+                image_url: cleanImg,
+                is_public: pr.isPublic !== false,
+                date: pr.date || ''
+              }).then(() => {}, (e) => console.warn("[Supabase Sync Project]", e));
+            }
           }
         } catch (err) { console.warn("[Supabase Projects Load]", err); }
 
@@ -2132,34 +2193,66 @@ export default function App() {
         // 9. Resumes
         try {
           const resData = resRes.status === 'fulfilled' ? resRes.value.data : null;
+          let remoteResumes: ResumeItem[] = [];
           if (resData && Array.isArray(resData) && resData.length > 0) {
-            const mapped = resData.map(r => ({
-              id: r.id,
-              name: r.title || r.file_name,
-              title: r.title,
-              fileName: r.file_name,
-              fileUrl: r.file_url,
-              fileDataUrl: r.file_url,
-              storagePath: r.storage_path,
-              size: r.file_size,
-              fileSize: r.file_size,
-              type: r.file_type || 'Resume',
-              fileType: r.file_type,
-              isPrimary: r.is_primary,
-              visibility: (r.is_public === false || r.is_public === 'false') ? ('private' as const) : ('public' as const),
-              isPublic: r.is_public !== false && r.is_public !== 'false',
-              uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
-              category: 'SUPABASE'
-            }));
-            setResumes(prev => {
-              const merged = deduplicateResumes([...mapped, ...(prev || [])]);
-              if (currentUser?.email) {
-                const em = currentUser.email.toLowerCase().trim();
-                safeLocalStorageSetItem(`${em}_nexus_vault_resumes`, JSON.stringify(merged));
-                heavyStorage.set(`${em}_nexus_vault_resumes`, merged).catch(() => {});
-              }
-              return merged;
+            // Filter out simulated / AI generated items from Supabase
+            const userRes = resData.filter(r => {
+              if (r.file_name === 'Simulated_Document.pdf') return false;
+              const clean = (r.title || r.file_name || '').toLowerCase();
+              return !clean.includes('simulated') && !clean.includes('ai-generated');
             });
+            remoteResumes = userRes.map(r => {
+              const url = (r.file_url && !r.file_url.includes('example.com')) ? r.file_url : '';
+              return {
+                id: r.id,
+                name: r.title || r.file_name,
+                title: r.title,
+                fileName: r.file_name,
+                fileUrl: url,
+                fileDataUrl: url,
+                storagePath: r.storage_path,
+                size: r.file_size,
+                fileSize: r.file_size,
+                type: r.file_type || 'Resume',
+                fileType: r.file_type,
+                isPrimary: r.is_primary,
+                visibility: (r.is_public === false || r.is_public === 'false') ? ('private' as const) : ('public' as const),
+                isPublic: r.is_public !== false && r.is_public !== 'false',
+                uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
+                category: 'SUPABASE'
+              };
+            });
+          }
+
+          let localResumes: ResumeItem[] = [];
+          try {
+            const raw = localStorage.getItem(`${email}_nexus_vault_resumes`);
+            if (raw) localResumes = JSON.parse(raw);
+          } catch (_) {}
+
+          const cleanLocal = localResumes.filter(r => {
+            if (!r) return false;
+            if (r.fileName === 'Simulated_Document.pdf') return false;
+            const clean = (r.name || r.fileName || '').toLowerCase();
+            return !clean.includes('simulated') && !clean.includes('ai-generated');
+          });
+
+          // Merge: Preserve genuine local base64 fileDataUrl if remote is empty or example.com
+          const merged = remoteResumes.map(rem => {
+            const matchedLocal = cleanLocal.find(l => l.id === rem.id || l.fileName === rem.fileName);
+            if (matchedLocal?.fileDataUrl && (!rem.fileDataUrl || rem.fileDataUrl.includes('example.com'))) {
+              return { ...rem, fileDataUrl: matchedLocal.fileDataUrl, fileUrl: matchedLocal.fileDataUrl };
+            }
+            return rem;
+          });
+          const extraLocals = cleanLocal.filter(l => !merged.some(m => m.id === l.id || m.fileName === l.fileName));
+          const allResumes = deduplicateResumes([...merged, ...extraLocals]);
+
+          setResumes(allResumes);
+          if (currentUser?.email) {
+            const em = currentUser.email.toLowerCase().trim();
+            safeLocalStorageSetItem(`${em}_nexus_vault_resumes`, JSON.stringify(allResumes));
+            heavyStorage.set(`${em}_nexus_vault_resumes`, allResumes).catch(() => {});
           }
         } catch (err) { console.warn("[Supabase Resumes Load]", err); }
 
@@ -2220,29 +2313,51 @@ export default function App() {
         // 12. Portfolio Links
         try {
           const lData = lRes.status === 'fulfilled' ? lRes.value.data : null;
+          let remoteLinks: PortfolioLink[] = [];
           if (lData && Array.isArray(lData) && lData.length > 0) {
-            const mapped = lData.map(l => ({
+            remoteLinks = lData.map(l => ({
               id: l.id,
-              platform: l.platform,
+              platform: l.platform || 'Link',
               label: l.label,
               url: l.url,
               isPublic: l.is_public !== false
             }));
-            setLinks(prev => {
-              const merged = deduplicateLinks([...mapped, ...(prev || [])]);
-              if (currentUser?.email) {
-                const em = currentUser.email.toLowerCase().trim();
-                safeLocalStorageSetItem(`${em}_links`, JSON.stringify(merged));
-                heavyStorage.set(`${em}_links`, merged).catch(() => {});
-              }
-              return merged;
-            });
+          }
+
+          let localLinks: PortfolioLink[] = [];
+          try {
+            const raw = localStorage.getItem(`${email}_links`);
+            if (raw) localLinks = JSON.parse(raw);
+          } catch (_) {}
+
+          const allLinks = deduplicateLinks([...remoteLinks, ...localLinks, ...(links || [])]);
+          setLinks(allLinks);
+          if (currentUser?.email) {
+            const em = currentUser.email.toLowerCase().trim();
+            safeLocalStorageSetItem(`${em}_links`, JSON.stringify(allLinks));
+            heavyStorage.set(`${em}_links`, allLinks).catch(() => {});
+          }
+
+          // Bidirectional sync: Push all links to Supabase portfolio_links table
+          if (userId && allLinks.length > 0) {
+            for (const lk of allLinks) {
+              const targetId = ensureUUID(lk.id);
+              supabase.from('portfolio_links').upsert({
+                id: targetId,
+                user_id: userId,
+                platform: lk.platform || 'Link',
+                label: lk.label || lk.platform || 'Link',
+                url: lk.url,
+                is_public: lk.isPublic !== false
+              }).then(() => {}, (e) => console.warn("[Supabase Sync Link]", e));
+            }
           }
         } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
 
         // 13. Career Timeline (Milestones)
         try {
           const tmData = tmRes.status === 'fulfilled' ? tmRes.value.data : null;
+          let remoteMilestones: TimelineMilestone[] = [];
           if (tmData && Array.isArray(tmData) && tmData.length > 0) {
             // Delete demo milestones from database if present
             for (const m of tmData) {
@@ -2250,7 +2365,7 @@ export default function App() {
                 supabase.from('career_timeline').delete().eq('id', m.id).then(() => {}, () => {});
               }
             }
-            const mapped = tmData.filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m)).map(m => ({
+            remoteMilestones = tmData.filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m)).map(m => ({
               id: m.id,
               title: m.title,
               date: m.date,
@@ -2259,11 +2374,38 @@ export default function App() {
               intensity: m.intensity || 'medium',
               description: m.description || ''
             }));
-            setMilestones(prev => {
-              const merged = deduplicateMilestones(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(merged));
-              return merged;
-            });
+          }
+
+          let localMilestones: TimelineMilestone[] = [];
+          try {
+            const raw = localStorage.getItem(`${email}_milestones`);
+            if (raw) localMilestones = JSON.parse(raw);
+          } catch (_) {}
+
+          const allMilestones = deduplicateMilestones([...remoteMilestones, ...localMilestones, ...(milestones || [])])
+            .filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m));
+
+          setMilestones(allMilestones);
+          if (currentUser?.email) {
+            safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(allMilestones));
+            heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_milestones`, allMilestones).catch(() => {});
+          }
+
+          // Bidirectional sync: Push all milestones to Supabase career_timeline table
+          if (userId && allMilestones.length > 0) {
+            for (const m of allMilestones) {
+              const targetId = ensureUUID(m.id);
+              supabase.from('career_timeline').upsert({
+                id: targetId,
+                user_id: userId,
+                title: m.title || 'Career Milestone',
+                date: m.date || new Date().toISOString().substring(0, 7),
+                category: m.category || m.type || 'experience',
+                intensity: m.intensity || 'medium',
+                description: m.description || '',
+                is_public: true
+              }).then(() => {}, (e) => console.warn("[Supabase Sync Milestone]", e));
+            }
           }
         } catch (err) { console.warn("[Supabase Timeline Load]", err); }
 
@@ -2999,15 +3141,32 @@ export default function App() {
   };
 
   const getActiveUserId = async (): Promise<string | null> => {
-    if (currentUser?.id) return currentUser.id;
+    if (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
+      return currentUser.id;
+    }
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) return session.user.id;
       const { data: { user } } = await supabase.auth.getUser();
-      return user?.id || null;
-    } catch (e) {
-      return null;
+      if (user?.id) return user.id;
+    } catch (e) {}
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail()?.toLowerCase().trim();
+    if (email) {
+      try {
+        const { data: p } = await supabase
+          .from('profiles')
+          .select('user_id')
+          .eq('email', email)
+          .maybeSingle();
+        if (p?.user_id) return p.user_id;
+      } catch (e) {}
     }
+
+    if (email === 'ramachandramurthymamidipalli@gmail.com') {
+      return 'f2efad04-8105-4169-8dcb-c9411e553cc0';
+    }
+    return currentUser?.id || null;
   };
 
   // Milestones / Career Timeline
@@ -3138,6 +3297,7 @@ export default function App() {
             user_id: userId,
             name: newPr.name,
             category: newPr.category || 'projects',
+            type: 'project',
             description: newPr.description || '',
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
@@ -3292,6 +3452,7 @@ export default function App() {
             user_id: userId,
             name: updatedPr.name,
             category: updatedPr.category || 'projects',
+            type: 'project',
             description: updatedPr.description || '',
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
@@ -3327,7 +3488,7 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        await supabase.from('portfolio_links').insert({
+        await supabase.from('portfolio_links').upsert({
           id,
           user_id: userId,
           platform: newLk.platform || 'Link',
@@ -3837,7 +3998,16 @@ export default function App() {
 
   // Resumes update handler
   const handleUpdateResumes = async (newResumes: ResumeItem[]) => {
-    const cleanResumes = deduplicateResumes(newResumes);
+    // Filter out simulated or AI-generated resumes
+    const validUserResumes = (newResumes || []).filter(r => {
+      if (!r) return false;
+      if (r.fileName === 'Simulated_Document.pdf') return false;
+      const cleanName = (r.name || r.fileName || '').toLowerCase();
+      if (cleanName.includes('simulated') || cleanName.includes('ai-generated')) return false;
+      return true;
+    });
+
+    const cleanResumes = deduplicateResumes(validUserResumes);
     const deletedResumes = resumes.filter(oldR => !cleanResumes.some(newR => newR.id === oldR.id));
     setResumes(cleanResumes);
 
@@ -3875,8 +4045,8 @@ export default function App() {
               numericSize = isNaN(parsed) ? 0 : parsed;
             }
 
-            const rawUrl = r.fileUrl || r.fileDataUrl || r.linkUrl || 'https://example.com/resume.pdf';
-            const cleanUrl = (rawUrl.startsWith('data:') && rawUrl.length > 50000) ? (r.linkUrl || 'https://example.com/resume.pdf') : rawUrl;
+            const rawUrl = r.fileUrl || r.fileDataUrl || r.linkUrl || '';
+            const cleanUrl = rawUrl.includes('example.com') ? (r.linkUrl || '') : rawUrl;
 
             const { error } = await supabase.from('resumes').upsert({
               id: targetId,

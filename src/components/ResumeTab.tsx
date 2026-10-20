@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { 
   FileText, 
   Printer, 
@@ -89,6 +89,17 @@ export default function ResumeTab({
     }
   };
 
+  // Only display genuine user-uploaded documents (excluding AI-generated/simulated placeholders)
+  const userUploadedResumes = useMemo(() => {
+    return (resumes || []).filter(r => {
+      if (!r) return false;
+      if (r.fileName === 'Simulated_Document.pdf') return false;
+      const cleanName = (r.name || r.fileName || '').toLowerCase();
+      if (cleanName.includes('simulated') || cleanName.includes('ai-generated')) return false;
+      return true;
+    });
+  }, [resumes]);
+
   // State managers for Form Data (Upload Modal)
   const [recordName, setRecordName] = useState('');
   const [documentType, setDocumentType] = useState('Resume');
@@ -171,8 +182,18 @@ export default function ResumeTab({
     e.preventDefault();
     if (!recordName.trim()) return;
 
-    let finalFileName = "Simulated_Document.pdf";
-    let finalSize = "120 KB";
+    if (sourceType === 'file' && !selectedFile && !editingResume?.fileDataUrl) {
+      alert('Please select a PDF document file to upload.');
+      return;
+    }
+
+    if (sourceType === 'link' && !docLinkUrl.trim()) {
+      alert('Please enter a valid document link URL.');
+      return;
+    }
+
+    let finalFileName = editingResume?.fileName || "Resume.pdf";
+    let finalSize = editingResume?.size || "Document";
 
     if (sourceType === 'file' && selectedFile) {
       finalFileName = selectedFile.name;
@@ -191,14 +212,14 @@ export default function ResumeTab({
       size: finalSize,
       uploadDate: new Date().toISOString().split('T')[0],
       category: documentType,
-      fileDataUrl: sourceType === 'file' ? selectedFile?.dataUrl : undefined,
+      fileDataUrl: sourceType === 'file' ? (selectedFile?.dataUrl || editingResume?.fileDataUrl) : undefined,
       linkUrl: sourceType === 'link' ? docLinkUrl : undefined
     };
 
     if (editingResume) {
       saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? newResume : r));
     } else {
-      saveResumesToStorage([newResume, ...resumes]);
+      saveResumesToStorage([newResume, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
     }
 
     // Reset fields
@@ -275,7 +296,7 @@ export default function ResumeTab({
     return (
       <div className="space-y-6 animate-fade-in" id="resume-viewer-fullpage">
         {/* Navigation / Toolbar Row */}
-        <div className="bg-[#0f1115] border border-slate-900 rounded-3xl p-5 w-full max-w-4xl mx-auto flex flex-col sm:flex-row justify-between sm:items-center gap-4 shadow-xl">
+        <div className="bg-[#0f1115] border border-slate-900 rounded-3xl p-4 sm:p-5 w-full max-w-4xl mx-auto flex flex-col sm:flex-row justify-between sm:items-center gap-4 shadow-xl">
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
@@ -284,348 +305,169 @@ export default function ResumeTab({
               }}
               className="px-3.5 py-2 bg-slate-950/60 hover:bg-slate-900 text-gray-400 hover:text-white transition duration-200 border border-slate-800/80 hover:border-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer select-none"
             >
-              <span>← Back to Vault</span>
+              <span>← Back to Resumes & Links</span>
             </button>
             <span className="text-slate-800">|</span>
             <div>
               <h3 className="text-sm font-bold text-white select-none line-clamp-1">
                 {viewingResume.name}
               </h3>
-              <p className="text-[10px] text-gray-500 font-mono tracking-wider select-none uppercase mt-0.5">
+              <p className="text-[10px] text-gray-550 font-mono tracking-wider select-none uppercase mt-0.5">
                 {viewingResume.type || 'Resume'}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            {viewerMode === 'generated' && (
-              /* Style Selector */
-              <div className="bg-slate-950 p-1 rounded-xl border border-slate-800/80 flex gap-1">
-                {([
-                  { id: 'slate', label: 'Tech Slate' },
-                  { id: 'classic', label: 'Classic' },
-                  { id: 'mono', label: 'Mono Dev' }
-                ] as const).map(style => (
-                  <button
-                    key={style.id}
-                    onClick={() => setLayoutStyle(style.id)}
-                    className={`px-3 py-1.5 text-[10px] font-mono rounded-lg transition cursor-pointer select-none ${
-                      layoutStyle === style.id 
-                        ? 'bg-slate-800 text-white font-bold' 
-                        : 'text-gray-500 hover:text-gray-400'
-                    }`}
-                  >
-                    {style.label}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <button
-              onClick={() => {
-                if (viewerMode === 'original' && viewingResume.fileDataUrl) {
-                  // Direct download file
+            {viewingResume.fileDataUrl && !viewingResume.fileDataUrl.includes('example.com') && (
+              <button
+                onClick={() => {
                   const link = document.createElement('a');
-                  link.href = viewingResume.fileDataUrl;
+                  link.href = viewingResume.fileDataUrl!;
                   link.download = viewingResume.fileName || viewingResume.name;
                   link.click();
-                } else {
-                  window.print();
-                }
-              }}
-              className="bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-md shadow-emerald-500/10"
-              style={{ backgroundColor: '#10b981' }}
-            >
-              {viewerMode === 'original' && viewingResume.fileDataUrl ? (
-                <>
-                  <Download className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-                  <span>Download File</span>
-                </>
-              ) : (
-                <>
-                  <Printer className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
-                  <span>Print / PDF</span>
-                </>
-              )}
-            </button>
+                }}
+                className="bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-md shadow-emerald-500/10"
+                style={{ backgroundColor: '#10b981' }}
+              >
+                <Download className="w-3.5 h-3.5 text-slate-950 stroke-[2.5]" />
+                <span>Download File</span>
+              </button>
+            )}
           </div>
         </div>
 
         {/* Dynamic Display Canvas */}
         <div className="w-full max-w-4xl mx-auto pb-8">
-          {viewerMode === 'original' ? (
-            <div className="bg-[#0f1115] border border-slate-900 rounded-3xl p-6 sm:p-10 space-y-6 shadow-2xl relative">
-              {viewingResume.fileDataUrl ? (() => {
-                const isPdf = viewingResume.fileDataUrl.startsWith('data:application/pdf') || (viewingResume.fileName || '').toLowerCase().endsWith('.pdf');
-                const isImage = viewingResume.fileDataUrl.startsWith('data:image/') || (viewingResume.fileName || '').toLowerCase().match(/\.(png|jpg|jpeg|gif|webp)$/);
-                
-                return (
-                  <div className="space-y-6 text-left">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 bg-slate-950/40 border border-slate-900/60 rounded-2xl gap-3">
-                      <div>
-                        <h4 className="text-white font-bold text-sm tracking-tight">{viewingResume.fileName || viewingResume.name}</h4>
-                        <p className="text-[10px] text-gray-550 font-mono uppercase mt-1 tracking-wider">
-                          Document Type: {viewingResume.type} • File Size: {viewingResume.size}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2.5">
+          <div className="bg-[#0f1115] border border-slate-900 rounded-3xl p-4 sm:p-8 md:p-10 space-y-6 shadow-2xl relative">
+            {viewingResume.fileDataUrl && !viewingResume.fileDataUrl.includes('example.com') ? (() => {
+              const isPdf = viewingResume.fileDataUrl.startsWith('data:application/pdf') || (viewingResume.fileName || '').toLowerCase().endsWith('.pdf');
+              const isImage = viewingResume.fileDataUrl.startsWith('data:image/') || (viewingResume.fileName || '').toLowerCase().match(/\.(png|jpg|jpeg|gif|webp)$/);
+              
+              return (
+                <div className="space-y-6 text-left">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-5 bg-slate-950/40 border border-slate-900/60 rounded-2xl gap-3">
+                    <div>
+                      <h4 className="text-white font-bold text-sm tracking-tight break-all">{viewingResume.fileName || viewingResume.name}</h4>
+                      <p className="text-[10px] text-gray-550 font-mono uppercase mt-1 tracking-wider">
+                        Document Type: {viewingResume.type} • File Size: {viewingResume.size}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <button 
+                        onClick={() => downloadFileUrl(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 select-none"
+                        style={{ backgroundColor: '#10b981', color: '#020617' }}
+                      >
+                        <Download className="w-3.5 h-3.5 text-slate-950" />
+                        <span>Download File ({viewingResume.size})</span>
+                      </button>
+                      {isPdf && (
                         <button 
-                          onClick={() => downloadFileUrl(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
-                          className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 select-none"
-                          style={{ backgroundColor: '#10b981', color: '#020617' }}
+                          onClick={() => openPdfInNewTab(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
+                          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer select-none"
                         >
-                          <Download className="w-3.5 h-3.5 text-slate-950" />
-                          <span>Download File ({viewingResume.size})</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>Open PDF</span>
                         </button>
-                        {isPdf && (
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950 border border-slate-900 rounded-2xl p-2 sm:p-4 flex justify-center items-center overflow-auto min-h-[380px]">
+                    {isImage ? (
+                      <div className="max-w-full max-h-[70vh] overflow-auto flex items-center justify-center p-2">
+                        <img 
+                          src={viewingResume.fileDataUrl} 
+                          alt={viewingResume.name} 
+                          className="max-w-full max-h-[65vh] object-contain rounded-xl border border-slate-850 shadow-xl"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    ) : isPdf ? (
+                      <div className="w-full h-full p-1 sm:p-2 flex flex-col space-y-3" style={{ minHeight: '520px' }}>
+                        <iframe 
+                          src={dataUrlToBlobUrl(viewingResume.fileDataUrl!)} 
+                          title={viewingResume.name} 
+                          className="w-full h-[55vh] sm:h-[520px] md:h-[650px] rounded-xl border border-zinc-800 bg-[#18181b]" 
+                        />
+                        <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 px-1 gap-2">
+                          <span>Interactive PDF Resume View</span>
                           <button 
                             onClick={() => openPdfInNewTab(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
-                            className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer select-none"
+                            className="text-emerald-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
-                            <span>Open PDF</span>
+                            <span>Open Native Browser Tab</span>
                           </button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="bg-slate-950 border border-slate-900 rounded-2xl p-4 flex justify-center items-center overflow-auto min-h-[380px]">
-                      {isImage ? (
-                        <div className="max-w-full max-h-[70vh] overflow-auto flex items-center justify-center p-2">
-                          <img 
-                            src={viewingResume.fileDataUrl} 
-                            alt={viewingResume.name} 
-                            className="max-w-full max-h-[65vh] object-contain rounded-xl border border-slate-850 shadow-xl"
-                            referrerPolicy="no-referrer"
-                          />
+                    ) : (
+                      <div className="w-full py-16 px-6 flex flex-col justify-center items-center text-center space-y-5 bg-[#09090b] rounded-2xl border border-zinc-800/80 max-w-xl mx-auto my-4">
+                        <div className="p-4 bg-emerald-500/10 rounded-full text-emerald-400 border border-emerald-500/15 shadow-inner">
+                          <FileText className="w-12 h-12" />
                         </div>
-                      ) : isPdf ? (
-                        <div className="w-full h-full p-2 flex flex-col space-y-3" style={{ minHeight: '500px' }}>
-                          <iframe 
-                            src={dataUrlToBlobUrl(viewingResume.fileDataUrl!)} 
-                            title={viewingResume.name} 
-                            className="w-full h-[480px] rounded-xl border border-zinc-800 bg-[#18181b]" 
-                          />
-                          <div className="flex items-center justify-between text-xs text-gray-400 px-1">
-                            <span>Interactive PDF Resume View</span>
-                            <button 
-                              onClick={() => openPdfInNewTab(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
-                              className="text-emerald-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                              <span>Open Native Browser Tab</span>
-                            </button>
-                          </div>
+                        <div className="space-y-1.5">
+                          <h4 className="text-white font-extrabold text-sm sm:text-base font-sans">Uploaded File Document</h4>
+                          <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                            File Format: <span className="font-mono text-emerald-400 font-bold">{viewingResume.fileName?.split('.').pop()?.toUpperCase() || 'DOCUMENT'}</span> ({viewingResume.size})
+                          </p>
                         </div>
-                      ) : (
-                        <div className="w-full py-16 px-6 flex flex-col justify-center items-center text-center space-y-5 bg-[#09090b] rounded-2xl border border-zinc-800/80 max-w-xl mx-auto my-4">
-                          <div className="p-4 bg-emerald-500/10 rounded-full text-emerald-400 border border-emerald-500/15 shadow-inner">
-                            <FileText className="w-12 h-12" />
-                          </div>
-                          <div className="space-y-1.5">
-                            <h4 className="text-white font-extrabold text-sm sm:text-base font-sans">Safe File Attachment</h4>
-                            <p className="text-xs text-gray-400 leading-relaxed font-sans">
-                              Uploaded File Format: <span className="font-mono text-emerald-400 font-bold">{viewingResume.fileName?.split('.').pop()?.toUpperCase() || 'DOCUMENT'}</span> ({viewingResume.size})
-                            </p>
-                          </div>
-                          <a 
-                            href={viewingResume.fileDataUrl}
-                            download={viewingResume.fileName || viewingResume.name}
-                            className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-extrabold px-6 py-3 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-lg active:scale-[0.98]"
-                            style={{ backgroundColor: '#10b981', color: '#020617' }}
-                          >
-                            <Download className="w-4 h-4 text-slate-950" />
-                            <span>Download Resume Attachment ({viewingResume.size})</span>
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })() : viewingResume.linkUrl ? (
-                <div className="p-8 rounded-2xl border text-center my-6 bg-slate-950/80 border-slate-800">
-                  <Link2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-                  <p className="text-sm font-bold mb-1 text-white">Linked Vault Document URL</p>
-                  <p className="text-xs text-gray-550 mb-6 max-w-md mx-auto truncate select-all font-mono">{viewingResume.linkUrl}</p>
-                  <a
-                    href={viewingResume.linkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-[#10b981] hover:bg-emerald-600 font-bold text-slate-950 px-6 py-3 rounded-xl text-xs transition duration-200 cursor-pointer select-none shadow-lg shadow-emerald-500/10"
-                    style={{ backgroundColor: '#10b981', color: '#020617' }}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-950" />
-                    <span>Open External Link URL</span>
-                  </a>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-gray-400 text-xs">
-                  No original uploaded document file or link exists for this record.
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className={`p-8 md:p-12 text-left rounded-3xl shadow-xl space-y-6 transition-all duration-300 print:shadow-none print:p-0 ${getLayoutClasses()}`} id="resume-print-area">
-              
-              {/* Profile Block */}
-              <div className={getHeaderColor()}>
-                <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
-                  <div>
-                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight select-text">{profile.name}</h1>
-                    <p className={`text-sm font-semibold tracking-wide uppercase mt-1 ${layoutStyle === 'slate' ? 'text-emerald-400 font-bold' : 'text-blue-705'}`}>
-                      {profile.headline}
-                    </p>
-                  </div>
-
-                  <div className={`text-xs space-y-1.5 md:text-right font-mono ${layoutStyle === 'slate' ? 'text-gray-400' : 'text-gray-600'}`}>
-                    <div className="flex items-center md:justify-end gap-1.5 select-text">
-                      <Mail className="w-3.5 h-3.5 opacity-60" />
-                      <span>{profile.email}</span>
-                    </div>
-                    <div className="flex items-center md:justify-end gap-1.5 select-text">
-                      <Phone className="w-3.5 h-3.5 opacity-60" />
-                      <span>{profile.phone}</span>
-                    </div>
-                    <div className="flex items-center md:justify-end gap-1.5 select-text">
-                      <MapPin className="w-3.5 h-3.5 opacity-60" />
-                      <span>{profile.location}</span>
-                    </div>
+                        <a 
+                          href={viewingResume.fileDataUrl}
+                          download={viewingResume.fileName || viewingResume.name}
+                          className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-extrabold px-6 py-3 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-lg active:scale-[0.98]"
+                          style={{ backgroundColor: '#10b981', color: '#020617' }}
+                        >
+                          <Download className="w-4 h-4 text-slate-950" />
+                          <span>Download File ({viewingResume.size})</span>
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                {profile.bio && (
-                  <p className={`text-xs md:text-sm mt-4 leading-relaxed italic select-text ${layoutStyle === 'slate' ? 'text-gray-400' : 'text-gray-600'}`}>
-                    "{profile.bio}"
+              );
+            })() : viewingResume.linkUrl && !viewingResume.linkUrl.includes('example.com') ? (
+              <div className="p-8 rounded-2xl border text-center my-6 bg-slate-950/80 border-slate-800">
+                <Link2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
+                <p className="text-sm font-bold mb-1 text-white">Linked Vault Document URL</p>
+                <p className="text-xs text-gray-550 mb-6 max-w-md mx-auto truncate select-all font-mono">{viewingResume.linkUrl}</p>
+                <a
+                  href={viewingResume.linkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-[#10b981] hover:bg-emerald-600 font-bold text-slate-950 px-6 py-3 rounded-xl text-xs transition duration-200 cursor-pointer select-none shadow-lg shadow-emerald-500/10"
+                  style={{ backgroundColor: '#10b981', color: '#020617' }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-slate-950" />
+                  <span>Open External Link URL</span>
+                </a>
+              </div>
+            ) : (
+              <div className="text-center py-12 px-4 space-y-4">
+                <div className="p-3 bg-amber-500/10 rounded-full text-amber-400 border border-amber-500/15 w-fit mx-auto">
+                  <FileText className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-white font-bold text-sm">Original PDF File Needed</h4>
+                  <p className="text-xs text-gray-400 max-w-md mx-auto">
+                    Please upload your original PDF file for this resume record so you can preview and download it natively.
                   </p>
-                )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleStartEdit(viewingResume);
+                    setShowViewModal(false);
+                  }}
+                  className="bg-[#10b981] hover:bg-emerald-600 font-bold text-slate-950 px-5 py-2.5 rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer transition shadow-lg"
+                >
+                  <CloudUpload className="w-4 h-4 text-slate-950" />
+                  <span>Upload Original PDF</span>
+                </button>
               </div>
-
-              {viewingResume.linkUrl && (
-                <div className={`p-6 rounded-2xl border text-center my-4 print:hidden transition-all duration-300 ${
-                  layoutStyle === 'slate' 
-                    ? 'bg-slate-950/80 border-slate-800' 
-                    : 'bg-gray-100 border-gray-300 font-sans'
-                }`}>
-                  <Link2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-                  <p className={`text-sm font-bold mb-1 ${layoutStyle === 'slate' ? 'text-white' : 'text-slate-900'}`}>Linked Vault Document</p>
-                  <p className="text-xs text-gray-550 mb-4 max-w-md mx-auto truncate select-all">{viewingResume.linkUrl}</p>
-                  <a
-                    href={viewingResume.linkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-[#10b981] hover:bg-emerald-600 font-bold text-slate-950 px-5 py-2.5 rounded-xl text-xs transition duration-200 cursor-pointer select-none"
-                    style={{ backgroundColor: '#10b981', color: '#020617' }}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 text-slate-950" />
-                    <span>Open External Link URL</span>
-                  </a>
-                </div>
-              )}
-
-              {/* Work Experience */}
-              <div className="space-y-4">
-                <h3 className={`text-xs md:text-sm font-mono font-bold uppercase tracking-wider ${layoutStyle === 'slate' ? 'text-gray-400 border-b border-slate-800/80 pb-1.5' : 'text-gray-700 border-b border-gray-300 pb-1'}`}>
-                  Professional Experience Timeline
-                </h3>
-                
-                <div className="space-y-5">
-                  {experience.map(exp => (
-                    <div key={exp.id} className="space-y-1.5">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-1 text-xs font-mono">
-                        <div className="select-text">
-                          <strong className="text-sm font-bold block md:inline">{exp.role}</strong>
-                          <span className="hidden md:inline text-gray-500"> — </span>
-                          <span className={`${layoutStyle === 'slate' ? 'text-emerald-400 font-semibold' : 'text-slate-800 font-bold'}`}>{exp.company}</span>
-                        </div>
-                        <span className="text-gray-500 text-[11px] font-semibold select-none">{exp.startDate} – {exp.endDate}</span>
-                      </div>
-                      
-                      <ul className="list-disc pl-4 space-y-1 text-xs leading-relaxed opacity-85 select-text">
-                        {exp.description.map((bullet, index) => (
-                          <li key={index}>{bullet}</li>
-                        ))}
-                      </ul>
-
-                      {exp.skillsUsed && exp.skillsUsed.length > 0 && (
-                        <div className="text-[10px] font-mono text-gray-505 flex items-center flex-wrap gap-1 mt-1 select-none">
-                          <span className="font-bold">Featured stacks:</span>
-                          <span>{exp.skillsUsed.join(', ')}</span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Education & Certs split column */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                
-                {/* Academic Ledger */}
-                <div className="space-y-3">
-                  <h3 className={`text-xs md:text-sm font-mono font-bold uppercase tracking-wider ${layoutStyle === 'slate' ? 'text-gray-400 border-b border-slate-800/80 pb-1.5' : 'text-gray-700 border-b border-gray-300 pb-1'}`}>
-                    Academic Ledger
-                  </h3>
-                  <div className="space-y-3">
-                    {education.map(edu => (
-                      <div key={edu.id} className="text-xs">
-                        <strong className="block text-sm font-bold select-text">{edu.degree}</strong>
-                        <p className="opacity-80 font-medium select-text">{edu.institution}</p>
-                        <div className="flex justify-between text-[11px] font-mono text-gray-500 mt-1 select-none">
-                          <span>
-                            {edu.startDate && edu.endDate
-                              ? `${edu.startDate} – ${edu.endDate}`
-                              : `${edu.startYear} – ${edu.endYear}`}
-                          </span>
-                          {edu.grade && <span>{edu.grade}</span>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Active Certifications */}
-                <div className="space-y-3">
-                  <h3 className={`text-xs md:text-sm font-mono font-bold uppercase tracking-wider ${layoutStyle === 'slate' ? 'text-gray-400 border-b border-slate-800/80 pb-1.5' : 'text-gray-700 border-b border-gray-300 pb-1'}`}>
-                    Active Credentials
-                  </h3>
-                  <div className="space-y-2.5">
-                    {certifications.map(cert => (
-                      <div key={cert.id} className="text-xs">
-                        <strong className="block font-bold select-text">{cert.title}</strong>
-                        <div className="flex justify-between text-[10px] font-mono text-gray-500 select-none">
-                          <span>{cert.issuer}</span>
-                          <span>Issued {cert.dateIssued}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Skills Showcase block */}
-              <div className="space-y-3">
-                <h3 className={`text-xs md:text-sm font-mono font-bold uppercase tracking-wider ${layoutStyle === 'slate' ? 'text-gray-400 border-b border-slate-800/80 pb-1.5' : 'text-gray-700 border-b border-gray-300 pb-1'}`}>
-                  Skill Showcase
-                </h3>
-                <div className="flex flex-wrap gap-2 text-[11px] font-mono">
-                  {skills.map(s => (
-                    <span 
-                      key={s.id} 
-                      className={`px-2.5 py-0.5 border rounded-full inline-flex items-center gap-1.5 select-none ${
-                        layoutStyle === 'slate' 
-                          ? 'bg-[#06070a]/80 border-slate-800 text-gray-300' 
-                          : 'bg-gray-100 border-gray-300 text-slate-800'
-                      }`}
-                    >
-                      <span>{s.name}</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     );
@@ -979,36 +821,61 @@ export default function ResumeTab({
         )}
       </div>
 
-      {/* 2. Sub-tab select segmented capsule */}
-      <div className="flex items-center gap-1 p-1 bg-[#0a0b0f] border border-slate-900 rounded-xl w-fit">
+      {/* 2. Sub-tab select segmented capsule - fully responsive for mobile, tablet, laptop */}
+      <div className="flex items-center gap-1 p-1 bg-[#0a0b0f] border border-slate-900 rounded-xl w-full sm:w-fit overflow-x-auto">
         <button
           onClick={() => setActiveSubTab('documents')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold transition cursor-pointer select-none ${
+          className={`flex items-center justify-center gap-2 flex-1 sm:flex-initial px-5 py-2.5 rounded-lg text-xs font-semibold transition cursor-pointer select-none ${
             activeSubTab === 'documents'
-              ? 'bg-[#15171e] text-white shadow-sm'
+              ? 'bg-[#15171e] text-white shadow-sm border border-slate-800'
               : 'text-gray-500 hover:text-gray-300'
           }`}
         >
-          <FileText className="w-3.5 h-3.5" />
+          <FileText className="w-3.5 h-3.5 text-emerald-400" />
           <span>Resumes & CV'S</span>
+          <span className="text-[10px] px-1.5 py-0.5 bg-slate-900 text-gray-400 rounded-full font-mono">{userUploadedResumes.length}</span>
         </button>
         <button
           onClick={() => setActiveSubTab('links')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-xs font-semibold transition cursor-pointer select-none ${
+          className={`flex items-center justify-center gap-2 flex-1 sm:flex-initial px-5 py-2.5 rounded-lg text-xs font-semibold transition cursor-pointer select-none ${
             activeSubTab === 'links'
-              ? 'bg-[#15171e] text-white shadow-sm'
+              ? 'bg-[#15171e] text-white shadow-sm border border-slate-800'
               : 'text-gray-500 hover:text-gray-300'
           }`}
         >
-          <Link2 className="w-3.5 h-3.5" />
+          <Link2 className="w-3.5 h-3.5 text-emerald-400" />
           <span>Links</span>
+          <span className="text-[10px] px-1.5 py-0.5 bg-slate-900 text-gray-400 rounded-full font-mono">{links.length}</span>
         </button>
       </div>
 
       {/* 3. Primary Grid lists */}
       {activeSubTab === 'documents' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {resumes.map(res => (
+          {userUploadedResumes.length === 0 ? (
+            <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-900 rounded-2xl bg-[#0f1115]/30 p-6 space-y-3">
+              <FileCheck className="w-10 h-10 text-slate-600 mx-auto" />
+              <p className="text-sm text-gray-300 font-bold">No uploaded resumes found</p>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">Upload your original PDF resume or CV to store and view it here.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingResume(null);
+                  setRecordName('');
+                  setDocumentType('Resume');
+                  setVisibility('private');
+                  setSelectedFile(null);
+                  setDocLinkUrl('');
+                  setSourceType('file');
+                  setShowUploadModal(true);
+                }}
+                className="mt-2 bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs inline-flex items-center gap-1.5 cursor-pointer transition select-none"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Upload First Resume PDF</span>
+              </button>
+            </div>
+          ) : userUploadedResumes.map(res => (
             <div 
               key={res.id} 
               className="bg-[#0f1115] border border-slate-900 rounded-2xl p-6 relative group flex flex-col justify-between transition-all duration-300 hover:border-slate-800"
@@ -1163,10 +1030,24 @@ export default function ResumeTab({
           ))}
 
           {links.length === 0 && (
-            <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-900 rounded-2xl bg-[#0f1115]/20">
-              <Link2 className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              <p className="text-sm text-gray-400 font-bold">No active links found</p>
-              <p className="text-xs text-gray-650 mt-1">Add links to your portfolio networks to share them.</p>
+            <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-900 rounded-2xl bg-[#0f1115]/30 p-6 space-y-3">
+              <Link2 className="w-10 h-10 text-slate-600 mx-auto" />
+              <p className="text-sm text-gray-300 font-bold">No active links found</p>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">Add links to your portfolio networks to share and sync them with Supabase.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingLink(null);
+                  setLinkPlatform('');
+                  setLinkLabel('');
+                  setLinkUrl('');
+                  setShowLinkModal(true);
+                }}
+                className="mt-2 bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs inline-flex items-center gap-1.5 cursor-pointer transition select-none"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Your First Link</span>
+              </button>
             </div>
           )}
         </div>

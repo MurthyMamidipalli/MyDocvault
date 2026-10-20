@@ -115,11 +115,7 @@ const blobUrlCache = new Map<string, string>();
  * Convert a base64 data URL or raw URL to a Blob Object URL (`blob:http...`).
  */
 export function dataUrlToBlobUrl(dataUrl: string, fallbackTitle?: string): string {
-  if (!dataUrl) {
-    if (fallbackTitle) {
-      const generated = createFallbackPdfDataUrl(fallbackTitle);
-      return dataUrlToBlobUrl(generated);
-    }
+  if (!dataUrl || dataUrl.includes('example.com')) {
     return '';
   }
 
@@ -162,15 +158,13 @@ export function dataUrlToBlobUrl(dataUrl: string, fallbackTitle?: string): strin
  * render the PDF natively in the top-level tab without blocking navigation.
  */
 export function openPdfInNewTab(url: string, filename?: string): void {
+  if (!url || url.includes('example.com')) return;
   let targetUrl = url;
-  
-  if (!targetUrl || targetUrl.trim() === '') {
-    targetUrl = createFallbackPdfDataUrl(filename || 'Document Record');
-  }
 
   if (targetUrl.startsWith('data:')) {
     targetUrl = dataUrlToBlobUrl(targetUrl, filename);
   }
+  if (!targetUrl) return;
 
   const cleanTitle = (filename || 'PDF Document').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -223,10 +217,8 @@ export function openPdfInNewTab(url: string, filename?: string): void {
  * Downloads a file cleanly from a base64 Data URL or standard URL with sanitized OS filename.
  */
 export function downloadFileUrl(url: string, filename: string): void {
+  if (!url || url.includes('example.com')) return;
   let targetUrl = url;
-  if (!targetUrl || targetUrl.trim() === '') {
-    targetUrl = createFallbackPdfDataUrl(filename || 'Document Record');
-  }
 
   const cleanName = sanitizeFilename(filename || 'document.pdf');
   let isBlobCreated = false;
