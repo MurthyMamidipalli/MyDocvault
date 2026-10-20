@@ -13,7 +13,8 @@ import {
   Globe,
   Copy,
   Check,
-  ExternalLink
+  ExternalLink,
+  X
 } from 'lucide-react';
 import { PersonalProfile, getAvatarInitials } from '../types';
 
@@ -27,6 +28,7 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
   const [formData, setFormData] = useState<PersonalProfile>({ ...profile });
   const [success, setSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
@@ -210,6 +212,24 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
     onUpdateProfile(updated);
   };
 
+  const handleClearProfileDetails = () => {
+    const updated: PersonalProfile = {
+      ...formData,
+      headline: '',
+      bio: '',
+      phone: '',
+      secondaryEmail: '',
+      secondaryPhone: '',
+      location: '',
+      avatarUrl: ''
+    };
+    setFormData(updated);
+    onUpdateProfile(updated);
+    setShowClearConfirm(false);
+    setSuccess(true);
+    setTimeout(() => setSuccess(false), 3000);
+  };
+
   return (
     <div className="space-y-8 animate-fade-in" id="profile-pane">
       {/* Tab Page Header */}
@@ -338,33 +358,67 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
 
               {/* Professional Tagline */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                  Professional Tagline
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                    Professional Tagline
+                  </label>
+                  {formData.headline && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('headline', '')}
+                      className="text-[11px] text-gray-500 hover:text-rose-400 font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
                 <div className="relative flex items-center">
                   <Briefcase className="absolute left-4 w-4 h-4 text-gray-500 pointer-events-none" />
                   <input 
                     type="text" 
-                    required
-                    value={formData.headline}
+                    value={formData.headline || ''}
+                    placeholder="e.g. Senior Business Analyst / Full Stack Engineer"
                     onChange={e => handleChange('headline', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-10 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
                   />
+                  {formData.headline && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('headline', '')}
+                      className="absolute right-3 text-gray-500 hover:text-rose-400 p-1"
+                      title="Clear headline"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Professional Bio */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                  Professional Bio
-                </label>
-                <textarea 
-                  rows={4}
-                  value={formData.bio}
-                  onChange={e => handleChange('bio', e.target.value)}
-                  placeholder="Write a powerful summary of your career expertise..."
-                  className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl p-4 text-white text-sm outline-none resize-none transition-all shadow-inner font-sans leading-relaxed"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                    Professional Bio
+                  </label>
+                  {formData.bio && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('bio', '')}
+                      className="text-[11px] text-gray-500 hover:text-rose-400 font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Clear Bio
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <textarea 
+                    rows={4}
+                    value={formData.bio || ''}
+                    onChange={e => handleChange('bio', e.target.value)}
+                    placeholder="Write a powerful summary of your career expertise..."
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl p-4 text-white text-sm outline-none resize-none transition-all shadow-inner font-sans leading-relaxed"
+                  />
+                </div>
               </div>
 
             </div>
@@ -391,7 +445,7 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                   <input 
                     type="email" 
                     required
-                    value={formData.email}
+                    value={formData.email || ''}
                     onChange={e => handleChange('email', e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
                   />
@@ -400,9 +454,20 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
 
               {/* Secondary Email */}
               <div className="space-y-2">
-                <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                  Secondary Email
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                    Secondary Email
+                  </label>
+                  {formData.secondaryEmail && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('secondaryEmail', '')}
+                      className="text-[11px] text-gray-500 hover:text-rose-400 font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
                 <div className="relative flex items-center">
                   <Mail className="absolute left-4 w-4 h-4 text-gray-500 pointer-events-none" />
                   <input 
@@ -410,33 +475,75 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                     value={formData.secondaryEmail || ''}
                     onChange={e => handleChange('secondaryEmail', e.target.value)}
                     placeholder="Optional secondary email address"
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-10 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
                   />
+                  {formData.secondaryEmail && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('secondaryEmail', '')}
+                      className="absolute right-3 text-gray-500 hover:text-rose-400 p-1"
+                      title="Clear secondary email"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Primary Phone */}
               <div className="space-y-2">
-                <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                  Primary Phone
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                    Primary Phone
+                  </label>
+                  {formData.phone && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('phone', '')}
+                      className="text-[11px] text-gray-500 hover:text-rose-400 font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
                 <div className="relative flex items-center">
                   <Phone className="absolute left-4 w-4 h-4 text-gray-500 pointer-events-none" />
                   <input 
                     type="text" 
-                    required
-                    value={formData.phone}
+                    value={formData.phone || ''}
+                    placeholder="e.g. +1 (555) 000-0000"
                     onChange={e => handleChange('phone', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-10 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
                   />
+                  {formData.phone && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('phone', '')}
+                      className="absolute right-3 text-gray-500 hover:text-rose-400 p-1"
+                      title="Clear phone"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Secondary Phone */}
               <div className="space-y-2">
-                <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                  Secondary Phone
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                    Secondary Phone
+                  </label>
+                  {formData.secondaryPhone && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('secondaryPhone', '')}
+                      className="text-[11px] text-gray-500 hover:text-rose-400 font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
                 <div className="relative flex items-center">
                   <Phone className="absolute left-4 w-4 h-4 text-gray-500 pointer-events-none" />
                   <input 
@@ -444,25 +551,56 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                     value={formData.secondaryPhone || ''}
                     onChange={e => handleChange('secondaryPhone', e.target.value)}
                     placeholder="Optional secondary phone coordinates"
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-10 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
                   />
+                  {formData.secondaryPhone && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('secondaryPhone', '')}
+                      className="absolute right-3 text-gray-500 hover:text-rose-400 p-1"
+                      title="Clear secondary phone"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Geography Location / Workspace Base */}
               <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                  Geography Location / Workspace Base
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                    Geography Location / Workspace Base
+                  </label>
+                  {formData.location && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('location', '')}
+                      className="text-[11px] text-gray-500 hover:text-rose-400 font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
                 <div className="relative flex items-center">
                   <MapPin className="absolute left-4 w-4 h-4 text-gray-500 pointer-events-none" />
                   <input 
                     type="text" 
-                    required
-                    value={formData.location}
+                    value={formData.location || ''}
+                    placeholder="e.g. San Francisco, CA / Remote"
                     onChange={e => handleChange('location', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-4 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-10 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
                   />
+                  {formData.location && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('location', '')}
+                      className="absolute right-3 text-gray-500 hover:text-rose-400 p-1"
+                      title="Clear location"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -594,13 +732,44 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
           </div>
 
           {/* Form Actions */}
-          <div className="flex items-center gap-4 pt-4 border-t border-slate-800/60">
-            <button 
-              type="submit" 
-              className="bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] font-bold text-slate-950 px-6 py-3 rounded-xl cursor-pointer text-xs transition-all shadow-lg shadow-emerald-500/10"
-            >
-              Save Profile Changes
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800/60">
+            <div className="flex flex-wrap items-center gap-3">
+              <button 
+                type="submit" 
+                className="bg-emerald-500 hover:bg-emerald-600 active:scale-[0.98] font-bold text-slate-950 px-6 py-3 rounded-xl cursor-pointer text-xs transition-all shadow-lg shadow-emerald-500/10"
+              >
+                Save Profile Changes
+              </button>
+
+              {!showClearConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowClearConfirm(true)}
+                  className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 hover:text-rose-300 font-bold px-4 py-3 rounded-xl cursor-pointer text-xs transition-all shadow-md active:scale-95"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Clear Profile Details</span>
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 bg-slate-950 p-1.5 border border-rose-800 rounded-xl animate-fade-in">
+                  <span className="text-[11px] font-mono font-bold text-rose-400 pl-2">Delete profile data permanently?</span>
+                  <button
+                    type="button"
+                    onClick={handleClearProfileDetails}
+                    className="bg-rose-500 hover:bg-rose-600 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs cursor-pointer transition shadow"
+                  >
+                    Yes, Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowClearConfirm(false)}
+                    className="text-gray-400 hover:text-white px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
             
             {success && (
               <div className="flex items-center gap-2 text-emerald-400 text-xs font-medium animate-fade-in">
