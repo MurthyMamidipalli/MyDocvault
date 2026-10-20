@@ -5139,11 +5139,10 @@ export default function App() {
     }
     
     const fetchWithFallback = async () => {
+      let pRow: any = null;
       // 1. Direct Supabase Public Profile Query
       try {
         console.log(`[Supabase Share Query] Fetching public profile for slug: '${slug}'`);
-        
-        let pRow: any = null;
 
         // Try exact match by share_slug
         const { data: exactRow } = await supabase
@@ -5412,8 +5411,8 @@ export default function App() {
         console.log("[Sync] Stale local offline cache failed:", cacheErr);
       }
 
-      // Ensure fallback payload is set: if sharedProfile is private
-      if (sharedProfile.publicProfile === false) {
+      // Ensure fallback payload is set: if sharedProfile is private or row not found in public database
+      if (!isDemo && (sharedProfile.publicProfile === false || !pRow)) {
         setRemoteShareData({
           profile: {
             ...EMPTY_PROFILE,

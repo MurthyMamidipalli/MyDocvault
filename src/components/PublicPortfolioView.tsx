@@ -112,7 +112,21 @@ export default function PublicPortfolioView({
     return 'bg-emerald-505/10 text-emerald-400 border-emerald-500/20';
   };
 
-  if (profile.publicProfile === false) {
+  const isPrivate = profile.publicProfile === false || (
+    profile.shareSlug !== 'demo' &&
+    profile.shareSlug !== 'template' &&
+    !profile.headline?.trim() &&
+    !profile.bio?.trim() &&
+    !profile.phone?.trim() &&
+    !profile.location?.trim() &&
+    (!skills || skills.length === 0) &&
+    (!experience || experience.length === 0) &&
+    (!projects || projects.length === 0) &&
+    (!certifications || certifications.length === 0) &&
+    (!education || education.length === 0)
+  );
+
+  if (isPrivate) {
     const displayName = profile.name || (profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : '') || formatSlugToName(profile.shareSlug);
     const initials = getAvatarInitials({ ...profile, name: displayName });
 
@@ -147,8 +161,8 @@ export default function PublicPortfolioView({
 
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-mono font-semibold tracking-wider uppercase">
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-              Private Profile
+              <Lock className="w-3.5 h-3.5" />
+              <span>Profile is Private</span>
             </div>
 
             <h1 className="text-white font-extrabold text-2xl md:text-3xl tracking-tight font-sans">
