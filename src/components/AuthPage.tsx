@@ -278,7 +278,7 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
           email: trimmedEmail,
           headline: 'Verified Professional',
           share_slug: shareSlug,
-          public_profile: false
+          public_profile: true
         }, { onConflict: 'user_id' });
 
         triggerToast(`Account created successfully for ${trimmedEmail}!`);

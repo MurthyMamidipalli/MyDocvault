@@ -4874,7 +4874,7 @@ export default function App() {
           firstName: fallbackDisplayName.split(' ')[0] || '',
           lastName: fallbackDisplayName.split(' ').slice(1).join(' ') || '',
           shareSlug: slug, 
-          publicProfile: false 
+          publicProfile: true 
         };
     let sharedSkills: Skill[] = isDemo ? INITIAL_SKILLS : [];
     let sharedExperience: Experience[] = isDemo ? INITIAL_EXPERIENCE : [];
@@ -4958,7 +4958,7 @@ export default function App() {
 
       sharedProfile = locP !== null 
         ? { ...locP, name: locP.name || fallbackDisplayName, publicProfile: !isLocPrivate } 
-        : (isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, name: fallbackDisplayName, shareSlug: slug, publicProfile: false });
+        : (isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, name: fallbackDisplayName, shareSlug: slug, publicProfile: true });
 
       if (isLocPrivate) {
         sharedSkills = [];
@@ -5412,8 +5412,8 @@ export default function App() {
         console.log("[Sync] Stale local offline cache failed:", cacheErr);
       }
 
-      // Ensure fallback payload is set: if sharedProfile is private or not found in public database
-      if (sharedProfile.publicProfile === false || !isDemo) {
+      // Ensure fallback payload is set: if sharedProfile is private
+      if (sharedProfile.publicProfile === false) {
         setRemoteShareData({
           profile: {
             ...EMPTY_PROFILE,

@@ -238,7 +238,7 @@ export const EMPTY_PROFILE: PersonalProfile = {
   location: "",
   bio: "",
   avatarUrl: "",
-  publicProfile: false
+  publicProfile: true
 };
 
 export const INITIAL_PROFILE: PersonalProfile = {
