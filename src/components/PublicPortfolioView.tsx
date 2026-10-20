@@ -15,6 +15,7 @@ import {
   MessageSquare,
   ChevronLeft,
   EyeOff,
+  Lock,
   Calendar,
   Clock,
   FileText,
@@ -112,20 +113,30 @@ export default function PublicPortfolioView({
 
   if (profile.publicProfile === false) {
     return (
-      <div className="min-h-screen bg-[#07080b] flex flex-col justify-center items-center font-sans select-none relative overflow-hidden" id="nexus-share-disabled">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[140px] bg-red-500/10 pointer-events-none" />
-        <div className="z-10 text-center space-y-6 max-w-sm px-6">
+      <div className="min-h-screen bg-[#07080b] flex flex-col justify-center items-center font-sans select-none relative overflow-hidden px-4" id="nexus-share-disabled">
+        {/* Ambient atmospheric backdrop */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[160px] bg-rose-500/10 pointer-events-none" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] rounded-full blur-[100px] bg-red-600/10 pointer-events-none" />
+
+        <div className="z-10 text-center space-y-6 max-w-md w-full">
           <div className="relative inline-flex">
-            <div className="relative rounded-full border border-red-500/30 p-4 bg-slate-950/80 shadow-2xl">
-              <EyeOff className="w-8 h-8 text-red-500 animate-pulse" />
+            <span className="absolute -inset-1.5 rounded-3xl bg-rose-500/20 blur-md animate-pulse" />
+            <div className="relative rounded-2xl border border-rose-500/30 p-5 bg-slate-950/90 shadow-2xl backdrop-blur-xl">
+              <Lock className="w-10 h-10 text-rose-500" />
             </div>
           </div>
-          <div className="space-y-2">
-            <h2 className="text-white font-extrabold text-sm tracking-widest uppercase font-mono">Access Restricted</h2>
-            <p className="text-sm text-gray-400 font-mono leading-relaxed bg-slate-950/60 p-3.5 border border-slate-900 rounded-xl">
-              This profile is not publicly available.
+
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-mono font-semibold tracking-wider uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              Private Mode
+            </div>
+            <h1 className="text-white font-extrabold text-2xl tracking-tight font-sans">Profile is Private</h1>
+            <p className="text-sm text-gray-400 font-mono leading-relaxed bg-slate-950/70 p-4 border border-slate-900 rounded-xl shadow-inner">
+              This profile is set to Private. No information or data is publicly available.
             </p>
           </div>
+
           <button 
             type="button"
             onClick={() => {
@@ -136,9 +147,9 @@ export default function PublicPortfolioView({
                 window.location.hash = '#overview';
               }
             }}
-            className="flex items-center gap-2 text-xs font-semibold text-gray-400 hover:text-white transition cursor-pointer select-none bg-slate-900 border border-slate-800 py-1.5 px-3.5 rounded-xl mx-auto active:scale-95"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-gray-300 hover:text-white transition cursor-pointer select-none bg-slate-900/90 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 py-2.5 px-5 rounded-xl shadow-lg active:scale-95 mx-auto"
           >
-            <ChevronLeft className="w-3.5 h-3.5" />
+            <ChevronLeft className="w-4 h-4" />
             <span>Go to Console</span>
           </button>
         </div>

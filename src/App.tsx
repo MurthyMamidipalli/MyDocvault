@@ -2947,6 +2947,20 @@ export default function App() {
       heavyStorage.set(`${email}_profile`, newProfile).catch(() => {});
       if (newProfile.shareSlug) {
         safeLocalStorageSetItem(`nexus_cache_profile_${newProfile.shareSlug}`, JSON.stringify(newProfile));
+        if (newProfile.publicProfile === false) {
+          try {
+            localStorage.removeItem(`nexus_cache_skills_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_experience_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_certs_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_projects_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_education_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_achievements_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_testimonials_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_links_${newProfile.shareSlug}`);
+            localStorage.removeItem(`nexus_cache_calendar_events_${newProfile.shareSlug}`);
+          } catch (_) {}
+          apiFetch(`/api/share/${newProfile.shareSlug}`, { method: 'DELETE' }).catch(() => {});
+        }
       }
     }
 
@@ -4757,15 +4771,33 @@ export default function App() {
         }
 
         // Clean sync directly to our custom Express backend API relative path
-        try {
-          await apiFetch(`/api/share/${shareSlug}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ serialized })
-          });
-          console.log(`[Auto-Publish] Synced successfully with server cache service for slug: ${shareSlug}`);
-        } catch (err) {
-          console.log(`[Auto-Publish] Express Sync deferred for ${shareSlug}.`);
+        if (profile.publicProfile === false) {
+          try {
+            await apiFetch(`/api/share/${shareSlug}`, { method: 'DELETE' });
+            console.log(`[Auto-Publish] Cleaned up public share endpoint because profile is private: ${shareSlug}`);
+          } catch (_) {}
+          try {
+            localStorage.removeItem(`nexus_cache_skills_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_experience_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_certs_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_projects_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_education_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_achievements_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_testimonials_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_links_${shareSlug}`);
+            localStorage.removeItem(`nexus_cache_calendar_events_${shareSlug}`);
+          } catch (_) {}
+        } else {
+          try {
+            await apiFetch(`/api/share/${shareSlug}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ serialized })
+            });
+            console.log(`[Auto-Publish] Synced successfully with server cache service for slug: ${shareSlug}`);
+          } catch (err) {
+            console.log(`[Auto-Publish] Express Sync deferred for ${shareSlug}.`);
+          }
         }
       };
 
@@ -4894,55 +4926,85 @@ export default function App() {
       };
       
       const locP = getLocalData('profile');
-      const locS = getLocalData('skills');
-      const locE = getLocalData('experience');
-      const locC = getLocalData('certs');
-      const locPr = getLocalData('projects');
-      const locProd = getLocalData('products');
-      const locOth = getLocalData('others');
-      const locEd = getLocalData('education');
-      const locA = getLocalData('achievements');
-      const locT = getLocalData('testimonials');
-      const locL = getLocalData('links');
-      const locResL = getLocalData('resume_links');
-      const locRes = getLocalData('resumes') || getLocalData('vault_resumes');
-      const locCal = getLocalData('calendar_events');
+      const isLocPrivate = locP !== null && locP.publicProfile === false;
 
-      sharedProfile = locP !== null ? { ...locP, publicProfile: locP.publicProfile !== false } : (isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, publicProfile: true });
-      sharedSkills = locS !== null ? locS : (isDemo ? INITIAL_SKILLS : []);
-      sharedExperience = locE !== null ? locE : (isDemo ? INITIAL_EXPERIENCE : []);
-      sharedCertifications = locC !== null ? locC : (isDemo ? INITIAL_CERTIFICATIONS : []);
-      sharedProjects = (locPr !== null || locProd !== null || locOth !== null) 
-        ? [...(locPr || []), ...(locProd || []), ...(locOth || [])] 
-        : (isDemo ? INITIAL_PROJECTS : []);
-      sharedEducation = locEd !== null ? locEd : (isDemo ? INITIAL_EDUCATION : []);
-      sharedAchievements = locA !== null ? locA : (isDemo ? INITIAL_ACHIEVEMENTS : []);
-      sharedTestimonials = locT !== null ? locT : (isDemo ? INITIAL_TESTIMONIALS : []);
-      sharedLinks = (locL !== null || locResL !== null) ? [...(locL || []), ...(locResL || [])] : (isDemo ? INITIAL_LINKS : []);
-      sharedResumes = locRes !== null ? locRes : [];
-      sharedCalendarEvents = locCal !== null ? locCal : (isDemo ? INITIAL_CALENDAR_EVENTS : []);
+      sharedProfile = locP !== null ? { ...locP, publicProfile: !isLocPrivate } : (isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, publicProfile: true });
+
+      if (isLocPrivate) {
+        sharedSkills = [];
+        sharedExperience = [];
+        sharedCertifications = [];
+        sharedProjects = [];
+        sharedEducation = [];
+        sharedAchievements = [];
+        sharedTestimonials = [];
+        sharedLinks = [];
+        sharedResumes = [];
+        sharedCalendarEvents = [];
+      } else {
+        const locS = getLocalData('skills');
+        const locE = getLocalData('experience');
+        const locC = getLocalData('certs');
+        const locPr = getLocalData('projects');
+        const locProd = getLocalData('products');
+        const locOth = getLocalData('others');
+        const locEd = getLocalData('education');
+        const locA = getLocalData('achievements');
+        const locT = getLocalData('testimonials');
+        const locL = getLocalData('links');
+        const locResL = getLocalData('resume_links');
+        const locRes = getLocalData('resumes') || getLocalData('vault_resumes');
+        const locCal = getLocalData('calendar_events');
+
+        sharedSkills = locS !== null ? locS : (isDemo ? INITIAL_SKILLS : []);
+        sharedExperience = locE !== null ? locE : (isDemo ? INITIAL_EXPERIENCE : []);
+        sharedCertifications = locC !== null ? locC : (isDemo ? INITIAL_CERTIFICATIONS : []);
+        sharedProjects = (locPr !== null || locProd !== null || locOth !== null) 
+          ? [...(locPr || []), ...(locProd || []), ...(locOth || [])] 
+          : (isDemo ? INITIAL_PROJECTS : []);
+        sharedEducation = locEd !== null ? locEd : (isDemo ? INITIAL_EDUCATION : []);
+        sharedAchievements = locA !== null ? locA : (isDemo ? INITIAL_ACHIEVEMENTS : []);
+        sharedTestimonials = locT !== null ? locT : (isDemo ? INITIAL_TESTIMONIALS : []);
+        sharedLinks = (locL !== null || locResL !== null) ? [...(locL || []), ...(locResL || [])] : (isDemo ? INITIAL_LINKS : []);
+        sharedResumes = locRes !== null ? locRes : [];
+        sharedCalendarEvents = locCal !== null ? locCal : (isDemo ? INITIAL_CALENDAR_EVENTS : []);
+      }
     } else {
       // Direct offline read-only local storage fallback
       const cachedProfileStr = localStorage.getItem(`nexus_cache_profile_${slug}`);
       if (cachedProfileStr) {
         try {
-          sharedProfile = { ...JSON.parse(cachedProfileStr), publicProfile: true };
-          const getCachedData = (keySuffix: string, fallback: any) => {
-            const saved = localStorage.getItem(`nexus_cache_${keySuffix}_${slug}`);
-            if (saved) {
-              try { return JSON.parse(saved); } catch (e) {}
-            }
-            return fallback;
-          };
-          sharedSkills = getCachedData('skills', sharedSkills);
-          sharedExperience = getCachedData('experience', sharedExperience);
-          sharedCertifications = getCachedData('certs', sharedCertifications);
-          sharedProjects = getCachedData('projects', sharedProjects);
-          sharedEducation = getCachedData('education', sharedEducation);
-          sharedAchievements = getCachedData('achievements', sharedAchievements);
-          sharedTestimonials = getCachedData('testimonials', sharedTestimonials);
-          sharedLinks = getCachedData('links', sharedLinks);
-          sharedCalendarEvents = getCachedData('calendar_events', sharedCalendarEvents);
+          const parsedCache = JSON.parse(cachedProfileStr);
+          const isCachePrivate = parsedCache.publicProfile === false;
+          sharedProfile = { ...parsedCache, publicProfile: !isCachePrivate };
+          if (isCachePrivate) {
+            sharedSkills = [];
+            sharedExperience = [];
+            sharedCertifications = [];
+            sharedProjects = [];
+            sharedEducation = [];
+            sharedAchievements = [];
+            sharedTestimonials = [];
+            sharedLinks = [];
+            sharedCalendarEvents = [];
+          } else {
+            const getCachedData = (keySuffix: string, fallback: any) => {
+              const saved = localStorage.getItem(`nexus_cache_${keySuffix}_${slug}`);
+              if (saved) {
+                try { return JSON.parse(saved); } catch (e) {}
+              }
+              return fallback;
+            };
+            sharedSkills = getCachedData('skills', sharedSkills);
+            sharedExperience = getCachedData('experience', sharedExperience);
+            sharedCertifications = getCachedData('certs', sharedCertifications);
+            sharedProjects = getCachedData('projects', sharedProjects);
+            sharedEducation = getCachedData('education', sharedEducation);
+            sharedAchievements = getCachedData('achievements', sharedAchievements);
+            sharedTestimonials = getCachedData('testimonials', sharedTestimonials);
+            sharedLinks = getCachedData('links', sharedLinks);
+            sharedCalendarEvents = getCachedData('calendar_events', sharedCalendarEvents);
+          }
         } catch (e) {}
       }
     }
@@ -4991,32 +5053,45 @@ export default function App() {
       const decoded = decodePortfolioData(text);
       if (decoded) {
         lastFetchedText = text;
+        const isPayloadPrivate = decoded.p?.publicProfile === false;
         const finalData = {
-          profile: decoded.p ? { ...decoded.p, publicProfile: true } : { ...sharedProfile, publicProfile: true },
-          skills: decoded.s || sharedSkills,
-          experience: decoded.e || sharedExperience,
-          certifications: decoded.c || sharedCertifications,
-          projects: decoded.pr || sharedProjects,
-          education: decoded.ed || sharedEducation,
-          achievements: decoded.a || sharedAchievements,
-          testimonials: decoded.t || sharedTestimonials,
-          links: decoded.l || sharedLinks,
-          calendarEvents: decoded.cal || []
+          profile: decoded.p ? { ...decoded.p, publicProfile: !isPayloadPrivate } : { ...sharedProfile, publicProfile: sharedProfile.publicProfile !== false },
+          skills: isPayloadPrivate ? [] : (decoded.s || sharedSkills),
+          experience: isPayloadPrivate ? [] : (decoded.e || sharedExperience),
+          certifications: isPayloadPrivate ? [] : (decoded.c || sharedCertifications),
+          projects: isPayloadPrivate ? [] : (decoded.pr || sharedProjects),
+          education: isPayloadPrivate ? [] : (decoded.ed || sharedEducation),
+          achievements: isPayloadPrivate ? [] : (decoded.a || sharedAchievements),
+          testimonials: isPayloadPrivate ? [] : (decoded.t || sharedTestimonials),
+          links: isPayloadPrivate ? [] : (decoded.l || sharedLinks),
+          calendarEvents: isPayloadPrivate ? [] : (decoded.cal || [])
         };
         setRemoteShareData(finalData);
 
         // Back up Cache for future offline review
         try {
           localStorage.setItem(`nexus_cache_profile_${slug}`, JSON.stringify(finalData.profile));
-          localStorage.setItem(`nexus_cache_skills_${slug}`, JSON.stringify(finalData.skills));
-          localStorage.setItem(`nexus_cache_experience_${slug}`, JSON.stringify(finalData.experience));
-          localStorage.setItem(`nexus_cache_certs_${slug}`, JSON.stringify(finalData.certifications));
-          localStorage.setItem(`nexus_cache_projects_${slug}`, JSON.stringify(finalData.projects));
-          localStorage.setItem(`nexus_cache_education_${slug}`, JSON.stringify(finalData.education));
-          localStorage.setItem(`nexus_cache_achievements_${slug}`, JSON.stringify(finalData.achievements));
-          localStorage.setItem(`nexus_cache_testimonials_${slug}`, JSON.stringify(finalData.testimonials));
-          localStorage.setItem(`nexus_cache_links_${slug}`, JSON.stringify(finalData.links));
-          localStorage.setItem(`nexus_cache_calendar_events_${slug}`, JSON.stringify(finalData.calendarEvents));
+          if (isPayloadPrivate) {
+            localStorage.removeItem(`nexus_cache_skills_${slug}`);
+            localStorage.removeItem(`nexus_cache_experience_${slug}`);
+            localStorage.removeItem(`nexus_cache_certs_${slug}`);
+            localStorage.removeItem(`nexus_cache_projects_${slug}`);
+            localStorage.removeItem(`nexus_cache_education_${slug}`);
+            localStorage.removeItem(`nexus_cache_achievements_${slug}`);
+            localStorage.removeItem(`nexus_cache_testimonials_${slug}`);
+            localStorage.removeItem(`nexus_cache_links_${slug}`);
+            localStorage.removeItem(`nexus_cache_calendar_events_${slug}`);
+          } else {
+            localStorage.setItem(`nexus_cache_skills_${slug}`, JSON.stringify(finalData.skills));
+            localStorage.setItem(`nexus_cache_experience_${slug}`, JSON.stringify(finalData.experience));
+            localStorage.setItem(`nexus_cache_certs_${slug}`, JSON.stringify(finalData.certifications));
+            localStorage.setItem(`nexus_cache_projects_${slug}`, JSON.stringify(finalData.projects));
+            localStorage.setItem(`nexus_cache_education_${slug}`, JSON.stringify(finalData.education));
+            localStorage.setItem(`nexus_cache_achievements_${slug}`, JSON.stringify(finalData.achievements));
+            localStorage.setItem(`nexus_cache_testimonials_${slug}`, JSON.stringify(finalData.testimonials));
+            localStorage.setItem(`nexus_cache_links_${slug}`, JSON.stringify(finalData.links));
+            localStorage.setItem(`nexus_cache_calendar_events_${slug}`, JSON.stringify(finalData.calendarEvents));
+          }
         } catch (e) {}
       }
     };
@@ -5122,7 +5197,7 @@ export default function App() {
             phone: pRow.phone || '',
             location: pRow.location || '',
             avatarUrl: pRow.avatar_url || '',
-            publicProfile: true,
+            publicProfile: pRow.public_profile !== false,
             shareSlug: pRow.share_slug || slug
           };
 
@@ -5265,17 +5340,19 @@ export default function App() {
       try {
         const cachedProfile = localStorage.getItem(`nexus_cache_profile_${slug}`);
         if (cachedProfile) {
+          const parsedCache = JSON.parse(cachedProfile);
+          const isCachePrivate = parsedCache.publicProfile === false;
           const finalData = {
-            profile: { ...JSON.parse(cachedProfile), publicProfile: true },
-            skills: JSON.parse(localStorage.getItem(`nexus_cache_skills_${slug}`) || "[]"),
-            experience: JSON.parse(localStorage.getItem(`nexus_cache_experience_${slug}`) || "[]"),
-            certifications: JSON.parse(localStorage.getItem(`nexus_cache_certs_${slug}`) || "[]"),
-            projects: JSON.parse(localStorage.getItem(`nexus_cache_projects_${slug}`) || "[]"),
-            education: JSON.parse(localStorage.getItem(`nexus_cache_education_${slug}`) || "[]"),
-            achievements: JSON.parse(localStorage.getItem(`nexus_cache_achievements_${slug}`) || "[]"),
-            testimonials: JSON.parse(localStorage.getItem(`nexus_cache_testimonials_${slug}`) || "[]"),
-            links: JSON.parse(localStorage.getItem(`nexus_cache_links_${slug}`) || "[]"),
-            calendarEvents: JSON.parse(localStorage.getItem(`nexus_cache_calendar_events_${slug}`) || "[]")
+            profile: { ...parsedCache, publicProfile: !isCachePrivate },
+            skills: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_skills_${slug}`) || "[]"),
+            experience: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_experience_${slug}`) || "[]"),
+            certifications: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_certs_${slug}`) || "[]"),
+            projects: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_projects_${slug}`) || "[]"),
+            education: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_education_${slug}`) || "[]"),
+            achievements: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_achievements_${slug}`) || "[]"),
+            testimonials: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_testimonials_${slug}`) || "[]"),
+            links: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_links_${slug}`) || "[]"),
+            calendarEvents: isCachePrivate ? [] : JSON.parse(localStorage.getItem(`nexus_cache_calendar_events_${slug}`) || "[]")
           };
           setRemoteShareData(finalData);
           console.log(`[Sync] Successfully restored from local offline Cache backup.`);
@@ -5285,19 +5362,26 @@ export default function App() {
         console.log("[Sync] Stale local offline cache failed:", cacheErr);
       }
 
-      // Ensure fallback payload is set so visitor never sees Access Restricted
-      setRemoteShareData(prev => prev || {
-        profile: sharedProfile,
-        skills: sharedSkills,
-        experience: sharedExperience,
-        certifications: sharedCertifications,
-        projects: sharedProjects,
-        education: sharedEducation,
-        achievements: sharedAchievements,
-        testimonials: sharedTestimonials,
-        links: sharedLinks,
-        calendarEvents: sharedCalendarEvents
-      });
+      // Ensure fallback payload is set: if sharedProfile is private, set empty data arrays
+      if (sharedProfile.publicProfile === false) {
+        setRemoteShareData({
+          profile: { ...sharedProfile, publicProfile: false },
+          skills: [], experience: [], certifications: [], projects: [], education: [], achievements: [], testimonials: [], links: [], calendarEvents: []
+        });
+      } else {
+        setRemoteShareData(prev => prev || {
+          profile: sharedProfile,
+          skills: sharedSkills,
+          experience: sharedExperience,
+          certifications: sharedCertifications,
+          projects: sharedProjects,
+          education: sharedEducation,
+          achievements: sharedAchievements,
+          testimonials: sharedTestimonials,
+          links: sharedLinks,
+          calendarEvents: sharedCalendarEvents
+        });
+      }
 
       return "";
     };
@@ -5390,21 +5474,23 @@ export default function App() {
       );
     }
 
+    const isProfilePrivate = remoteShareData.profile?.publicProfile === false;
+
     return (
       <PublicPortfolioView 
         profile={remoteShareData.profile}
-        skills={remoteShareData.skills}
-        experience={remoteShareData.experience}
-        certifications={remoteShareData.certifications}
-        projects={remoteShareData.projects}
-        education={remoteShareData.education}
-        achievements={remoteShareData.achievements}
-        testimonials={remoteShareData.testimonials}
-        links={remoteShareData.links}
-        resumes={remoteShareData.resumes && remoteShareData.resumes.length > 0 ? remoteShareData.resumes : resumes}
-        documents={remoteShareData.documents || documents}
-        calendarEvents={remoteShareData.calendarEvents || []}
-        currentJob={remoteShareData.currentJob || currentJob}
+        skills={isProfilePrivate ? [] : remoteShareData.skills}
+        experience={isProfilePrivate ? [] : remoteShareData.experience}
+        certifications={isProfilePrivate ? [] : remoteShareData.certifications}
+        projects={isProfilePrivate ? [] : remoteShareData.projects}
+        education={isProfilePrivate ? [] : remoteShareData.education}
+        achievements={isProfilePrivate ? [] : remoteShareData.achievements}
+        testimonials={isProfilePrivate ? [] : remoteShareData.testimonials}
+        links={isProfilePrivate ? [] : remoteShareData.links}
+        resumes={isProfilePrivate ? [] : (remoteShareData.resumes && remoteShareData.resumes.length > 0 ? remoteShareData.resumes : [])}
+        documents={isProfilePrivate ? [] : (remoteShareData.documents || [])}
+        calendarEvents={isProfilePrivate ? [] : (remoteShareData.calendarEvents || [])}
+        currentJob={isProfilePrivate ? undefined : remoteShareData.currentJob}
         onGoToConsole={() => {
           window.history.replaceState(null, '', window.location.pathname + '#overview');
           setActiveTab('overview');

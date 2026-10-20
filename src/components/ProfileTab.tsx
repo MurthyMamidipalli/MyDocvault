@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Lock,
   X
 } from 'lucide-react';
 import { PersonalProfile, getAvatarInitials } from '../types';
@@ -649,9 +650,22 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                 </div>
 
                 <div className="space-y-2 pt-1">
-                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
-                    Public Profile Status
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                      Public Profile Status
+                    </label>
+                    {formData.publicProfile === false ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 uppercase tracking-wider">
+                        <Lock className="w-3 h-3" />
+                        Profile is Private
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider">
+                        <Globe className="w-3 h-3" />
+                        Public Active
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-4">
                     <button
                       type="button"
@@ -679,9 +693,16 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                       <span>No, Disable Public Profile</span>
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-500">
-                    When enabled, visitors can see your designated public data at your unique shareable profile link. When disabled, the public link displays that your profile is not publicly available.
-                  </p>
+                  {formData.publicProfile === false ? (
+                    <p className="text-[11px] text-rose-400 font-medium bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5 flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 shrink-0" />
+                      <span>Profile is Private. Anyone visiting your link will see "Profile is Private" and no personal data will be visible.</span>
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-gray-500">
+                      When enabled, visitors can see your designated public data at your unique shareable profile link. When disabled, your profile is marked Private and no data is shared.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2 pt-2">
