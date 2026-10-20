@@ -58,6 +58,7 @@ import {
   EMPTY_PROFILE,
   EMPTY_CURRENT_JOB,
   getAvatarInitials,
+  formatSlugToName,
   INITIAL_PROFILE, 
   INITIAL_SKILLS, 
   INITIAL_EDUCATION, 
@@ -4858,13 +4859,23 @@ export default function App() {
         rawSlug = seg;
       }
     }
-    rawSlug = rawSlug.split('/')[0].trim().toLowerCase();
+    rawSlug = rawSlug.split('/')[0].split('#')[0].split('?')[0].trim().toLowerCase();
     let slug = rawSlug;
 
     const isDemo = slug === 'demo' || slug === 'template';
+    const fallbackDisplayName = formatSlugToName(slug);
 
     // Baseline shared variables (starts with default fallback or empty depending on owner)
-    let sharedProfile: PersonalProfile = isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, publicProfile: true };
+    let sharedProfile: PersonalProfile = isDemo 
+      ? { ...INITIAL_PROFILE, publicProfile: true } 
+      : { 
+          ...EMPTY_PROFILE, 
+          name: fallbackDisplayName, 
+          firstName: fallbackDisplayName.split(' ')[0] || '',
+          lastName: fallbackDisplayName.split(' ').slice(1).join(' ') || '',
+          shareSlug: slug, 
+          publicProfile: false 
+        };
     let sharedSkills: Skill[] = isDemo ? INITIAL_SKILLS : [];
     let sharedExperience: Experience[] = isDemo ? INITIAL_EXPERIENCE : [];
     let sharedCertifications: Certification[] = isDemo ? INITIAL_CERTIFICATIONS : [];
@@ -4896,14 +4907,17 @@ export default function App() {
     }
 
     // Scan all possible profiles on this machine to find the one matching the current slug
+    const targetNorm = slug.replace(/[^a-z0-9]/g, '');
     for (const u of registeredUsers) {
       const savedProfileStr = localStorage.getItem(`${u.email}_profile`);
       if (savedProfileStr) {
         try {
           const p = JSON.parse(savedProfileStr);
-          if (p && p.name) {
-            const candidateSlug = p.name.toLowerCase().replace(/\s+/g, '-');
-            if (candidateSlug === slug) {
+          if (p) {
+            const pSlugNorm = (p.shareSlug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const candidateSlugNorm = (p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const emailSlugNorm = (u.email || '').split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (pSlugNorm === targetNorm || candidateSlugNorm === targetNorm || emailSlugNorm === targetNorm) {
               matchedEmail = u.email;
               break;
             }
@@ -4918,8 +4932,12 @@ export default function App() {
       if (savedProfileStr) {
         try {
           const p = JSON.parse(savedProfileStr);
-          if (p && p.name && p.name.toLowerCase().replace(/\s+/g, '-') === slug) {
-            matchedEmail = currentEmail;
+          if (p) {
+            const pSlugNorm = (p.shareSlug || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const candidateSlugNorm = (p.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (pSlugNorm === targetNorm || candidateSlugNorm === targetNorm) {
+              matchedEmail = currentEmail;
+            }
           }
         } catch (e) {}
       }
@@ -4938,7 +4956,9 @@ export default function App() {
       const locP = getLocalData('profile');
       const isLocPrivate = locP !== null && locP.publicProfile === false;
 
-      sharedProfile = locP !== null ? { ...locP, publicProfile: !isLocPrivate } : (isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, publicProfile: true });
+      sharedProfile = locP !== null 
+        ? { ...locP, name: locP.name || fallbackDisplayName, publicProfile: !isLocPrivate } 
+        : (isDemo ? { ...INITIAL_PROFILE, publicProfile: true } : { ...EMPTY_PROFILE, name: fallbackDisplayName, shareSlug: slug, publicProfile: false });
 
       if (isLocPrivate) {
         sharedSkills = [];
@@ -5134,19 +5154,30 @@ export default function App() {
 
         pRow = exactRow;
 
+        // Try match with slug stripped of hyphens
+        if (!pRow) {
+          const { data: noHyphenRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('share_slug', slug.replace(/[^a-z0-9]/g, ''))
+            .maybeSingle();
+          pRow = noHyphenRow;
+        }
+
         // Fallback: match by candidate name slug or email handle
         if (!pRow) {
           const { data: allP } = await supabase.from('profiles').select('*');
           if (allP && allP.length > 0) {
+            const targetNorm = slug.replace(/[^a-z0-9]/g, '');
             pRow = allP.find((p: any) => {
-              if (p.share_slug && p.share_slug.toLowerCase() === slug) return true;
+              if (p.share_slug && (p.share_slug.toLowerCase() === slug || p.share_slug.toLowerCase().replace(/[^a-z0-9]/g, '') === targetNorm)) return true;
               if (p.name) {
                 const candidate = p.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-                if (candidate === slug) return true;
+                if (candidate === slug || candidate.replace(/[^a-z0-9]/g, '') === targetNorm) return true;
               }
               if (p.email) {
                 const handle = p.email.split('@')[0].toLowerCase().replace(/[^a-z0-9-]/g, '');
-                if (handle === slug) return true;
+                if (handle === slug || handle.replace(/[^a-z0-9]/g, '') === targetNorm) return true;
               }
               return false;
             });
@@ -5154,9 +5185,18 @@ export default function App() {
         }
 
         if (pRow) {
+          const displayName = pRow.name || `${pRow.first_name || ''} ${pRow.last_name || ''}`.trim() || fallbackDisplayName;
           if (pRow.public_profile === false) {
             setRemoteShareData({
-              profile: { ...sharedProfile, publicProfile: false },
+              profile: {
+                ...EMPTY_PROFILE,
+                name: displayName,
+                firstName: pRow.first_name || displayName.split(' ')[0] || '',
+                lastName: pRow.last_name || displayName.split(' ').slice(1).join(' ') || '',
+                avatarUrl: pRow.avatar_url || '',
+                shareSlug: pRow.share_slug || slug,
+                publicProfile: false
+              },
               skills: [], experience: [], certifications: [], projects: [], education: [], achievements: [], testimonials: [], links: [], calendarEvents: []
             });
             return "";
@@ -5372,10 +5412,18 @@ export default function App() {
         console.log("[Sync] Stale local offline cache failed:", cacheErr);
       }
 
-      // Ensure fallback payload is set: if sharedProfile is private, set empty data arrays
-      if (sharedProfile.publicProfile === false) {
+      // Ensure fallback payload is set: if sharedProfile is private or not found in public database
+      if (sharedProfile.publicProfile === false || !isDemo) {
         setRemoteShareData({
-          profile: { ...sharedProfile, publicProfile: false },
+          profile: {
+            ...EMPTY_PROFILE,
+            name: sharedProfile.name || fallbackDisplayName,
+            firstName: sharedProfile.firstName || (sharedProfile.name || fallbackDisplayName).split(' ')[0] || '',
+            lastName: sharedProfile.lastName || (sharedProfile.name || fallbackDisplayName).split(' ').slice(1).join(' ') || '',
+            avatarUrl: sharedProfile.avatarUrl || '',
+            shareSlug: sharedProfile.shareSlug || slug,
+            publicProfile: false
+          },
           skills: [], experience: [], certifications: [], projects: [], education: [], achievements: [], testimonials: [], links: [], calendarEvents: []
         });
       } else {

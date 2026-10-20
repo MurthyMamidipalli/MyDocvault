@@ -671,36 +671,43 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
                       type="button"
                       onClick={() => handleChange('publicProfile', true)}
                       className={`flex-1 min-w-[180px] max-w-[280px] py-2.5 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer ${
-                        formData.publicProfile === true 
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/40 font-bold' 
-                          : 'bg-slate-950 text-gray-400 border-slate-800 hover:bg-slate-900'
+                        formData.publicProfile !== false 
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/50 ring-1 ring-emerald-500/40 font-bold shadow-md shadow-emerald-950/50' 
+                          : 'bg-slate-950 text-gray-400 border-slate-800 hover:bg-slate-900 hover:text-gray-200'
                       }`}
                     >
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Yes, Enable Public Profile</span>
+                      <Globe className={`w-3.5 h-3.5 ${formData.publicProfile !== false ? 'text-emerald-400' : 'text-gray-500'}`} />
+                      {formData.publicProfile !== false && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                      )}
+                      <span>Enable Public Profile</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => handleChange('publicProfile', false)}
                       className={`flex-1 min-w-[180px] max-w-[280px] py-2.5 px-4 rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer ${
-                        formData.publicProfile !== true 
-                          ? 'bg-rose-500/10 text-rose-400 border-rose-500/40 font-bold' 
-                          : 'bg-slate-950 text-gray-400 border-slate-800 hover:bg-slate-900'
+                        formData.publicProfile === false 
+                          ? 'bg-rose-500/15 text-rose-300 border-rose-500/50 ring-1 ring-rose-500/40 font-bold shadow-md shadow-rose-950/50' 
+                          : 'bg-slate-950 text-gray-400 border-slate-800 hover:bg-slate-900 hover:text-gray-200'
                       }`}
                     >
-                      <span className="w-2 h-2 rounded-full bg-rose-500" />
-                      <span>No, Disable Public Profile</span>
+                      <Lock className={`w-3.5 h-3.5 ${formData.publicProfile === false ? 'text-rose-400' : 'text-gray-500'}`} />
+                      {formData.publicProfile === false && (
+                        <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+                      )}
+                      <span>Disable Public Profile</span>
                     </button>
                   </div>
                   {formData.publicProfile === false ? (
                     <p className="text-[11px] text-rose-400 font-medium bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5 flex items-center gap-2">
                       <Lock className="w-3.5 h-3.5 shrink-0" />
-                      <span>Profile is Private. Anyone visiting your link will see "Profile is Private" and no personal data will be visible.</span>
+                      <span>Profile is Private. Anyone visiting your link will see your name and "Profile is Private", with all other personal data hidden.</span>
                     </p>
                   ) : (
-                    <p className="text-[11px] text-gray-500">
-                      When enabled, visitors can see your designated public data at your unique shareable profile link. When disabled, your profile is marked Private and no data is shared.
+                    <p className="text-[11px] text-emerald-400/90 font-medium bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2.5 flex items-center gap-2">
+                      <Globe className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                      <span>Public Profile is Active. Anyone with your link can view your designated public portfolio.</span>
                     </p>
                   )}
                 </div>

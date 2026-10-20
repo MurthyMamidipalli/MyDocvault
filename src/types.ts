@@ -944,6 +944,48 @@ export function getAvatarInitials(profile: { name?: string; firstName?: string; 
     }
   }
 
+  // 4. Quaternary: Slug derivation
+  if ((profile as any)?.shareSlug) {
+    const fromSlug = formatSlugToName((profile as any).shareSlug);
+    if (fromSlug && fromSlug !== 'User Profile') {
+      const parts = fromSlug.split(/\s+/).filter(Boolean);
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return fromSlug.slice(0, 2).toUpperCase();
+    }
+  }
+
   return 'DV';
+}
+
+export function formatSlugToName(slug?: string | null): string {
+  if (!slug || slug === 'my-profile' || slug === 'user' || slug === 'demo' || slug === 'template') {
+    return 'User Profile';
+  }
+  const clean = slug.split('#')[0].split('?')[0].replace(/^\/+|\/+$/g, '').trim();
+  if (clean.includes('-') || clean.includes('_') || clean.includes('.')) {
+    return clean
+      .replace(/[-_.]+/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .split(' ')
+      .filter(Boolean)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+  const lower = clean.toLowerCase();
+  if (lower === 'ramachandramurthymamidipalli') {
+    return 'Ramachandra Murthy Mamidipalli';
+  }
+  if (lower.startsWith('ramachandra') && lower.includes('murthy')) {
+    const rem = lower.replace('ramachandra', '').replace('murthy', '');
+    return ['Ramachandra', 'Murthy', rem ? (rem.charAt(0).toUpperCase() + rem.slice(1)) : ''].filter(Boolean).join(' ');
+  }
+  return clean
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
 }
 

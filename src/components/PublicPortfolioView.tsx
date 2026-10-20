@@ -39,7 +39,8 @@ import {
   ResumeItem,
   VaultDocument,
   CurrentJob,
-  getAvatarInitials
+  getAvatarInitials,
+  formatSlugToName
 } from '../types';
 import { openPdfInNewTab, downloadFileUrl } from '../lib/pdfUtils';
 import { generateCertificationPdf } from './CertificationsTab';
@@ -112,6 +113,9 @@ export default function PublicPortfolioView({
   };
 
   if (profile.publicProfile === false) {
+    const displayName = profile.name || (profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : '') || formatSlugToName(profile.shareSlug);
+    const initials = getAvatarInitials({ ...profile, name: displayName });
+
     return (
       <div className="min-h-screen bg-[#07080b] flex flex-col justify-center items-center font-sans select-none relative overflow-hidden px-4" id="nexus-share-disabled">
         {/* Ambient atmospheric backdrop */}
@@ -119,21 +123,40 @@ export default function PublicPortfolioView({
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] h-[320px] rounded-full blur-[100px] bg-red-600/10 pointer-events-none" />
 
         <div className="z-10 text-center space-y-6 max-w-md w-full">
-          <div className="relative inline-flex">
-            <span className="absolute -inset-1.5 rounded-3xl bg-rose-500/20 blur-md animate-pulse" />
-            <div className="relative rounded-2xl border border-rose-500/30 p-5 bg-slate-950/90 shadow-2xl backdrop-blur-xl">
-              <Lock className="w-10 h-10 text-rose-500" />
+          {/* User Avatar Circle with Initials (Derived from user name, NOT default "DV") */}
+          <div className="relative inline-flex items-center justify-center">
+            <span className="absolute -inset-2 rounded-full bg-rose-500/20 blur-md animate-pulse" />
+            {profile.avatarUrl && !profile.avatarUrl.startsWith('[') && !profile.avatarUrl.includes('truncated') ? (
+              <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-rose-500/40 ring-4 ring-rose-500/20 shadow-2xl relative z-10">
+                <img 
+                  src={profile.avatarUrl} 
+                  alt={displayName} 
+                  className="w-full h-full object-cover bg-slate-950"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-slate-950 border-4 border-rose-500/40 ring-4 ring-rose-500/20 shadow-2xl flex items-center justify-center font-bold text-3xl text-rose-400 select-none relative z-10">
+                {initials !== 'DV' ? initials : (displayName.split(' ').length >= 2 ? (displayName.split(' ')[0][0] + displayName.split(' ')[displayName.split(' ').length - 1][0]).toUpperCase() : displayName.slice(0, 2).toUpperCase())}
+              </div>
+            )}
+            <div className="absolute -bottom-1 -right-1 bg-slate-950 border border-rose-500/50 rounded-full p-1.5 shadow-lg z-20 text-rose-400">
+              <Lock className="w-4 h-4" />
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[11px] font-mono font-semibold tracking-wider uppercase">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-              Private Mode
+              Private Profile
             </div>
-            <h1 className="text-white font-extrabold text-2xl tracking-tight font-sans">Profile is Private</h1>
+
+            <h1 className="text-white font-extrabold text-2xl md:text-3xl tracking-tight font-sans">
+              {displayName}
+            </h1>
+
             <p className="text-sm text-gray-400 font-mono leading-relaxed bg-slate-950/70 p-4 border border-slate-900 rounded-xl shadow-inner">
-              This profile is set to Private. No information or data is publicly available.
+              🔒 This profile is set to Private. Portfolio details, skills, experience, and documents are protected and not visible publicly.
             </p>
           </div>
 
