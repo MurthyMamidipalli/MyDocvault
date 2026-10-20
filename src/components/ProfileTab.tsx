@@ -142,69 +142,63 @@ export default function ProfileTab({ profile, onUpdateProfile, shareUrl: passedS
     setTimeout(() => setSuccess(false), 3000);
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (user) {
-        const result = await uploadFileToSupabaseStorage(STORAGE_BUCKETS.PROFILE_IMAGES, user.id, file, 'avatar');
-        if (result?.publicUrl) {
-          const updated = { ...formData, avatarUrl: result.publicUrl };
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rawResult = reader.result;
+      if (typeof rawResult !== 'string') return;
+
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX_AXIS = 360;
+
+          if (width > height) {
+            if (width > MAX_AXIS) {
+              height = Math.round((height * MAX_AXIS) / width);
+              width = MAX_AXIS;
+            }
+          } else {
+            if (height > MAX_AXIS) {
+              width = Math.round((width * MAX_AXIS) / height);
+              height = MAX_AXIS;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          let finalAvatar = rawResult;
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            finalAvatar = canvas.toDataURL('image/jpeg', 0.85);
+          }
+          const updated = { ...formData, avatarUrl: finalAvatar };
           setFormData(updated);
           onUpdateProfile(updated);
-          return;
-        }
-      }
-      
-      // Fallback local canvas compression if storage upload deferred
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          const rawResult = reader.result;
-          const img = new Image();
-          img.src = rawResult;
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-            const MAX_AXIS = 300;
-
-            if (width > height) {
-              if (width > MAX_AXIS) {
-                height *= MAX_AXIS / width;
-                width = MAX_AXIS;
-              }
-            } else {
-              if (height > MAX_AXIS) {
-                width *= MAX_AXIS / height;
-                height = MAX_AXIS;
-              }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0, width, height);
-              const compressed = canvas.toDataURL('image/jpeg', 0.85);
-              const updated = { ...formData, avatarUrl: compressed };
-              setFormData(updated);
-              onUpdateProfile(updated);
-            } else {
-              const updated = { ...formData, avatarUrl: rawResult };
-              setFormData(updated);
-              onUpdateProfile(updated);
-            }
-          };
-          img.onerror = () => {
-            const updated = { ...formData, avatarUrl: rawResult };
-            setFormData(updated);
-            onUpdateProfile(updated);
-          };
+        } catch (err) {
+          const updated = { ...formData, avatarUrl: rawResult };
+          setFormData(updated);
+          onUpdateProfile(updated);
         }
       };
-      reader.readAsDataURL(file);
-    }
+      img.onerror = () => {
+        const updated = { ...formData, avatarUrl: rawResult };
+        setFormData(updated);
+        onUpdateProfile(updated);
+      };
+      img.src = rawResult;
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input value so selecting the same file again triggers onChange
+    e.target.value = '';
   };
 
   const handleRemovePhoto = () => {

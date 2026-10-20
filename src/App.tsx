@@ -5411,8 +5411,8 @@ export default function App() {
         console.log("[Sync] Stale local offline cache failed:", cacheErr);
       }
 
-      // Ensure fallback payload is set: if sharedProfile is private or row not found in public database
-      if (!isDemo && (sharedProfile.publicProfile === false || !pRow)) {
+      // Ensure fallback payload is set: only if sharedProfile is explicitly private
+      if (sharedProfile.publicProfile === false) {
         setRemoteShareData({
           profile: {
             ...EMPTY_PROFILE,
@@ -5805,8 +5805,12 @@ export default function App() {
                   {currentUser?.email || profile.email || 'user@example.com'}
                 </p>
               </div>
-              <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 font-bold flex items-center justify-center text-emerald-400 select-none shrink-0 text-xs">
-                {getAvatarInitials(profile)}
+              <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 font-bold flex items-center justify-center text-emerald-400 select-none shrink-0 text-xs overflow-hidden">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt={profile.name || "Avatar"} className="w-full h-full object-cover" />
+                ) : (
+                  getAvatarInitials(profile)
+                )}
               </div>
             </div>
           </div>

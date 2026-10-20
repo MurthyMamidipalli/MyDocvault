@@ -112,21 +112,7 @@ export default function PublicPortfolioView({
     return 'bg-emerald-505/10 text-emerald-400 border-emerald-500/20';
   };
 
-  const isPrivate = profile.publicProfile === false || (
-    profile.shareSlug !== 'demo' &&
-    profile.shareSlug !== 'template' &&
-    !profile.headline?.trim() &&
-    !profile.bio?.trim() &&
-    !profile.phone?.trim() &&
-    !profile.location?.trim() &&
-    (!skills || skills.length === 0) &&
-    (!experience || experience.length === 0) &&
-    (!projects || projects.length === 0) &&
-    (!certifications || certifications.length === 0) &&
-    (!education || education.length === 0)
-  );
-
-  if (isPrivate) {
+  if (profile.publicProfile === false) {
     const displayName = profile.name || (profile.firstName ? `${profile.firstName} ${profile.lastName || ''}`.trim() : '') || formatSlugToName(profile.shareSlug);
     const initials = getAvatarInitials({ ...profile, name: displayName });
 
