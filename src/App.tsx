@@ -3565,7 +3565,7 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        await supabase.from('portfolio_links').upsert({
+        const { error: pErr } = await supabase.from('portfolio_links').upsert({
           id,
           user_id: userId,
           platform: newLk.platform || 'Link',
@@ -3573,8 +3573,12 @@ export default function App() {
           url: newLk.url,
           is_public: newLk.isPublic !== false
         });
+        if (pErr) {
+          console.error("[Supabase Add Link Error]", pErr);
+          triggerToast(`Link Sync: ${pErr.message}`);
+        }
 
-        await supabase.from('resumes').upsert({
+        const { error: rErr } = await supabase.from('resumes').upsert({
           id,
           user_id: userId,
           title: newLk.label || newLk.platform || 'Link',
@@ -3586,6 +3590,7 @@ export default function App() {
           is_primary: false,
           is_public: newLk.isPublic !== false
         });
+        if (rErr) console.warn("[Supabase Resume Link Warning]", rErr);
       } catch (err) { console.warn("[Supabase Add Link Error]", err); }
     }
   };
@@ -3631,7 +3636,7 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        await supabase.from('portfolio_links').upsert({
+        const { error: pErr } = await supabase.from('portfolio_links').upsert({
           id: targetId,
           user_id: userId,
           platform: updatedLk.platform || 'Link',
@@ -3639,8 +3644,12 @@ export default function App() {
           url: updatedLk.url,
           is_public: updatedLk.isPublic !== false
         });
+        if (pErr) {
+          console.error("[Supabase Update Link Error]", pErr);
+          triggerToast(`Link Sync: ${pErr.message}`);
+        }
 
-        await supabase.from('resumes').upsert({
+        const { error: rErr } = await supabase.from('resumes').upsert({
           id: targetId,
           user_id: userId,
           title: updatedLk.label || updatedLk.platform || 'Link',
@@ -3652,6 +3661,7 @@ export default function App() {
           is_primary: false,
           is_public: updatedLk.isPublic !== false
         });
+        if (rErr) console.warn("[Supabase Resume Link Update Warning]", rErr);
       } catch (err) { console.warn("[Supabase Update Link Error]", err); }
     }
   };
