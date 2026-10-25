@@ -530,10 +530,11 @@ export default function NotepadTab({
       </div>
 
       {/* 2. Bento Container Setup */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[640px] bg-slate-950/20 border border-slate-900 rounded-3xl overflow-hidden shadow-2xl relative">
+      <div className={`${isFullTab ? 'flex flex-col' : 'grid grid-cols-1 lg:grid-cols-12 gap-6'} min-h-[640px] bg-slate-950/20 border border-slate-900 rounded-3xl overflow-hidden shadow-2xl relative`}>
         
-        {/* SIDEBAR DIRECTORY: Notes & Tasks List */}
-        <div className={`col-span-1 ${isFullTab ? 'hidden' : 'lg:col-span-4'} border-r border-slate-900/80 bg-[#0a0b0f]/80 flex flex-col ${isMobileListOpen ? 'block' : 'hidden lg:flex'}`}>
+        {/* SIDEBAR DIRECTORY: Notes & Tasks List (Hidden in Full Tab) */}
+        {!isFullTab && (
+          <div className={`col-span-1 lg:col-span-4 border-r border-slate-900/80 bg-[#0a0b0f]/80 flex flex-col ${isMobileListOpen ? 'block' : 'hidden lg:flex'}`}>
           
           <div className="p-4 border-b border-slate-900 space-y-3 shrink-0">
             {/* View Mode Switcher: All | Notes | Tasks */}
@@ -766,14 +767,14 @@ export default function NotepadTab({
               })
             )}
           </div>
-
         </div>
+      )}
 
         {/* ACTIVE EDITOR SCREEN: Full Tap / Tab Workspace */}
         <div 
           ref={editorWorkspaceRef}
           id="notepad-active-editor-pane"
-          className={`col-span-1 ${isFullTab ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col bg-[#050608]/40 ${!isMobileListOpen ? 'block' : 'hidden lg:flex'}`}
+          className={`${isFullTab ? 'w-full' : 'col-span-1 lg:col-span-8'} flex flex-col bg-[#050608]/40 ${!isMobileListOpen || isFullTab ? 'block' : 'hidden lg:flex'}`}
         >
           {activeNote ? (
             <div className="flex flex-col h-full flex-1">
@@ -835,16 +836,25 @@ export default function NotepadTab({
                   <button
                     type="button"
                     onClick={() => {
-                      setIsFullTab(!isFullTab);
+                      const next = !isFullTab;
+                      setIsFullTab(next);
+                      if (isMobileListOpen) {
+                        setIsMobileListOpen(false);
+                      }
                       setTimeout(() => {
-                        editorWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }, 50);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                        document.getElementById('notepad-workspace-root')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 20);
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0a0b0f] hover:bg-slate-900 text-gray-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-850 active:scale-95 transition cursor-pointer"
-                    title={isFullTab ? "Exit Full Tab mode" : "Open Full Tab workspace"}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border active:scale-95 transition cursor-pointer ${
+                      isFullTab 
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/25'
+                        : 'bg-[#0a0b0f] hover:bg-slate-900 text-gray-300 hover:text-white border-slate-850'
+                    }`}
+                    title={isFullTab ? "Exit Full Tab mode (Split View)" : "Open Full Tab workspace"}
                   >
                     {isFullTab ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                    <span className="hidden sm:inline">{isFullTab ? 'Split View' : 'Full Tab'}</span>
+                    <span>{isFullTab ? 'Split View' : 'Full Tab'}</span>
                   </button>
 
                   {/* Save Button */}
