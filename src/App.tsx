@@ -35,7 +35,9 @@ import {
   Calendar,
   AlertTriangle,
   CreditCard,
-  Layers
+  Layers,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 import { 
@@ -1117,6 +1119,25 @@ export default function App() {
   
   // Mobile drawer state
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Desktop sidebar open/close state with local persistence
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('nexus_sidebar_open');
+      if (saved !== null) return saved !== 'false';
+    }
+    return true;
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('nexus_sidebar_open', String(next));
+      } catch (_) {}
+      return next;
+    });
+  };
 
   // Current logged in user state
   const [currentUser, setCurrentUser] = useState<{ id?: string; email: string; firstName?: string; lastName?: string } | null>(() => {
@@ -5580,8 +5601,13 @@ export default function App() {
     );
   }
 
-  // Clean Sidebar items rendering configuration - Sorted Alphabetically (A to Z) with Hover Options
+  // Clean Sidebar items rendering configuration - Home Page & Profile at TOP, remaining modules A-Z
   const sidebarItems = [
+    // Top Pinned Navigation
+    { id: 'overview', label: 'Home Page', icon: Home },
+    { id: 'profile', label: 'Personal Profile', icon: User },
+
+    // Alphabetical Modules (A to Z)
     { id: 'achievements', label: 'Achievements & Awards', icon: Star },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'timeline', label: 'Career Timeline', icon: GitBranch },
@@ -5592,9 +5618,7 @@ export default function App() {
     { id: 'vault', label: 'Document Vault', icon: FolderLock },
     { id: 'education', label: 'Education', icon: GraduationCap },
     { id: 'experience', label: 'Experience', icon: Briefcase },
-    { id: 'overview', label: 'Home Page', icon: Home },
     { id: 'notepad', label: 'Note Pad', icon: StickyNote },
-    { id: 'profile', label: 'Personal Profile', icon: User },
     { id: 'portfolios', label: 'Portfolios & Links', icon: Link2 },
     { id: 'projects', label: 'Projects & Products', icon: Rocket },
     { id: 'resume', label: 'Resume / CV', icon: FileText },
@@ -5610,71 +5634,115 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#08090d] text-gray-300 flex flex-col md:flex-row font-sans relative antialiased" id="nexus-crm-shell">
       
-      {/* 1. CYBER NAVIGATION SIDEBAR (Desktop) */}
-      <aside className="w-64 bg-[#0a0b0d] border-r border-slate-900 flex-col hidden md:flex shrink-0 z-10 select-none">
-        
-        {/* Sidebar Brand header */}
-        <div className="p-6 border-b border-slate-900/80 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="bg-emerald-500/10 text-emerald-400 p-2 rounded-xl border border-emerald-500/25">
-              <Sparkles className="w-5 h-5 animate-pulse" />
+      {/* 1. CYBER NAVIGATION SIDEBAR (Desktop) with Open & Close Toggle */}
+      <aside 
+        className={`${isSidebarOpen ? 'w-64' : 'w-20'} bg-[#0a0b0d] border-r border-slate-900 flex-col hidden md:flex shrink-0 z-20 select-none transition-all duration-300 ease-in-out`}
+      >
+        {/* Sidebar Brand header with Open / Close Toggle Button */}
+        <div className={`p-4 border-b border-slate-900/80 flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
+          {isSidebarOpen ? (
+            <>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="bg-emerald-500/10 text-emerald-400 p-2 rounded-xl border border-emerald-500/25 shrink-0">
+                  <Sparkles className="w-5 h-5 animate-pulse" />
+                </div>
+                <div className="truncate">
+                  <h1 className="font-sans font-bold text-sm tracking-tight text-white leading-none">MyDocVault</h1>
+                  <span className="text-[9px] text-gray-500 font-mono tracking-wider font-semibold">Personal Document Saver</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                title="Close navigation bar"
+                className="p-1.5 rounded-lg hover:bg-slate-800 border border-slate-800 text-gray-400 hover:text-white transition cursor-pointer shrink-0 ml-2 active:scale-95"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                title="Open navigation bar"
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-emerald-400 hover:text-emerald-300 transition cursor-pointer group active:scale-95"
+              >
+                <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </button>
             </div>
-            <div>
-              <h1 className="font-sans font-bold text-sm tracking-tight text-white leading-none">MyDocVault</h1>
-              <span className="text-[9px] text-gray-500 font-mono tracking-wider font-semibold">Personal Document Saver</span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Navigation Sidebar links with Alphabetical Order & Rich Hover Option */}
-        <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-1 custom-scrollbar text-xs">
-          {sidebarItems.map(nav => {
+        {/* Navigation Sidebar links with Home & Profile at Top, Alphabetical below, and Rich Hover Option */}
+        <nav className="flex-1 px-3 py-4 overflow-y-auto space-y-1 custom-scrollbar text-xs">
+          {sidebarItems.map((nav) => {
             const Icon = nav.icon;
             const isActive = activeTab === nav.id;
+            const isDividerAfter = nav.id === 'profile';
 
             return (
-              <button
-                key={nav.id}
-                id={`sidebar-nav-${nav.id}`}
-                onClick={() => setActiveTab(nav.id)}
-                title={nav.label}
-                className={`w-full group flex items-center justify-between py-2.5 px-3 rounded-xl transition-all duration-200 font-semibold cursor-pointer border ${
-                  isActive 
-                    ? 'bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent text-emerald-300 font-bold border-emerald-500/40 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/20' 
-                    : 'border-transparent text-gray-400 hover:text-white hover:bg-slate-850/60 hover:border-slate-800 hover:shadow-md hover:translate-x-1'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <Icon className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+              <React.Fragment key={nav.id}>
+                <button
+                  id={`sidebar-nav-${nav.id}`}
+                  onClick={() => setActiveTab(nav.id)}
+                  title={nav.label}
+                  className={`w-full group flex items-center ${isSidebarOpen ? 'justify-between px-3' : 'justify-center px-2'} py-2.5 rounded-xl transition-all duration-200 font-semibold cursor-pointer border ${
                     isActive 
-                      ? 'text-emerald-400 scale-105' 
-                      : 'text-gray-500 group-hover:text-emerald-400 group-hover:scale-110'
-                  }`} />
-                  <span className="truncate">{nav.label}</span>
-                </div>
-                {/* Active indicator dot & hover indicator pip */}
-                {isActive ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-sm shadow-emerald-400" />
-                ) : (
-                  <span className="w-1.5 h-1.5 rounded-full bg-slate-700 opacity-0 group-hover:opacity-100 group-hover:bg-emerald-400/70 shrink-0 transition-opacity duration-150" />
+                      ? 'bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent text-emerald-300 font-bold border-emerald-500/40 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/20' 
+                      : 'border-transparent text-gray-400 hover:text-white hover:bg-slate-850/60 hover:border-slate-800 hover:shadow-md hover:translate-x-1'
+                  }`}
+                >
+                  <div className={`flex items-center gap-3 min-w-0 ${isSidebarOpen ? '' : 'justify-center'}`}>
+                    <Icon className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+                      isActive 
+                        ? 'text-emerald-400 scale-105' 
+                        : 'text-gray-500 group-hover:text-emerald-400 group-hover:scale-110'
+                    }`} />
+                    {isSidebarOpen && <span className="truncate">{nav.label}</span>}
+                  </div>
+                  {/* Indicator pip when open */}
+                  {isSidebarOpen && (
+                    isActive ? (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-sm shadow-emerald-400" />
+                    ) : (
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-700 opacity-0 group-hover:opacity-100 group-hover:bg-emerald-400/70 shrink-0 transition-opacity duration-150" />
+                    )
+                  )}
+                </button>
+
+                {/* Elegant subtle divider between top pinned items (Home & Profile) and alphabetical modules */}
+                {isDividerAfter && isSidebarOpen && (
+                  <div className="py-2 px-1">
+                    <div className="border-t border-slate-900/80 flex items-center justify-between pt-2">
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-gray-500 font-bold">Modules</span>
+                      <span className="text-[9px] font-mono text-gray-600">A-Z</span>
+                    </div>
+                  </div>
                 )}
-              </button>
+                {isDividerAfter && !isSidebarOpen && (
+                  <div className="py-1">
+                    <div className="border-t border-slate-900/80" />
+                  </div>
+                )}
+              </React.Fragment>
             );
           })}
         </nav>
 
-        {/* Sidebar Settings Option at absolute bottom */}
-        <div className="p-4 border-t border-slate-900/80 bg-slate-950/20 space-y-1.5">
+        {/* Sidebar Settings & Logout Options at bottom */}
+        <div className={`p-3 border-t border-slate-900/80 bg-slate-950/20 space-y-1.5 ${isSidebarOpen ? '' : 'flex flex-col items-center'}`}>
           <button
             onClick={() => setActiveTab('settings')}
-            className={`w-full flex items-center gap-3.5 py-2.5 px-3 rounded-xl text-xs font-semibold cursor-pointer transition ${
+            title="Settings"
+            className={`w-full flex items-center ${isSidebarOpen ? 'gap-3.5 px-3' : 'justify-center px-2'} py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition ${
               activeTab === 'settings' 
                 ? 'bg-slate-900/80 text-emerald-400 font-bold border border-slate-800/60' 
-                : 'text-gray-400 hover:text-white hover:bg-slate-900/20'
+                : 'text-gray-400 hover:text-white hover:bg-slate-900/40'
             }`}
           >
             <Settings className="w-4 h-4 text-gray-500 shrink-0" />
-            <span>Settings</span>
+            {isSidebarOpen && <span>Settings</span>}
           </button>
 
           <button
@@ -5689,10 +5757,11 @@ export default function App() {
                 }
               });
             }}
-            className="w-full flex items-center gap-3.5 py-2.5 px-3 rounded-xl text-xs font-semibold text-rose-450 hover:text-rose-450 hover:bg-rose-950/20 cursor-pointer transition"
+            title="Logout"
+            className={`w-full flex items-center ${isSidebarOpen ? 'gap-3.5 px-3' : 'justify-center px-2'} py-2.5 rounded-xl text-xs font-semibold text-rose-450 hover:text-rose-400 hover:bg-rose-950/20 cursor-pointer transition`}
           >
             <LogOut className="w-4 h-4 text-gray-500 shrink-0" />
-            <span>Logout</span>
+            {isSidebarOpen && <span>Logout</span>}
           </button>
         </div>
 
@@ -5789,18 +5858,30 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 bg-[#08090d]">
         
         {/* Navigation Breadcrumbs & Top details header (exactly matches user profile section in screenshot) */}
-        <header className="bg-[#0a0b0d] border-b border-slate-900 hidden md:flex items-center justify-between px-8 py-3.5 shadow-sm select-none z-10">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-500 font-mono text-xs">Breadcrumb:</span>
-            <div className="flex items-center gap-1.5 text-xs font-bold text-white uppercase tracking-wide">
-              <span>🏠</span>
-              <span>Home Page</span>
-              {activeTab !== 'overview' && (
-                <>
-                  <span className="text-gray-650 font-normal">/</span>
-                  <span className="text-emerald-400">{getActiveTabBreadcrumb()}</span>
-                </>
-              )}
+        <header className="bg-[#0a0b0d] border-b border-slate-900 hidden md:flex items-center justify-between px-6 lg:px-8 py-3.5 shadow-sm select-none z-10">
+          <div className="flex items-center gap-3">
+            {/* Sidebar toggle button (Open/Close) */}
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              title={isSidebarOpen ? "Close navigation bar" : "Open navigation bar"}
+              className="p-1.5 rounded-lg hover:bg-slate-850 border border-slate-800 text-gray-400 hover:text-emerald-400 transition flex items-center justify-center cursor-pointer active:scale-95"
+            >
+              {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4 text-emerald-400" />}
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 font-mono text-xs">Breadcrumb:</span>
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white uppercase tracking-wide">
+                <span>🏠</span>
+                <span>Home Page</span>
+                {activeTab !== 'overview' && (
+                  <>
+                    <span className="text-gray-650 font-normal">/</span>
+                    <span className="text-emerald-400">{getActiveTabBreadcrumb()}</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
