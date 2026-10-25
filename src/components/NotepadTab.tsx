@@ -80,6 +80,29 @@ export default function NotepadTab({
   const editorRef = useRef<HTMLDivElement>(null);
   const editorWorkspaceRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+
+  // Preserve user's current highlighted selection in editor
+  const saveSelection = () => {
+    try {
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0 && editorRef.current && editorRef.current.contains(sel.anchorNode)) {
+        savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+      }
+    } catch (_) {}
+  };
+
+  const restoreSelection = () => {
+    try {
+      if (savedRangeRef.current && editorRef.current) {
+        const sel = window.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+          sel.addRange(savedRangeRef.current);
+        }
+      }
+    } catch (_) {}
+  };
 
   // Subtask input state for active note
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -118,7 +141,111 @@ export default function NotepadTab({
 
   // Format command helper for Rich Text Toolbar
   const executeFormat = (command: string, value: string = '') => {
-    document.execCommand(command, false, value);
+    editorRef.current?.focus();
+    restoreSelection();
+    try {
+      document.execCommand(command, false, value);
+    } catch (_) {}
+    saveSelection();
+    if (editorRef.current && activeNoteId) {
+      handleUpdateActiveNote('content', editorRef.current.innerHTML);
+    }
+  };
+
+  // Heading Block Formatter for Normal, H1, H2, H3
+  const applyHeadingBlock = (tag: 'p' | 'h1' | 'h2' | 'h3') => {
+    editorRef.current?.focus();
+    restoreSelection();
+    try {
+      const ok = document.execCommand('formatBlock', false, `<${tag.toUpperCase()}>`);
+      if (!ok) {
+        document.execCommand('formatBlock', false, tag);
+      }
+    } catch (_) {
+      try {
+        document.execCommand('formatBlock', false, tag);
+      } catch (e) {}
+    }
+
+    // Fallback: If text was selected and formatBlock was ignored by browser, wrap selection
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed && editorRef.current?.contains(sel.anchorNode)) {
+      try {
+        const range = sel.getRangeAt(0);
+        const el = document.createElement(tag);
+        el.appendChild(range.extractContents());
+        range.insertNode(el);
+        range.selectNodeContents(el);
+        sel.removeAllRanges();
+        sel.addRange(range);
+        savedRangeRef.current = range.cloneRange();
+      } catch (_) {}
+    }
+
+    saveSelection();
+    if (editorRef.current && activeNoteId) {
+      handleUpdateActiveNote('content', editorRef.current.innerHTML);
+    }
+  };
+
+  // Font Family: Changes ONLY the highlighted/selected text
+  const applyFontToSelection = (fontFamily: string) => {
+    editorRef.current?.focus();
+    restoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed || !editorRef.current?.contains(sel.anchorNode)) {
+      triggerToast('Please select/highlight the specific text you want to change font for.');
+      return;
+    }
+
+    try {
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.fontFamily = fontFamily;
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+
+      // Re-select newly styled span
+      range.selectNodeContents(span);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      savedRangeRef.current = range.cloneRange();
+      triggerToast('Font applied to selected text.');
+    } catch (err) {
+      console.warn('Font apply error', err);
+    }
+
+    if (editorRef.current && activeNoteId) {
+      handleUpdateActiveNote('content', editorRef.current.innerHTML);
+    }
+  };
+
+  // Font Size: Changes ONLY the highlighted/selected text
+  const applyFontSizeToSelection = (sizePx: string) => {
+    editorRef.current?.focus();
+    restoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed || !editorRef.current?.contains(sel.anchorNode)) {
+      triggerToast('Please select/highlight the specific text you want to resize.');
+      return;
+    }
+
+    try {
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.fontSize = sizePx;
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+
+      range.selectNodeContents(span);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      savedRangeRef.current = range.cloneRange();
+      triggerToast('Font size updated on selected text.');
+    } catch (err) {
+      console.warn('Font size apply error', err);
+    }
+
     if (editorRef.current && activeNoteId) {
       handleUpdateActiveNote('content', editorRef.current.innerHTML);
     }
@@ -580,9 +707,13 @@ export default function NotepadTab({
                             e.stopPropagation();
                             setActiveNoteId(note.id);
                             setIsMobileListOpen(false);
+                            setTimeout(() => {
+                              editorWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                              editorRef.current?.focus();
+                            }, 50);
                           }}
                           title="Edit document"
-                          className="flex items-center gap-1 px-2 py-1 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 hover:text-sky-300 border border-sky-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm"
+                          className="flex items-center gap-1 px-2.5 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm active:scale-95"
                         >
                           <Pencil className="w-3 h-3" />
                           <span>Edit</span>
@@ -596,7 +727,7 @@ export default function NotepadTab({
                             setDeleteConfirmId(note.id);
                           }}
                           title="Delete document"
-                          className="flex items-center gap-1 px-2 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm"
+                          className="flex items-center gap-1 px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm active:scale-95"
                         >
                           <Trash2 className="w-3 h-3" />
                           <span>Delete</span>
@@ -691,6 +822,11 @@ export default function NotepadTab({
                     <Pin className="w-3 h-3" />
                     <span className="hidden sm:inline">{activeNote.isPinned ? 'Pinned' : 'Pin'}</span>
                   </button>
+                  {/* Top Edit Mode Indicator */}
+                  <div className="flex items-center gap-1 px-2 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/30 rounded-xl text-[10px] font-bold font-mono uppercase">
+                    <Pencil className="w-3 h-3 shrink-0" />
+                    <span>Edit Document</span>
+                  </div>
                 </div>
 
                 {/* Editor operations: Full Tab toggle, Save, Copy, Export, and Delete */}
@@ -698,7 +834,12 @@ export default function NotepadTab({
                   {/* Full Tab Toggle Button */}
                   <button
                     type="button"
-                    onClick={() => setIsFullTab(!isFullTab)}
+                    onClick={() => {
+                      setIsFullTab(!isFullTab);
+                      setTimeout(() => {
+                        editorWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 50);
+                    }}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0a0b0f] hover:bg-slate-900 text-gray-300 hover:text-white text-xs font-semibold rounded-xl border border-slate-850 active:scale-95 transition cursor-pointer"
                     title={isFullTab ? "Exit Full Tab mode" : "Open Full Tab workspace"}
                   >
@@ -791,67 +932,85 @@ export default function NotepadTab({
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850 shrink-0">
                   <button
                     type="button"
-                    onClick={() => executeFormat('formatBlock', '<p>')}
-                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850"
-                    title="Normal text"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyHeadingBlock('p')}
+                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
+                    title="Normal text (Paragraph)"
                   >
                     Normal
                   </button>
                   <button
                     type="button"
-                    onClick={() => executeFormat('formatBlock', '<h1>')}
-                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850"
-                    title="Heading 1"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyHeadingBlock('h1')}
+                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
+                    title="Heading 1 (Main Header)"
                   >
                     H1
                   </button>
                   <button
                     type="button"
-                    onClick={() => executeFormat('formatBlock', '<h2>')}
-                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850"
-                    title="Heading 2"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyHeadingBlock('h2')}
+                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
+                    title="Heading 2 (Sub-header)"
                   >
                     H2
                   </button>
                   <button
                     type="button"
-                    onClick={() => executeFormat('formatBlock', '<h3>')}
-                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850"
-                    title="Heading 3"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyHeadingBlock('h3')}
+                    className="px-2 py-1 text-[11px] font-bold text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
+                    title="Heading 3 (Section Header)"
                   >
                     H3
                   </button>
                 </div>
 
-                {/* Font Family selector */}
+                {/* Font Family selector: changes selected text only */}
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850 shrink-0">
                   <Type className="w-3.5 h-3.5 text-gray-500 ml-1" />
                   <select
                     value={activeFont}
+                    onMouseDown={saveSelection}
                     onChange={(e) => {
-                      setActiveFont(e.target.value);
-                      executeFormat('fontName', e.target.value);
+                      const selectedFont = e.target.value;
+                      setActiveFont(selectedFont);
+                      applyFontToSelection(selectedFont);
                     }}
                     className="bg-transparent text-white text-[11px] font-semibold focus:outline-none cursor-pointer pr-1"
+                    title="Select text and choose font to apply"
                   >
                     <option value="Inter, sans-serif" className="bg-slate-900">Inter</option>
                     <option value="Outfit, sans-serif" className="bg-slate-900">Outfit</option>
                     <option value="Merriweather, serif" className="bg-slate-900">Merriweather (Serif)</option>
-                    <option value="Fira Code, monospace" className="bg-slate-900">Fira Code (Mono)</option>
-                    <option value="Poppins, sans-serif" className="bg-slate-900">Poppins</option>
+                    <option value="JetBrains Mono, monospace" className="bg-slate-900">Mono (JetBrains)</option>
+                    <option value="'Space Grotesk', sans-serif" className="bg-slate-900">Space Grotesk</option>
+                    <option value="Georgia, serif" className="bg-slate-900">Georgia</option>
                   </select>
                 </div>
 
-                {/* Font Size selector */}
+                {/* Font Size selector: changes selected text only */}
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850 shrink-0">
                   <span className="text-[10px] text-gray-500 font-mono ml-1">Size</span>
                   <select
                     value={activeFontSize}
+                    onMouseDown={saveSelection}
                     onChange={(e) => {
-                      setActiveFontSize(e.target.value);
-                      executeFormat('fontSize', e.target.value);
+                      const val = e.target.value;
+                      setActiveFontSize(val);
+                      const sizeMap: Record<string, string> = {
+                        '2': '12px',
+                        '3': '14px',
+                        '4': '16px',
+                        '5': '18px',
+                        '6': '22px'
+                      };
+                      applyFontSizeToSelection(sizeMap[val] || '14px');
                     }}
                     className="bg-transparent text-white text-[11px] font-semibold focus:outline-none cursor-pointer pr-1"
+                    title="Select text and choose font size to apply"
                   >
                     <option value="2" className="bg-slate-900">Small (12px)</option>
                     <option value="3" className="bg-slate-900">Normal (14px)</option>
@@ -865,32 +1024,36 @@ export default function NotepadTab({
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850 shrink-0">
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('bold')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Bold (Ctrl+B)"
                   >
                     <Bold className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('italic')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Italic (Ctrl+I)"
                   >
                     <Italic className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('underline')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Underline (Ctrl+U)"
                   >
                     <UnderlineIcon className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('strikeThrough')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Strikethrough"
                   >
                     <Strikethrough className="w-3.5 h-3.5" />
@@ -901,32 +1064,36 @@ export default function NotepadTab({
                 <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850 shrink-0">
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('justifyLeft')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Align Left"
                   >
                     <AlignLeft className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('justifyCenter')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Align Center"
                   >
                     <AlignCenter className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('justifyRight')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Align Right"
                   >
                     <AlignRight className="w-3.5 h-3.5" />
                   </button>
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => executeFormat('justifyFull')}
-                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850"
+                    className="p-1.5 text-gray-400 hover:text-white rounded hover:bg-slate-850 transition"
                     title="Justify"
                   >
                     <AlignJustify className="w-3.5 h-3.5" />
@@ -1074,12 +1241,15 @@ export default function NotepadTab({
                     onInput={(e) => {
                       const html = (e.currentTarget as HTMLDivElement).innerHTML;
                       handleUpdateActiveNote('content', html);
+                      saveSelection();
                     }}
+                    onKeyUp={saveSelection}
+                    onMouseUp={saveSelection}
+                    onSelect={saveSelection}
                     data-placeholder="Start typing your documents or transcripts and let the auto-saving modules work..."
-                    className="w-full flex-1 bg-transparent text-sm text-gray-200 focus:outline-none leading-relaxed custom-scrollbar font-sans font-medium p-2 rounded-xl border border-transparent focus:border-slate-850/60 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-600"
+                    className="w-full flex-1 bg-transparent text-sm text-gray-200 focus:outline-none leading-relaxed custom-scrollbar font-sans font-medium p-3 rounded-xl border border-transparent focus:border-slate-850/60 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-600 notepad-editor-surface"
                     style={{ 
-                      minHeight: '340px',
-                      fontFamily: activeFont 
+                      minHeight: '340px'
                     }}
                   />
                 </div>

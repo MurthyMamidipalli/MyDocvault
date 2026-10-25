@@ -92,12 +92,12 @@ export default function CalendarTab({
     }
   };
 
-  // Helper to open Gmail web compose prefilled with event details
+  // Helper to open Gmail: on mobile launches Gmail app via mailto, on desktop opens Gmail compose
   const sendGmailReminder = (evt: CalendarEvent, targetAddr?: string) => {
     const emailTo = targetAddr || evt.gmailAddress || gmailAddress || userEmail || 'ramachandramurthymamidipalli1@gmail.com';
     const subject = encodeURIComponent(`📅 Calendar Reminder: ${evt.title}`);
     const bodyText = encodeURIComponent(
-      `Hello Ramachandra,\n\nHere is your scheduled event notification from MyDocVault Calendar:\n\n` +
+      `Hello,\n\nHere is your scheduled event notification from MyDocVault Calendar:\n\n` +
       `📌 Event: ${evt.title}\n` +
       `📂 Type: ${evt.type.toUpperCase()}\n` +
       `📅 Date: ${evt.date}\n` +
@@ -106,8 +106,20 @@ export default function CalendarTab({
       `📝 Description: ${evt.description || 'N/A'}\n\n` +
       `Sent via MyDocVault Personal Calendar Reminders.`
     );
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${emailTo}&su=${subject}&body=${bodyText}`;
-    window.open(gmailUrl, '_blank');
+
+    const isMobile = typeof navigator !== 'undefined' && (
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+      window.innerWidth < 768
+    );
+
+    if (isMobile) {
+      // In mobile, mailto link directly launches the installed Gmail app with prefilled fields
+      window.location.href = `mailto:${emailTo}?subject=${subject}&body=${bodyText}`;
+    } else {
+      // Desktop: opens Gmail web compose in a new tab
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${emailTo}&su=${subject}&body=${bodyText}`;
+      window.open(gmailUrl, '_blank');
+    }
   };
 
   // Live timer check for upcoming event notifications
@@ -619,28 +631,32 @@ export default function CalendarTab({
                         </span>
                       </div>
 
-                      {/* Hover action bar */}
-                      <div className="opacity-0 group-hover:opacity-100 transition duration-150 absolute top-3 right-3 flex items-center gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-850">
+                      {/* CLEARLY VISIBLE ACTION BUTTONS: EDIT & DELETE WITH PROPER SPACE */}
+                      <div className="flex items-center gap-2.5 shrink-0">
                         <button
+                          type="button"
                           onClick={() => handleStartEdit(evt)}
-                          className="p-1 hover:text-emerald-400 text-gray-400 transition"
+                          className="flex items-center gap-1 px-2.5 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm active:scale-95"
                           title="Edit Event"
                         >
                           <Pencil className="w-3.5 h-3.5" />
+                          <span>Edit</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => onDeleteEvent(evt.id)}
-                          className="p-1 hover:text-rose-400 text-gray-400 transition"
+                          className="flex items-center gap-1 px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm active:scale-95"
                           title="Delete Event"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
+                          <span>Delete</span>
                         </button>
                       </div>
                     </div>
 
                     {/* Title & Desc */}
                     <div className="space-y-1">
-                      <h4 className="text-white font-bold text-sm leading-tight pr-[50px]">{evt.title}</h4>
+                      <h4 className="text-white font-bold text-sm leading-tight pr-2">{evt.title}</h4>
                       {evt.description && (
                         <p className="text-gray-400 text-[11px] leading-relaxed font-sans">{evt.description}</p>
                       )}
@@ -668,16 +684,16 @@ export default function CalendarTab({
                       </div>
                     </div>
 
-                    {/* Quick Gmail Send Action */}
-                    <div className="flex items-center gap-2 pt-1 border-t border-slate-850/60 mt-1">
+                    {/* Send Notification to Email */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-850/60 mt-1">
                       <button
                         type="button"
                         onClick={() => sendGmailReminder(evt)}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-rose-400 font-bold rounded-lg text-[10px] transition cursor-pointer"
-                        title="Open Gmail compose window with pre-filled event details"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 font-bold rounded-xl text-xs transition cursor-pointer shadow-sm active:scale-95"
+                        title="Send notification to email (opens Gmail app on mobile, Gmail web on desktop)"
                       >
                         <Mail className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Send Gmail Reminder</span>
+                        <span>Send Notification to Email</span>
                       </button>
                     </div>
 
@@ -816,28 +832,28 @@ export default function CalendarTab({
               <div className="space-y-1">
                 <label className="text-[10px] font-mono font-bold text-gray-400 uppercase flex items-center gap-1.5">
                   <Bell className="w-3 h-3 text-amber-400" />
-                  <span>Reminder Notification Trigger</span>
+                  <span>Reminder Option (15 min, 30 min, 1 hour) *</span>
                 </label>
                 <select
                   value={reminderMinutes}
                   onChange={e => setReminderMinutes(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-white text-xs md:text-sm focus:border-emerald-500 outline-none"
+                  className="w-full bg-slate-950 border border-slate-850 rounded-xl px-3 py-2 text-white text-xs md:text-sm focus:border-emerald-500 outline-none cursor-pointer font-medium"
                 >
+                  <option value={15}>15 minutes before event</option>
+                  <option value={30}>30 minutes before event</option>
+                  <option value={60}>1 hour before event</option>
                   <option value={0}>At event start time</option>
-                  <option value={5}>5 minutes before</option>
-                  <option value={10}>10 minutes before</option>
-                  <option value={15}>15 minutes before</option>
-                  <option value={30}>30 minutes before</option>
-                  <option value={60}>1 hour before</option>
+                  <option value={5}>5 minutes before event</option>
+                  <option value={10}>10 minutes before event</option>
                 </select>
               </div>
 
               {/* Gmail Email Alert Configuration */}
               <div className="space-y-2 p-3 bg-slate-950 border border-slate-850 rounded-xl">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-mono font-bold text-gray-300 uppercase flex items-center gap-1.5">
+                  <label className="text-xs font-mono font-bold text-gray-300 uppercase flex items-center gap-1.5">
                     <Mail className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Send Reminder via Gmail</span>
+                    <span>Send Reminder Mails via Gmail</span>
                   </label>
                   <input
                     type="checkbox"
@@ -849,17 +865,17 @@ export default function CalendarTab({
                 </div>
 
                 {sendGmail && (
-                  <div className="space-y-1 pt-1">
-                    <label className="text-[9px] font-mono text-gray-400 uppercase">Target Gmail Address</label>
+                  <div className="space-y-1 pt-1 border-t border-slate-900">
+                    <label className="text-[10px] font-mono font-bold text-gray-400 uppercase">User's Gmail Option to Send Reminder Mails *</label>
                     <input
                       type="email"
                       value={gmailAddress}
                       onChange={e => setGmailAddress(e.target.value)}
                       placeholder="e.g. yourname@gmail.com"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-white text-xs focus:border-rose-500 outline-none font-mono"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-xs focus:border-rose-500 outline-none font-mono"
                     />
-                    <p className="text-[9px] text-gray-500">
-                      When enabled, saving or triggering this event opens a pre-filled Gmail compose draft ready to send.
+                    <p className="text-[10px] text-gray-500">
+                      Reminder mail will be dispatched to this mentioned Gmail ID. In mobile, tapping notification opens the Gmail app directly.
                     </p>
                   </div>
                 )}

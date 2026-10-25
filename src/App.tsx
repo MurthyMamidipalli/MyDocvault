@@ -1412,12 +1412,8 @@ export default function App() {
     }
   };
 
-  const handleUserLogout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.error("Sign out error:", e);
-    }
+  const handleUserLogout = () => {
+    // 1. Immediately reset state locally with 0ms latency
     setCurrentUser(null);
     localStorage.removeItem('nexus_current_user');
     localStorage.setItem('nexus_active_tab', 'overview');
@@ -1426,6 +1422,12 @@ export default function App() {
       window.history.replaceState(null, '', `${window.location.pathname}#overview`);
     }
     resetUserDataState();
+    triggerToast('Logged off successfully.');
+
+    // 2. Perform remote signOut in background without blocking UI
+    supabase.auth.signOut().catch((e) => {
+      console.warn("Background sign out:", e);
+    });
   };
 
   // Styled custom modal dialog to bypass native iframe confirm blocking
@@ -1958,7 +1960,7 @@ export default function App() {
         } catch (e) {}
       }
 
-      if (!userId && email === 'ramachandramurthymamidipalli@gmail.com') {
+      if (!userId && (email === 'ramachandramurthymamidipalli@gmail.com' || email === 'ramachandramurthymamidipalli1@gmail.com')) {
         userId = 'f2efad04-8105-4169-8dcb-c9411e553cc0';
       }
 
@@ -2582,6 +2584,15 @@ export default function App() {
               const isPinned = Boolean(n.is_pinned || tagArray.includes('__pinned__') || tagArray.includes('pinned'));
               const isTask = n.type === 'task' || tagArray.includes('__task__');
               const isCompleted = Boolean(n.completed || tagArray.includes('__completed__'));
+              
+              const tasksTag = tagArray.find((t: string) => t.startsWith('__tasks__:'));
+              let subtasks: any[] = [];
+              if (tasksTag) {
+                try {
+                  subtasks = JSON.parse(tasksTag.replace('__tasks__:', ''));
+                } catch (_) {}
+              }
+
               return {
                 id: n.id,
                 title: n.title,
@@ -2591,14 +2602,15 @@ export default function App() {
                 isPinned,
                 type: isTask ? ('task' as const) : ('note' as const),
                 completed: isCompleted,
+                tasks: subtasks,
                 isPublic: n.is_public !== false,
                 updatedAt: n.updated_at || new Date().toISOString()
               };
             });
             const updatedNotes = deduplicateNotes(mapped);
             setNotes(updatedNotes);
-            if (currentUser?.email) {
-              const em = currentUser.email.toLowerCase().trim();
+            const em = currentUser?.email?.toLowerCase().trim() || email;
+            if (em) {
               safeLocalStorageSetItem(`${em}_notepad_notes`, JSON.stringify(updatedNotes));
               heavyStorage.set(`${em}_notepad_notes`, updatedNotes).catch(() => {});
             }
@@ -2848,11 +2860,13 @@ export default function App() {
               description: cal.description,
               isPublic: cal.is_public !== false
             }));
-            setCalendarEvents(prev => {
-              const merged = deduplicateCalendarEvents(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_calendar_events`, JSON.stringify(merged));
-              return merged;
-            });
+            const merged = deduplicateCalendarEvents(mapped);
+            setCalendarEvents(merged);
+            const em = currentUser?.email?.toLowerCase().trim() || email;
+            if (em) {
+              safeLocalStorageSetItem(`${em}_calendar_events`, JSON.stringify(merged));
+              heavyStorage.set(`${em}_calendar_events`, merged).catch(() => {});
+            }
           }
         } catch (err) { console.warn("[Supabase Calendar Events Load]", err); }
 
@@ -2931,7 +2945,7 @@ export default function App() {
       } catch (e) {}
     }
 
-    if (email === 'ramachandramurthymamidipalli@gmail.com') {
+    if (email === 'ramachandramurthymamidipalli@gmail.com' || email === 'ramachandramurthymamidipalli1@gmail.com') {
       return 'f2efad04-8105-4169-8dcb-c9411e553cc0';
     }
     return currentUser?.id || null;
@@ -4868,14 +4882,22 @@ export default function App() {
   const handleAddCalendarEvent = async (newEvt: Omit<CalendarEvent, 'id'>) => {
     const id = generateUUID();
     const evt: CalendarEvent = { ...newEvt, id };
-    setCalendarEvents(prev => deduplicateCalendarEvents([evt, ...prev]));
+    const updated = deduplicateCalendarEvents([evt, ...calendarEvents]);
+    setCalendarEvents(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_calendar_events`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_calendar_events`, updated).catch(() => {});
+    }
     triggerToast(`Added scheduled event: "${newEvt.title}"`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('calendar_events').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           title: newEvt.title,
           date: newEvt.date,
           start_time: newEvt.startTime,
@@ -4891,14 +4913,22 @@ export default function App() {
   const handleUpdateCalendarEvent = async (updatedEvt: CalendarEvent) => {
     const targetId = ensureUUID(updatedEvt.id);
     const item = { ...updatedEvt, id: targetId };
-    setCalendarEvents(prev => deduplicateCalendarEvents(prev.map(evt => evt.id === updatedEvt.id ? item : evt)));
+    const updated = deduplicateCalendarEvents(calendarEvents.map(evt => (evt.id === updatedEvt.id || evt.id === targetId) ? item : evt));
+    setCalendarEvents(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_calendar_events`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_calendar_events`, updated).catch(() => {});
+    }
     triggerToast(`Updated scheduled event: "${updatedEvt.title}"`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('calendar_events').upsert({
           id: targetId,
-          user_id: currentUser.id,
+          user_id: userId,
           title: updatedEvt.title,
           date: updatedEvt.date,
           start_time: updatedEvt.startTime,
@@ -5041,7 +5071,8 @@ export default function App() {
               ...(n.category ? [n.category] : []),
               ...(n.isPinned ? ['__pinned__'] : []),
               ...(n.type === 'task' ? ['__task__'] : []),
-              ...(n.completed ? ['__completed__'] : [])
+              ...(n.completed ? ['__completed__'] : []),
+              ...(n.tasks && n.tasks.length > 0 ? [`__tasks__:${JSON.stringify(n.tasks)}`] : [])
             ];
             await supabase.from('notes').upsert({
               id: targetId,
