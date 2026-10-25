@@ -9,6 +9,7 @@ export interface PersonalProfile {
   name: string;
   firstName?: string;
   lastName?: string;
+  company?: string;
   secondaryEmail?: string;
   secondaryPhone?: string;
   headline: string;
@@ -230,6 +231,7 @@ export const EMPTY_PROFILE: PersonalProfile = {
   name: "",
   firstName: "",
   lastName: "",
+  company: "",
   headline: "",
   email: "",
   secondaryEmail: "",
@@ -245,6 +247,7 @@ export const INITIAL_PROFILE: PersonalProfile = {
   name: "Ramachandra Murthy Mamidipalli",
   firstName: "Ramachandra Murthy",
   lastName: "Mamidipalli",
+  company: "Photonx Technologies",
   headline: "Business Analytics",
   email: "ramachandramurthymamidipalli1@gmail.com",
   secondaryEmail: "subramanyaramachandramurthy@gmail.com",

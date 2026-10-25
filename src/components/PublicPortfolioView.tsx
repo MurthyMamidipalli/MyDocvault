@@ -386,8 +386,14 @@ export default function PublicPortfolioView({
               <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight text-white leading-none">
                 {profile.name}
               </h1>
-              <p className={`text-sm md:text-base font-medium font-sans max-w-xl text-gray-300`}>
-                {profile.headline}
+              <p className={`text-sm md:text-base font-medium font-sans max-w-xl text-gray-300 flex items-center flex-wrap gap-2`}>
+                <span>{profile.headline}</span>
+                {profile.company && (
+                  <>
+                    <span className="text-gray-500">•</span>
+                    <span className="text-emerald-400 font-semibold">{profile.company}</span>
+                  </>
+                )}
               </p>
             </div>
 

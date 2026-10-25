@@ -1348,7 +1348,7 @@ export default function App() {
           if (!node) return node;
           if (typeof node === 'string') {
             if (node.startsWith('data:') && node.length > 500) {
-              if (parentKey === 'avatarUrl' && node.length < 500000) return node;
+              if (parentKey === 'avatarUrl' && node.length < 1500000) return node;
               return '';
             }
             return node;
@@ -1361,7 +1361,7 @@ export default function App() {
             for (const k of Object.keys(node)) {
               const v = node[k];
               if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) {
-                if (k === 'avatarUrl' && v.length < 500000) {
+                if (k === 'avatarUrl' && v.length < 1500000) {
                   out[k] = v;
                 } else {
                   out[k] = '';
@@ -1638,7 +1638,9 @@ export default function App() {
           setProfile(prev => ({
             ...prev,
             ...dProf,
-            avatarUrl: dProf.avatarUrl !== undefined ? (dProf.avatarUrl || '') : prev.avatarUrl
+            company: dProf.company || prev.company || '',
+            publicProfile: prev.publicProfile !== undefined ? prev.publicProfile : (dProf.publicProfile ?? true),
+            avatarUrl: dProf.avatarUrl || prev.avatarUrl || ''
           }));
         }
 
@@ -1842,31 +1844,39 @@ export default function App() {
         try {
           const pData = pRes.status === 'fulfilled' ? pRes.value.data : null;
           if (pData) {
-            const restoredAvatar = pData.avatar_url || '';
-            if (!restoredAvatar && email) {
-              try {
-                localStorage.removeItem(`${email}_avatar_cache`);
-              } catch (_) {}
-            } else if (restoredAvatar && email) {
+            const localSavedStr = email ? localStorage.getItem(`${email}_profile`) : null;
+            let localSaved: PersonalProfile | null = null;
+            if (localSavedStr) {
+              try { localSaved = JSON.parse(localSavedStr); } catch (_) {}
+            }
+            const localAvatar = (email ? localStorage.getItem(`${email}_avatar_cache`) : '') || localSaved?.avatarUrl || profile.avatarUrl || '';
+            const restoredAvatar = pData.avatar_url || localAvatar;
+
+            if (restoredAvatar && email) {
               try {
                 safeLocalStorageSetItem(`${email}_avatar_cache`, restoredAvatar);
               } catch (_) {}
             }
 
+            // Strictly preserve user's explicit publicProfile setting so background Supabase sync doesn't flip it to private
+            const localPublicProfile = localSaved?.publicProfile !== undefined ? localSaved.publicProfile : profile.publicProfile;
+            const resolvedPublicProfile = localPublicProfile !== undefined ? localPublicProfile : (pData.public_profile ?? true);
+
             const updatedProfile: PersonalProfile = {
-              name: pData.name ?? '',
-              firstName: pData.first_name ?? '',
-              lastName: pData.last_name ?? '',
-              headline: pData.headline ?? '',
-              bio: pData.bio ?? '',
+              name: pData.name ?? localSaved?.name ?? '',
+              firstName: pData.first_name ?? localSaved?.firstName ?? '',
+              lastName: pData.last_name ?? localSaved?.lastName ?? '',
+              company: localSaved?.company || profile.company || '',
+              headline: pData.headline ?? localSaved?.headline ?? '',
+              bio: pData.bio ?? localSaved?.bio ?? '',
               email: pData.email || email || '',
-              phone: pData.phone ?? '',
-              secondaryEmail: pData.secondary_email ?? '',
-              secondaryPhone: pData.secondary_phone ?? '',
-              location: pData.location ?? '',
+              phone: pData.phone ?? localSaved?.phone ?? '',
+              secondaryEmail: pData.secondary_email ?? localSaved?.secondaryEmail ?? '',
+              secondaryPhone: pData.secondary_phone ?? localSaved?.secondaryPhone ?? '',
+              location: pData.location ?? localSaved?.location ?? '',
               avatarUrl: restoredAvatar,
-              publicProfile: pData.public_profile ?? true,
-              shareSlug: pData.share_slug || (pData.name ? pData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'user')
+              publicProfile: resolvedPublicProfile,
+              shareSlug: pData.share_slug || localSaved?.shareSlug || (pData.name ? pData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'user')
             };
 
             setProfile(updatedProfile);
@@ -5570,26 +5580,26 @@ export default function App() {
     );
   }
 
-  // Clean Sidebar items rendering configuration
+  // Clean Sidebar items rendering configuration - Sorted Alphabetically (A to Z) with Hover Options
   const sidebarItems = [
-    { id: 'overview', label: 'Home Page', icon: Home },
-    { id: 'profile', label: 'Personal Profile', icon: User },
-    { id: 'skills', label: 'Skills', icon: Cpu },
-    { id: 'education', label: 'Education', icon: GraduationCap },
+    { id: 'achievements', label: 'Achievements & Awards', icon: Star },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
+    { id: 'timeline', label: 'Career Timeline', icon: GitBranch },
     { id: 'certifications', label: 'Certifications', icon: Award },
-    { id: 'experience', label: 'Experience', icon: Briefcase },
+    { id: 'contacts', label: 'Contacts', icon: Users },
     { id: 'current-job', label: 'Current Job', icon: Laptop },
+    { id: 'digital-visiting-card', label: 'Digital Visiting Card', icon: CreditCard },
+    { id: 'vault', label: 'Document Vault', icon: FolderLock },
+    { id: 'education', label: 'Education', icon: GraduationCap },
+    { id: 'experience', label: 'Experience', icon: Briefcase },
+    { id: 'overview', label: 'Home Page', icon: Home },
+    { id: 'notepad', label: 'Note Pad', icon: StickyNote },
+    { id: 'profile', label: 'Personal Profile', icon: User },
+    { id: 'portfolios', label: 'Portfolios & Links', icon: Link2 },
     { id: 'projects', label: 'Projects & Products', icon: Rocket },
     { id: 'resume', label: 'Resume / CV', icon: FileText },
-    { id: 'portfolios', label: 'Portfolios & Links', icon: Link2 },
-    { id: 'timeline', label: 'Career Timeline', icon: GitBranch },
-    { id: 'contacts', label: 'Contacts', icon: Users },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'achievements', label: 'Achievements & Awards', icon: Star },
-    { id: 'testimonials', label: 'Testimonials', icon: MessageSquare },
-    { id: 'vault', label: 'Document Vault', icon: FolderLock },
-    { id: 'notepad', label: 'Note Pad', icon: StickyNote },
-    { id: 'digital-visiting-card', label: 'Digital Visiting Card', icon: CreditCard }
+    { id: 'skills', label: 'Skills', icon: Cpu },
+    { id: 'testimonials', label: 'Testimonials', icon: MessageSquare }
   ];
 
   const getActiveTabBreadcrumb = () => {
@@ -5616,8 +5626,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Navigation Sidebar links */}
-        <nav className="flex-1 px-4 py-6 overflow-y-auto space-y-1 custom-scrollbar text-xs">
+        {/* Navigation Sidebar links with Alphabetical Order & Rich Hover Option */}
+        <nav className="flex-1 px-3 py-5 overflow-y-auto space-y-1 custom-scrollbar text-xs">
           {sidebarItems.map(nav => {
             const Icon = nav.icon;
             const isActive = activeTab === nav.id;
@@ -5627,14 +5637,27 @@ export default function App() {
                 key={nav.id}
                 id={`sidebar-nav-${nav.id}`}
                 onClick={() => setActiveTab(nav.id)}
-                className={`w-full flex items-center gap-3.5 py-2.5 px-3 rounded-xl transition duration-150 font-semibold cursor-pointer ${
+                title={nav.label}
+                className={`w-full group flex items-center justify-between py-2.5 px-3 rounded-xl transition-all duration-200 font-semibold cursor-pointer border ${
                   isActive 
-                    ? 'bg-slate-900/80 text-emerald-400 font-bold border border-slate-800/60' 
-                    : 'text-gray-400 hover:text-white hover:bg-slate-900/20'
+                    ? 'bg-gradient-to-r from-emerald-500/15 via-emerald-500/10 to-transparent text-emerald-300 font-bold border-emerald-500/40 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/20' 
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-slate-850/60 hover:border-slate-800 hover:shadow-md hover:translate-x-1'
                 }`}
               >
-                <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-emerald-400' : 'text-gray-500'}`} />
-                <span className="truncate">{nav.label}</span>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Icon className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+                    isActive 
+                      ? 'text-emerald-400 scale-105' 
+                      : 'text-gray-500 group-hover:text-emerald-400 group-hover:scale-110'
+                  }`} />
+                  <span className="truncate">{nav.label}</span>
+                </div>
+                {/* Active indicator dot & hover indicator pip */}
+                {isActive ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0 shadow-sm shadow-emerald-400" />
+                ) : (
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-700 opacity-0 group-hover:opacity-100 group-hover:bg-emerald-400/70 shrink-0 transition-opacity duration-150" />
+                )}
               </button>
             );
           })}
@@ -5713,14 +5736,18 @@ export default function App() {
                   setActiveTab(nav.id);
                   setIsMobileMenuOpen(false);
                 }}
-                className={`w-full flex items-center gap-3 py-2 px-3 rounded-lg transition text-xs font-semibold cursor-pointer ${
+                title={nav.label}
+                className={`w-full group flex items-center justify-between py-2.5 px-3 rounded-lg transition-all text-xs font-semibold cursor-pointer border ${
                   isActive 
-                    ? 'bg-slate-900 text-emerald-400 font-bold' 
-                    : 'text-gray-400 hover:text-white hover:bg-slate-900/20'
+                    ? 'bg-emerald-500/15 text-emerald-300 font-bold border-emerald-500/40' 
+                    : 'border-transparent text-gray-400 hover:text-white hover:bg-slate-850/60 hover:border-slate-800 hover:translate-x-1'
                 }`}
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{nav.label}</span>
+                <div className="flex items-center gap-3">
+                  <Icon className={`w-4 h-4 shrink-0 transition-transform ${isActive ? 'text-emerald-400' : 'text-gray-500 group-hover:text-emerald-400 group-hover:scale-110'}`} />
+                  <span>{nav.label}</span>
+                </div>
+                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
               </button>
             );
           })}
