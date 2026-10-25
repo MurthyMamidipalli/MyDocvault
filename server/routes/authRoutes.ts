@@ -22,6 +22,11 @@ router.post("/signup", async (req, res, next) => {
 
     if (!isAppwriteConfigured()) {
       console.log(`[Auth Signup] Appwrite credentials not detected. Operating in local mode for: ${cleanEmail}`);
+      const existingUser = await appwriteService.getUserByEmail(cleanEmail);
+      if (existingUser) {
+        return res.status(400).json({ success: false, message: "An account with this mail ID already exists. Please log in instead." });
+      }
+
       const dbUser = await appwriteService.createUser(
         cleanEmail,
         password,
@@ -45,30 +50,32 @@ router.post("/signup", async (req, res, next) => {
     console.log(`[Auth Signup] Creating Appwrite Auth account for: ${cleanEmail}`);
     
     // First, verify if user already exists in Appwrite Auth
-    let authUser;
     try {
       const searchResult = await users.list([
         Query.equal("email", [cleanEmail]),
         Query.limit(1)
       ]);
       if (searchResult.users.length > 0) {
-        authUser = searchResult.users[0];
-        console.log(`[Auth Signup] User already exists in Appwrite Auth with ID: ${authUser.$id}`);
+        console.log(`[Auth Signup] User already exists in Appwrite Auth with ID: ${searchResult.users[0].$id}`);
+        return res.status(400).json({ success: false, message: "An account with this mail ID already exists. Please log in instead." });
       }
     } catch (e) {
       console.log("[Auth Signup] Did not find any existing auth accounts.");
     }
 
-    if (!authUser) {
-      authUser = await users.create(
-        ID.unique(),
-        cleanEmail,
-        undefined, // phone
-        password,
-        `${firstName || ""} ${lastName || ""}`.trim()
-      );
-      console.log(`[Auth Signup] Appwrite Auth account created successfully with ID: ${authUser.$id}`);
+    const existingDbUser = await appwriteService.getUserByEmail(cleanEmail);
+    if (existingDbUser) {
+      return res.status(400).json({ success: false, message: "An account with this mail ID already exists. Please log in instead." });
     }
+
+    const authUser = await users.create(
+      ID.unique(),
+      cleanEmail,
+      undefined, // phone
+      password,
+      `${firstName || ""} ${lastName || ""}`.trim()
+    );
+    console.log(`[Auth Signup] Appwrite Auth account created successfully with ID: ${authUser.$id}`);
 
     console.log(`[Auth Signup] Caching in database 'users' table...`);
     const dbUser = await appwriteService.createUser(

@@ -246,6 +246,52 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
 
     setIsValidating(true);
     try {
+      // 1. Check local/synced registered users list
+      const savedUsersRaw = localStorage.getItem('nexus_registered_users');
+      if (savedUsersRaw) {
+        try {
+          const savedUsers = JSON.parse(savedUsersRaw);
+          if (Array.isArray(savedUsers) && savedUsers.some((u: any) => u.email?.toLowerCase().trim() === trimmedEmail)) {
+            setErrorMessage('An account with this mail ID already exists. Please log in instead.');
+            setIsValidating(false);
+            return;
+          }
+        } catch (_) {}
+      }
+
+      // 2. Check if a profile with this email already exists in Supabase
+      try {
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .eq('email', trimmedEmail)
+          .maybeSingle();
+
+        if (existingProfile) {
+          setErrorMessage('An account with this mail ID already exists. Please log in instead.');
+          setIsValidating(false);
+          return;
+        }
+      } catch (err) {
+        console.warn('[Pre-Signup Verification Check]', err);
+      }
+
+      // 3. Check backend /api/users
+      try {
+        const res = await apiFetch('/api/users');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.users)) {
+            if (data.users.some((u: any) => u.email?.toLowerCase().trim() === trimmedEmail)) {
+              setErrorMessage('An account with this mail ID already exists. Please log in instead.');
+              setIsValidating(false);
+              return;
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 4. Register with Supabase Auth
       const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : 'https://mydocvault-lilac.vercel.app/';
       console.log(`[Supabase Auth] Registering user ${trimmedEmail} with redirect ${redirectUrl}...`);
       const { data, error } = await supabase.auth.signUp({
@@ -262,7 +308,22 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
       });
 
       if (error) {
+        if (
+          error.message?.toLowerCase().includes('already registered') ||
+          error.message?.toLowerCase().includes('already exists') ||
+          error.message?.toLowerCase().includes('user already exists')
+        ) {
+          setErrorMessage('An account with this mail ID already exists. Please log in instead.');
+          return;
+        }
         throw new Error(error.message);
+      }
+
+      // 5. In Supabase Auth, if a user already exists and email confirmations are enabled,
+      // Supabase returns a user object with empty identities array (identities: []) without returning an error.
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        setErrorMessage('An account with this mail ID already exists. Please log in instead.');
+        return;
       }
 
       const user = data.user;
@@ -281,6 +342,21 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
           public_profile: true
         }, { onConflict: 'user_id' });
 
+        // Save newly created user to local registered users list and push to server
+        const currentUsers = getSavedUsers();
+        if (!currentUsers.some(u => u.email.toLowerCase() === trimmedEmail)) {
+          const updatedUsers: SavedUser[] = [
+            ...currentUsers,
+            {
+              email: trimmedEmail,
+              firstName: firstName.trim(),
+              lastName: lastName.trim(),
+              isMailOnly: false
+            }
+          ];
+          saveUserList(updatedUsers);
+        }
+
         triggerToast(`Account created successfully for ${trimmedEmail}!`);
         
         onLoginSuccess({
@@ -294,7 +370,16 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
       }
     } catch (err: any) {
       console.error('[Supabase Signup Failure]', err);
-      setErrorMessage(err.message || 'Failed to create account. Please try again.');
+      const msg = err.message || 'Failed to create account. Please try again.';
+      if (
+        msg.toLowerCase().includes('already registered') ||
+        msg.toLowerCase().includes('already exists') ||
+        msg.toLowerCase().includes('user already exists')
+      ) {
+        setErrorMessage('An account with this mail ID already exists. Please log in instead.');
+      } else {
+        setErrorMessage(msg);
+      }
     } finally {
       setIsValidating(false);
     }
