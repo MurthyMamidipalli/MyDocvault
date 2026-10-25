@@ -162,6 +162,8 @@ export interface TimelineMilestone {
   description: string;
   intensity: 'low' | 'medium' | 'high';
   type?: string;
+  isAuto?: boolean;
+  isPublic?: boolean;
 }
 
 export interface Contact {
@@ -793,6 +795,13 @@ export const INITIAL_DOCUMENTS: VaultDocument[] = [
   { id: 'doc-3', name: 'Wharton_Business_Analytics_Cert.pdf', category: 'certificate', size: '180 KB', uploadDate: '2026-05-20' }
 ];
 
+export interface TaskItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  dueDate?: string;
+}
+
 export interface NotepadNote {
   id: string;
   title: string;
@@ -801,6 +810,9 @@ export interface NotepadNote {
   category?: string;
   isPinned?: boolean;
   isPublic?: boolean;
+  type?: 'note' | 'task';
+  completed?: boolean;
+  tasks?: TaskItem[];
 }
 
 export interface ResumeItem {

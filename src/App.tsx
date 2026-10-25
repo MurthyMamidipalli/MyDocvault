@@ -476,7 +476,10 @@ export const deduplicateNotes = (items?: NotepadNote[]): NotepadNote[] => {
         ...item,
         id: existing.id || item.id,
         content: (item.content || '').length >= (existing.content || '').length ? item.content : existing.content,
-        title: item.title || existing.title
+        title: item.title || existing.title,
+        isPinned: item.isPinned !== undefined ? item.isPinned : existing.isPinned,
+        type: item.type || existing.type,
+        completed: item.completed !== undefined ? item.completed : existing.completed
       };
     } else {
       if (idKey) seenIds.add(idKey);
@@ -553,41 +556,73 @@ export const deduplicateMilestones = (items?: TimelineMilestone[]): TimelineMile
   if (!items || !Array.isArray(items)) return [];
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: TimelineMilestone[] = [];
-  const seen = new Set<string>();
+  const seenKeys = new Set<string>();
+
+  const getMilestoneKeys = (m: TimelineMilestone): string[] => {
+    const keys: string[] = [];
+    const rawTitle = (m.title || '').toLowerCase()
+      .replace(/\(active engagement\)/gi, '')
+      .replace(/\(current job engagement\)/gi, '')
+      .replace(/\(score\/grade:[^)]*\)/gi, '')
+      .replace(/\(score:[^)]*\)/gi, '')
+      .trim();
+
+    const alphaTitle = rawTitle.replace(/[^a-z0-9]/g, '');
+    const yearMatch = (m.date || '').match(/\d{4}/);
+    const year = yearMatch ? yearMatch[0] : '';
+
+    if (m.id) {
+      keys.push(`id_${toUUID(m.id)}`);
+      keys.push(`rawid_${m.id}`);
+    }
+
+    if (rawTitle.includes(' at ')) {
+      const parts = rawTitle.split(' at ');
+      if (parts.length >= 2) {
+        const roleOrDegree = parts[0].replace(/[^a-z0-9]/g, '');
+        const companyOrInst = parts[1].replace(/[^a-z0-9]/g, '');
+        if (roleOrDegree && companyOrInst) {
+          keys.push(`pair_${roleOrDegree}_${companyOrInst}`);
+          if (year) {
+            keys.push(`pair_yr_${year}_${roleOrDegree}_${companyOrInst}`);
+          }
+        }
+      }
+    }
+
+    if (alphaTitle) {
+      if (year) {
+        keys.push(`yr_title_${year}_${alphaTitle}`);
+      }
+      keys.push(`title_${alphaTitle}`);
+    }
+
+    return keys;
+  };
 
   for (const item of items) {
     if (!item) continue;
     if (isUserLoggedIn && (isDemoItem(item) || isDemoId(item.id) || isDemoTitle(item.title))) continue;
 
-    const idKey = item.id ? toUUID(item.id) : '';
-    const cleanTitle = (item.title || '')
-      .toLowerCase()
-      .replace(/\(active engagement\)/gi, '')
-      .replace(/\(current job engagement\)/gi, '')
-      .replace(/[^a-z0-9]/g, '');
-    const datePrefix = (item.date || '').substring(0, 7);
-    const contentKey = `${datePrefix}__${cleanTitle}`;
-
-    let matchIdx = -1;
-    if (idKey && seen.has(`id:${idKey}`)) {
-      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
-    } else if (cleanTitle && seen.has(contentKey)) {
-      matchIdx = result.findIndex(r => {
-        const rTitle = (r.title || '')
-          .toLowerCase()
-          .replace(/\(active engagement\)/gi, '')
-          .replace(/\(current job engagement\)/gi, '')
-          .replace(/[^a-z0-9]/g, '');
-        const rDatePrefix = (r.date || '').substring(0, 7);
-        return rTitle === cleanTitle && (!datePrefix || !rDatePrefix || datePrefix === rDatePrefix);
-      });
-    }
+    const keys = getMilestoneKeys(item);
+    const matchIdx = result.findIndex(r => {
+      const rKeys = getMilestoneKeys(r);
+      return keys.some(k => rKeys.includes(k));
+    });
 
     if (matchIdx >= 0) {
-      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+      const existing = result[matchIdx];
+      const hasRealUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id);
+      result[matchIdx] = {
+        ...existing,
+        ...item,
+        id: hasRealUuid ? item.id : (existing.id || item.id),
+        description: (item.description || '').length > (existing.description || '').length ? item.description : existing.description,
+        intensity: item.intensity || existing.intensity
+      };
+      keys.forEach(k => seenKeys.add(k));
     } else {
-      if (idKey) seen.add(`id:${idKey}`);
-      if (cleanTitle) seen.add(contentKey);
+      keys.forEach(k => seenKeys.add(k));
       result.push(item);
     }
   }
@@ -2541,15 +2576,25 @@ export default function App() {
         try {
           const nData = nRes.status === 'fulfilled' ? nRes.value.data : null;
           if (nData && Array.isArray(nData) && nData.length > 0) {
-            const mapped = nData.map(n => ({
-              id: n.id,
-              title: n.title,
-              content: n.content,
-              category: n.tags && n.tags.length > 0 ? n.tags[0] : 'General',
-              tags: n.tags || [],
-              isPublic: n.is_public !== false,
-              updatedAt: n.updated_at || new Date().toISOString()
-            }));
+            const mapped = nData.map(n => {
+              const tagArray = Array.isArray(n.tags) ? n.tags : [];
+              const categoryTag = tagArray.find((t: string) => !t.startsWith('__')) || 'General';
+              const isPinned = Boolean(n.is_pinned || tagArray.includes('__pinned__') || tagArray.includes('pinned'));
+              const isTask = n.type === 'task' || tagArray.includes('__task__');
+              const isCompleted = Boolean(n.completed || tagArray.includes('__completed__'));
+              return {
+                id: n.id,
+                title: n.title,
+                content: n.content,
+                category: categoryTag,
+                tags: tagArray,
+                isPinned,
+                type: isTask ? ('task' as const) : ('note' as const),
+                completed: isCompleted,
+                isPublic: n.is_public !== false,
+                updatedAt: n.updated_at || new Date().toISOString()
+              };
+            });
             const updatedNotes = deduplicateNotes(mapped);
             setNotes(updatedNotes);
             if (currentUser?.email) {
@@ -4394,6 +4439,42 @@ export default function App() {
     }
   };
 
+  const handleUpdateMilestone = async (updatedMil: TimelineMilestone) => {
+    const targetId = ensureUUID(updatedMil.id);
+    const item = { ...updatedMil, id: targetId };
+    const updated = milestones.map(m => (m.id === updatedMil.id || m.id === targetId || toUUID(m.id) === targetId) ? item : m);
+    setMilestones(deduplicateMilestones(updated));
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_milestones`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_milestones`, updated).catch(() => {});
+    }
+    triggerToast(`Career milestone updated in Supabase.`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
+      try {
+        const mDate = updatedMil.date || new Date().toISOString().substring(0, 7);
+        const { error } = await supabase.from('career_timeline').upsert({
+          id: targetId,
+          user_id: userId,
+          title: updatedMil.title || 'Career Milestone',
+          date: mDate.length === 4 ? `${mDate}-06` : mDate,
+          category: updatedMil.category || updatedMil.type || 'experience',
+          intensity: updatedMil.intensity || 'medium',
+          description: updatedMil.description || '',
+          is_public: true
+        });
+        if (error) {
+          console.error("[Supabase Update Milestone Error]", error);
+        }
+      } catch (err) {
+        console.warn("[Supabase Update Milestone Exception]", err);
+      }
+    }
+  };
+
   // Contacts CRM
   const handleAddContact = async (newCt: Omit<Contact, 'id' | 'interactionLogs'>) => {
     const id = generateUUID();
@@ -4956,12 +5037,18 @@ export default function App() {
         for (const n of cleanNotes) {
           const targetId = ensureUUID(n.id);
           try {
+            const tagsPayload = [
+              ...(n.category ? [n.category] : []),
+              ...(n.isPinned ? ['__pinned__'] : []),
+              ...(n.type === 'task' ? ['__task__'] : []),
+              ...(n.completed ? ['__completed__'] : [])
+            ];
             await supabase.from('notes').upsert({
               id: targetId,
               user_id: userId,
               title: n.title || 'Untitled Document',
               content: n.content || '',
-              tags: n.category ? [n.category] : [],
+              tags: tagsPayload,
               is_public: n.isPublic !== false,
               updated_at: n.updatedAt || new Date().toISOString()
             });
@@ -5112,9 +5199,9 @@ export default function App() {
             id: ensureUUID(restored.id),
             user_id: userId,
             name: restored.name,
-            proficiency: restored.level || restored.proficiency || 'Intermediate',
+            proficiency: (restored as any).level || restored.proficiency || 'Intermediate',
             category: restored.category || 'Technical',
-            years_of_exp: Number(restored.yearsOfExp) || Number(restored.yearsOfExperience) || 1
+            years_of_exp: Number(restored.yearsOfExp) || Number((restored as any).yearsOfExperience) || 1
           });
         } catch (err) { console.warn("[Supabase Restore Skill Error]", err); }
       }
@@ -6645,6 +6732,7 @@ export default function App() {
             <TimelineTab 
               milestones={milestones}
               onAddMilestone={handleAddMilestone}
+              onUpdateMilestone={handleUpdateMilestone}
               onDeleteMilestone={handleDeleteMilestone}
               experience={experience}
               education={education}

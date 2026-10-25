@@ -22,6 +22,7 @@ interface SettingsTabProps {
   oldData: DeletedItem[];
   onRestoreOldData: (item: DeletedItem) => void;
   onPermanentlyDeleteOldData: (id: string) => void;
+  onRestoreDefaults?: () => void;
 }
 
 export default function SettingsTab({
