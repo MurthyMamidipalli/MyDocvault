@@ -5,15 +5,18 @@ import { Experience } from '../types';
 interface ExperienceTabProps {
   experience: Experience[];
   onAddExperience: (experience: Omit<Experience, 'id'>) => void;
+  onUpdateExperience: (experience: Experience) => void;
   onDeleteExperience: (id: string) => void;
 }
 
 export default function ExperienceTab({
   experience,
   onAddExperience,
+  onUpdateExperience,
   onDeleteExperience
 }: ExperienceTabProps) {
   const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<Experience | null>(null);
   const [role, setRole] = useState('');
   const [company, setCompany] = useState('');
   const [location, setLocation] = useState('');
@@ -32,6 +35,40 @@ export default function ExperienceTab({
   const [links, setLinks] = useState<{ label: string; url: string }[]>([]);
   const [linkLabel, setLinkLabel] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+
+  const handleStartAdd = () => {
+    setEditingItem(null);
+    setRole('');
+    setCompany('');
+    setLocation('');
+    setStartDate('2022-01');
+    setEndDate('');
+    setIsCurrent(false);
+    setBulletText('');
+    setSkillsText('');
+    setLinks([]);
+    setLinkLabel('');
+    setLinkUrl('');
+    setPdfUrl('');
+    setPdfName('');
+    setShowForm(true);
+  };
+
+  const handleStartEdit = (exp: Experience) => {
+    setEditingItem(exp);
+    setRole(exp.role || '');
+    setCompany(exp.company || '');
+    setLocation(exp.location || '');
+    setStartDate(exp.startDate || '2022-01');
+    setEndDate(exp.endDate === 'Present' ? '' : (exp.endDate || ''));
+    setIsCurrent(exp.isCurrent || exp.endDate === 'Present');
+    setBulletText(Array.isArray(exp.description) ? exp.description.join('\n') : (exp.description || ''));
+    setSkillsText(Array.isArray(exp.skillsUsed) ? exp.skillsUsed.join(', ') : '');
+    setLinks(exp.links || []);
+    setPdfUrl(exp.pdfUrl || '');
+    setPdfName(exp.pdfName || '');
+    setShowForm(true);
+  };
 
   const handleAddLink = () => {
     if (!linkUrl.trim()) return;
@@ -69,19 +106,37 @@ export default function ExperienceTab({
     const description = bulletText.split('\n').filter(b => b.trim() !== '');
     const skillsUsed = skillsText.split(',').map(s => s.trim()).filter(s => s !== '');
 
-    onAddExperience({
-      role,
-      company,
-      location,
-      startDate,
-      endDate: isCurrent ? 'Present' : endDate,
-      isCurrent,
-      description,
-      skillsUsed,
-      links,
-      pdfUrl: pdfUrl || undefined,
-      pdfName: pdfName || undefined
-    });
+    if (editingItem) {
+      onUpdateExperience({
+        ...editingItem,
+        role,
+        company,
+        location,
+        startDate,
+        endDate: isCurrent ? 'Present' : endDate,
+        isCurrent,
+        description,
+        skillsUsed,
+        links,
+        pdfUrl: pdfUrl || undefined,
+        pdfName: pdfName || undefined
+      });
+      setEditingItem(null);
+    } else {
+      onAddExperience({
+        role,
+        company,
+        location,
+        startDate,
+        endDate: isCurrent ? 'Present' : endDate,
+        isCurrent,
+        description,
+        skillsUsed,
+        links,
+        pdfUrl: pdfUrl || undefined,
+        pdfName: pdfName || undefined
+      });
+    }
 
     // Reset Form
     setRole('');
@@ -108,7 +163,7 @@ export default function ExperienceTab({
           <p className="text-xs text-gray-400 mt-1">Review operational tenures, job descriptions, and validated technical accomplishments</p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={handleStartAdd}
           className="bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition shrink-0"
         >
           <Plus className="w-4 h-4" />
@@ -117,7 +172,27 @@ export default function ExperienceTab({
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
+        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 animate-fade-in">
+          <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+            <div>
+              <h3 className="text-sm font-bold text-white">
+                {editingItem ? 'Edit Career Record' : 'Add Work History'}
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {editingItem ? 'Modify your employment history details.' : 'Enter details of your professional tenure.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false);
+                setEditingItem(null);
+              }}
+              className="text-gray-400 hover:text-white p-1 rounded-lg"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-mono text-gray-400">Role Title *</label>
@@ -318,6 +393,7 @@ export default function ExperienceTab({
               type="button" 
               onClick={() => {
                 setShowForm(false);
+                setEditingItem(null);
                 setLinks([]);
                 setLinkLabel('');
                 setLinkUrl('');
@@ -332,7 +408,7 @@ export default function ExperienceTab({
               type="submit" 
               className="bg-[#10b981] hover:bg-[#059669] text-white font-bold px-6 py-2.5 rounded-xl cursor-pointer select-none transition active:scale-95 shadow-md shadow-[#10b981]/10"
             >
-              Save Experience
+              {editingItem ? 'Update Career Record' : 'Save Experience'}
             </button>
           </div>
         </form>
@@ -353,17 +429,28 @@ export default function ExperienceTab({
                 </div>
               </div>
 
-              <div className="flex flex-col items-end gap-1.5 text-xs font-mono text-gray-500 text-left md:text-right md:shrink-0">
-                {/* Delete option directly above the date */}
-                <button 
-                  type="button"
-                  onClick={() => onDeleteExperience(exp.id)}
-                  className="px-2.5 py-1 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
-                  title="Delete Career Ledger"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete</span>
-                </button>
+              <div className="flex flex-col items-end gap-2 text-xs font-mono text-gray-500 text-left md:text-right md:shrink-0">
+                {/* Prominent Edit and Delete buttons clearly visible with comfortable spacing */}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <button 
+                    type="button"
+                    onClick={() => handleStartEdit(exp)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+                    title="Edit Career Record"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => onDeleteExperience(exp.id)}
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+                    title="Delete Career Ledger"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
                 <span className="flex items-center gap-1.5 font-medium">
                   <Calendar className="w-3.5 h-3.5 text-gray-600" />
                   {exp.startDate} – {exp.endDate}

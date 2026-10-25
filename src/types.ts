@@ -57,6 +57,17 @@ export interface Specialization {
   createdAt?: string;
 }
 
+export interface DeletedItem {
+  id: string;
+  originalId: string;
+  itemType: 'experience' | 'education' | 'skill' | 'certification' | 'specialization' | 'project' | 'contact' | 'document' | 'other';
+  title: string;
+  subtitle?: string;
+  deletedAt: string;
+  expiresAt: string;
+  data: any;
+}
+
 export interface Certification {
   id: string;
   title: string;

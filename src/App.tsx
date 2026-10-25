@@ -48,6 +48,7 @@ import {
   Specialization,
   Certification, 
   Experience, 
+  DeletedItem, 
   CurrentJob, 
   Project, 
   PortfolioLink, 
@@ -1108,6 +1109,23 @@ export default function App() {
     return [];
   });
 
+  const [oldData, setOldData] = useState<DeletedItem[]>(() => {
+    const email = getCurrentUserEmail();
+    if (email) {
+      const saved = localStorage.getItem(`${email}_old_data`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            const now = Date.now();
+            return parsed.filter((item: any) => item && item.expiresAt && new Date(item.expiresAt).getTime() > now);
+          }
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+
   const VALID_APP_TABS = [
     'overview', 'profile', 'skills', 'education', 'certifications', 'experience',
     'current-job', 'projects', 'resume', 'portfolios', 'timeline', 'contacts',
@@ -1333,6 +1351,13 @@ export default function App() {
     setNotes(deduplicateNotes(getLocal('notepad_notes', [])));
     setMilestones(deduplicateMilestones(getLocal('milestones', isUserLoggedIn ? [] : INITIAL_TIMELINE)));
     setContacts(deduplicateContacts(getLocal('contacts', isUserLoggedIn ? [] : INITIAL_CONTACTS)));
+    const loadedOldData = getLocal('old_data', []);
+    if (Array.isArray(loadedOldData)) {
+      const now = Date.now();
+      setOldData(loadedOldData.filter((item: any) => item && item.expiresAt && new Date(item.expiresAt).getTime() > now));
+    } else {
+      setOldData([]);
+    }
     const localJob = getLocal('current_job', isUserLoggedIn ? EMPTY_CURRENT_JOB : {
       employer: 'Photonx Technologies',
       company: 'Photonx Technologies',
@@ -1532,6 +1557,14 @@ export default function App() {
   useEffect(() => {
     if (currentUser?.email) {
       const email = currentUser.email.toLowerCase().trim();
+      safeLocalStorageSetItem(`${email}_old_data`, JSON.stringify(oldData));
+      heavyStorage.set(`${email}_old_data`, oldData).catch(e => {});
+    }
+  }, [oldData, currentUser]);
+
+  useEffect(() => {
+    if (currentUser?.email) {
+      const email = currentUser.email.toLowerCase().trim();
       safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(currentJob));
       heavyStorage.set(`${email}_current_job`, currentJob).catch(e => {});
     }
@@ -1686,7 +1719,7 @@ export default function App() {
         const [
           dProf, dJob, dCerts, dProjs, dProds, dOthers,
           dEdu, dSpec, dSkills, dExp, dCt, dCal, dNotes,
-          dRes, dLinks, dMil, dAch, dTest
+          dRes, dLinks, dMil, dAch, dTest, dOldData
         ] = await Promise.all([
           heavyStorage.get(`${email}_profile`).catch(() => null),
           heavyStorage.get(`${email}_current_job`).catch(() => null),
@@ -1705,7 +1738,8 @@ export default function App() {
           heavyStorage.get(`${email}_links`).catch(() => null),
           heavyStorage.get(`${email}_milestones`).catch(() => null),
           heavyStorage.get(`${email}_achievements`).catch(() => null),
-          heavyStorage.get(`${email}_testimonials`).catch(() => null)
+          heavyStorage.get(`${email}_testimonials`).catch(() => null),
+          heavyStorage.get(`${email}_old_data`).catch(() => null)
         ]);
 
         if (dProf && typeof dProf === 'object') {
@@ -1815,6 +1849,16 @@ export default function App() {
 
         if (dTest && Array.isArray(dTest) && dTest.length > 0) {
           setTestimonials(prev => deduplicateTestimonials([...(prev || []), ...dTest]));
+        }
+
+        if (dOldData && Array.isArray(dOldData) && dOldData.length > 0) {
+          const now = Date.now();
+          const validOld = dOldData.filter((item: any) => item && item.expiresAt && new Date(item.expiresAt).getTime() > now);
+          setOldData(prev => {
+            const existingIds = new Set((prev || []).map(p => p.id));
+            const merged = [...(prev || []), ...validOld.filter(v => !existingIds.has(v.id))];
+            return merged;
+          });
         }
       } catch (err) {
         console.warn("Async restoration of heavy storage data deferred:", err);
@@ -3168,9 +3212,47 @@ export default function App() {
     }
   };
 
+  // Old Data (30-day retention) preservation helper
+  const addDeletedItem = (
+    originalItem: any,
+    itemType: DeletedItem['itemType'],
+    title: string,
+    subtitle?: string
+  ) => {
+    if (!originalItem) return;
+    const now = new Date();
+    const expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days retention
+    const newItem: DeletedItem = {
+      id: generateUUID(),
+      originalId: originalItem.id || generateUUID(),
+      itemType,
+      title: title || 'Deleted Record',
+      subtitle: subtitle || undefined,
+      deletedAt: now.toISOString(),
+      expiresAt: expires.toISOString(),
+      data: originalItem
+    };
+
+    setOldData(prev => {
+      const filtered = prev.filter(p => p.originalId !== newItem.originalId && !(p.itemType === itemType && p.title.toLowerCase() === newItem.title.toLowerCase()));
+      const updated = [newItem, ...filtered];
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_old_data`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_old_data`, updated).catch(() => {});
+      }
+      return updated;
+    });
+  };
+
   const handleDeleteSkill = async (id: string) => {
     const targetId = toUUID(id);
     let targetSkillName = '';
+
+    const targetItem = skills.find(s => s.id === id || s.id === targetId || toUUID(s.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'skill', targetItem.name || 'Skill', `${targetItem.yearsOfExp || 1} yrs exp`);
+    }
 
     setSkills(prev => {
       const target = prev.find(s => s.id === id || s.id === targetId || toUUID(s.id) === targetId);
@@ -3288,6 +3370,11 @@ export default function App() {
     const targetId = toUUID(id);
     let targetDegree = '';
     let targetInst = '';
+
+    const targetItem = education.find(e => e.id === id || e.id === targetId || toUUID(e.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'education', targetItem.degree || 'Education', targetItem.institution);
+    }
 
     setEducation(prev => {
       const target = prev.find(e => e.id === id || e.id === targetId || toUUID(e.id) === targetId);
@@ -3474,6 +3561,11 @@ export default function App() {
     const targetId = toUUID(id);
     let targetName = '';
 
+    const targetItem = specializations.find(s => s.id === id || s.id === targetId || toUUID(s.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'specialization', targetItem.name || 'Specialization');
+    }
+
     setSpecializations(prev => {
       const target = prev.find(s => s.id === id || s.id === targetId || toUUID(s.id) === targetId);
       targetName = target?.name ? target.name.trim().toLowerCase() : '';
@@ -3575,6 +3667,12 @@ export default function App() {
     const targetId = toUUID(id);
     let targetTitle = '';
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+
+    const targetItem = certifications.find(c => c.id === id || c.id === targetId || toUUID(c.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'certification', targetItem.title || 'Certification', targetItem.issuer);
+    }
+
     setCertifications(prev => {
       const target = prev.find(c => c.id === id || c.id === targetId || toUUID(c.id) === targetId);
       targetTitle = (target?.title || '').trim().toLowerCase();
@@ -3711,10 +3809,66 @@ export default function App() {
     }
   };
 
+  const handleUpdateExp = async (updatedExp: Experience) => {
+    const targetId = ensureUUID(updatedExp.id);
+    const item = { ...updatedExp, id: targetId };
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+
+    setExperience(prev => {
+      const updated = prev.map(e => (e.id === updatedExp.id || e.id === targetId || toUUID(e.id) === targetId) ? item : e);
+      if (email) {
+        safeLocalStorageSetItem(`${email}_experience`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_experience`, updated).catch(e => {});
+      }
+      return updated;
+    });
+
+    triggerToast(`Updated career record: ${updatedExp.role}`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
+      try {
+        await supabase.from('experience').upsert({
+          id: targetId,
+          user_id: userId,
+          company: updatedExp.company,
+          role: updatedExp.role,
+          employment_type: updatedExp.employmentType,
+          location: updatedExp.location,
+          start_date: updatedExp.startDate,
+          end_date: updatedExp.endDate,
+          is_current: updatedExp.isCurrent,
+          description: updatedExp.description || [],
+          skills_used: updatedExp.skillsUsed || [],
+          links: updatedExp.links || []
+        });
+
+        // Sync milestone to career_timeline
+        await supabase.from('career_timeline').upsert({
+          id: ensureUUID(`auto-exp-${targetId}`),
+          user_id: userId,
+          title: `${updatedExp.role} at ${updatedExp.company}`,
+          date: (updatedExp.startDate || new Date().toISOString().substring(0, 7)),
+          category: 'experience',
+          intensity: updatedExp.isCurrent ? 'high' : 'medium',
+          description: Array.isArray(updatedExp.description) && updatedExp.description.length > 0 ? updatedExp.description.join(' ') : `${updatedExp.role} role at ${updatedExp.company}.`,
+          is_public: true
+        });
+      } catch (err) {
+        console.warn("[Supabase Update Exp Error]", err);
+      }
+    }
+  };
+
   const handleDeleteExp = async (id: string) => {
     const targetId = toUUID(id);
     let targetRole = '';
     let targetCompany = '';
+
+    const targetItem = experience.find(e => e.id === id || e.id === targetId || toUUID(e.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'experience', targetItem.role || 'Experience', targetItem.company);
+    }
 
     setExperience(prev => {
       const target = prev.find(e => e.id === id || e.id === targetId || toUUID(e.id) === targetId);
@@ -3907,6 +4061,11 @@ export default function App() {
 
   const handleDeleteProj = async (id: string) => {
     const targetId = toUUID(id);
+
+    const targetItem = [...projects, ...products, ...others].find(p => p.id === id || p.id === targetId || toUUID(p.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'project', targetItem.name || 'Project', targetItem.category);
+    }
 
     const updatedProj = projects.filter(p => p.id !== id && p.id !== targetId);
     const updatedProd = products.filter(p => p.id !== id && p.id !== targetId);
@@ -4274,6 +4433,10 @@ export default function App() {
 
   const handleDeleteContact = async (id: string) => {
     const targetId = toUUID(id);
+    const targetItem = contacts.find(c => c.id === id || c.id === targetId || toUUID(c.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'contact', targetItem.name || 'Contact', targetItem.relationship || targetItem.company);
+    }
     const updated = contacts.filter(c => c.id !== id && c.id !== targetId);
     setContacts(updated);
 
@@ -4555,6 +4718,9 @@ export default function App() {
   const handleDeleteDocument = async (id: string) => {
     const docToDelete = documents.find(d => d.id === id);
     const docName = docToDelete ? docToDelete.name : "document";
+    if (docToDelete) {
+      addDeletedItem(docToDelete, 'document', docToDelete.name || 'Document', docToDelete.category);
+    }
     const targetId = toUUID(id);
     const updated = documents.filter(d => d.id !== id && d.id !== targetId);
     setDocuments(updated);
@@ -4855,7 +5021,205 @@ export default function App() {
     setAchievements([]);
     setTestimonials([]);
     setDocuments([]);
+    setOldData([]);
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      localStorage.removeItem(`${email}_old_data`);
+      heavyStorage.remove(`${email}_old_data`).catch(() => {});
+    }
     triggerToast("All stored structures cleaned.");
+  };
+
+  const handleRestoreOldData = async (item: DeletedItem) => {
+    if (!item || !item.data) return;
+
+    if (item.itemType === 'experience') {
+      const restored = item.data as Experience;
+      setExperience(prev => deduplicateExperience([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateExperience([restored, ...experience]);
+        safeLocalStorageSetItem(`${email}_experience`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_experience`, updated).catch(e => {});
+      }
+      const userId = await getActiveUserId();
+      if (userId) {
+        try {
+          await supabase.from('experience').upsert({
+            id: ensureUUID(restored.id),
+            user_id: userId,
+            company: restored.company,
+            role: restored.role,
+            employment_type: restored.employmentType,
+            location: restored.location,
+            start_date: restored.startDate,
+            end_date: restored.endDate,
+            is_current: restored.isCurrent,
+            description: restored.description || [],
+            skills_used: restored.skillsUsed || [],
+            links: restored.links || []
+          });
+          await supabase.from('career_timeline').upsert({
+            id: ensureUUID(`auto-exp-${restored.id}`),
+            user_id: userId,
+            title: `${restored.role} at ${restored.company}`,
+            date: (restored.startDate || new Date().toISOString().substring(0, 7)),
+            category: 'experience',
+            intensity: restored.isCurrent ? 'high' : 'medium',
+            description: Array.isArray(restored.description) && restored.description.length > 0 ? restored.description.join(' ') : `${restored.role} role at ${restored.company}.`,
+            is_public: true
+          });
+        } catch (err) { console.warn("[Supabase Restore Exp Error]", err); }
+      }
+    } else if (item.itemType === 'education') {
+      const restored = item.data as Education;
+      setEducation(prev => deduplicateEducation([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateEducation([restored, ...education]);
+        safeLocalStorageSetItem(`${email}_education`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_education`, updated).catch(e => {});
+      }
+      const userId = await getActiveUserId();
+      if (userId) {
+        try {
+          await supabase.from('education').upsert({
+            id: ensureUUID(restored.id),
+            user_id: userId,
+            institution: restored.institution,
+            degree: restored.degree,
+            field_of_study: restored.fieldOfStudy,
+            start_date: restored.startDate,
+            end_date: restored.endDate,
+            grade: restored.grade,
+            description: restored.description
+          });
+        } catch (err) { console.warn("[Supabase Restore Edu Error]", err); }
+      }
+    } else if (item.itemType === 'skill') {
+      const restored = item.data as Skill;
+      setSkills(prev => deduplicateSkills([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateSkills([restored, ...skills]);
+        safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_skills`, updated).catch(() => {});
+      }
+      const userId = await getActiveUserId();
+      if (userId) {
+        try {
+          await supabase.from('skills').upsert({
+            id: ensureUUID(restored.id),
+            user_id: userId,
+            name: restored.name,
+            proficiency: restored.level || restored.proficiency || 'Intermediate',
+            category: restored.category || 'Technical',
+            years_of_exp: Number(restored.yearsOfExp) || Number(restored.yearsOfExperience) || 1
+          });
+        } catch (err) { console.warn("[Supabase Restore Skill Error]", err); }
+      }
+    } else if (item.itemType === 'certification') {
+      const restored = item.data as Certification;
+      setCertifications(prev => deduplicateCertifications([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateCertifications([restored, ...certifications]);
+        safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_certs`, updated).catch(e => {});
+      }
+      const userId = await getActiveUserId();
+      if (userId) {
+        try {
+          await supabase.from('certifications').upsert({
+            id: ensureUUID(restored.id),
+            user_id: userId,
+            title: restored.title,
+            issuer: restored.issuer,
+            issue_date: restored.dateIssued || restored.issueDate,
+            expiry_date: restored.expirationDate || restored.expiryDate,
+            credential_id: restored.credentialId,
+            credential_url: restored.credentialUrl,
+            description: restored.description,
+            type: restored.type || 'study',
+            percentage: restored.percentage,
+            visibility: restored.visibility || 'public'
+          });
+        } catch (err) { console.warn("[Supabase Restore Cert Error]", err); }
+      }
+    } else if (item.itemType === 'specialization') {
+      const restored = item.data as Specialization;
+      setSpecializations(prev => deduplicateSpecializations([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateSpecializations([restored, ...specializations]);
+        safeLocalStorageSetItem(`${email}_specializations`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_specializations`, updated).catch(() => {});
+      }
+      const userId = await getActiveUserId();
+      if (userId) {
+        try {
+          await supabase.from('specializations').upsert({
+            id: ensureUUID(restored.id),
+            user_id: userId,
+            name: restored.name
+          });
+        } catch (err) { console.warn("[Supabase Restore Specialization Error]", err); }
+      }
+    } else if (item.itemType === 'project') {
+      const restored = item.data as Project;
+      if (restored.category === 'products' || (restored as any).type === 'product') {
+        setProducts(prev => deduplicateProjects([restored, ...prev]));
+      } else {
+        setProjects(prev => deduplicateProjects([restored, ...prev]));
+      }
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(projects));
+        heavyStorage.set(`${email}_projects`, projects).catch(() => {});
+      }
+    } else if (item.itemType === 'contact') {
+      const restored = item.data as Contact;
+      setContacts(prev => deduplicateContacts([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateContacts([restored, ...contacts]);
+        safeLocalStorageSetItem(`${email}_contacts`, JSON.stringify(updated));
+      }
+    } else if (item.itemType === 'document') {
+      const restored = item.data as VaultDocument;
+      setDocuments(prev => deduplicateDocuments([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateDocuments([restored, ...documents]);
+        safeLocalStorageSetItem(`${email}_documents`, JSON.stringify(updated));
+      }
+    }
+
+    // Remove from oldData
+    setOldData(prev => {
+      const updated = prev.filter(o => o.id !== item.id);
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_old_data`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_old_data`, updated).catch(e => {});
+      }
+      return updated;
+    });
+
+    triggerToast(`Data recovered successfully: ${item.title}`);
+  };
+
+  const handlePermanentlyDeleteOldData = (id: string) => {
+    setOldData(prev => {
+      const updated = prev.filter(o => o.id !== id);
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_old_data`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_old_data`, updated).catch(e => {});
+      }
+      return updated;
+    });
+    triggerToast("Archived record deleted permanently.");
   };
 
   // Recursively strips heavy base64 items (e.g. uploaded PDFs or massive image files)
@@ -6229,6 +6593,7 @@ export default function App() {
             <ExperienceTab 
               experience={experience}
               onAddExperience={handleAddExp}
+              onUpdateExperience={handleUpdateExp}
               onDeleteExperience={handleDeleteExp}
             />
           )}
@@ -6362,6 +6727,9 @@ export default function App() {
 
           {activeTab === 'settings' && (
             <SettingsTab 
+              oldData={oldData}
+              onRestoreOldData={handleRestoreOldData}
+              onPermanentlyDeleteOldData={handlePermanentlyDeleteOldData}
               onRestoreDefaults={handleRestoreDefaults}
               onWipeData={handleWipeData}
             />
