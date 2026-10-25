@@ -78,6 +78,8 @@ export default function NotepadTab({
   const [activeFont, setActiveFont] = useState('Inter, sans-serif');
   const [activeFontSize, setActiveFontSize] = useState('3'); // HTML font size 1-7
   const editorRef = useRef<HTMLDivElement>(null);
+  const editorWorkspaceRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   // Subtask input state for active note
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -124,6 +126,13 @@ export default function NotepadTab({
 
   // Create Note or Task Document
   const handleCreateDocument = (type: 'note' | 'task' = 'note') => {
+    // If the active filter hides this type, switch to 'all' so it is visible in the list
+    if (type === 'task' && viewMode === 'notes') {
+      setViewMode('all');
+    } else if (type === 'note' && viewMode === 'tasks') {
+      setViewMode('all');
+    }
+
     const newDoc: NotepadNote = {
       id: generateUUID(),
       title: type === 'task' ? 'Untitled Work Task' : 'Untitled Document',
@@ -137,9 +146,15 @@ export default function NotepadTab({
     };
     onUpdateNotes([newDoc, ...notes]);
     setActiveNoteId(newDoc.id);
-    setIsMobileListOpen(false); // Mobile: Open directly into editor
-    setIsFullTab(true); // Open in full tab for spacious workspace
-    triggerToast(`New ${type === 'task' ? 'work task' : 'document'} created in full workspace.`);
+    setIsMobileListOpen(false); // Mobile: switch directly to active editor
+    triggerToast(`New ${type === 'task' ? 'work task' : 'document'} opened in editor.`);
+
+    // Focus and scroll directly into the main editor workspace where notes are already open
+    setTimeout(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+      editorWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 50);
   };
 
   // Right-click "New Document" action: opens in new browser tab
@@ -624,7 +639,11 @@ export default function NotepadTab({
         </div>
 
         {/* ACTIVE EDITOR SCREEN: Full Tap / Tab Workspace */}
-        <div className={`col-span-1 ${isFullTab ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col bg-[#050608]/40 ${!isMobileListOpen ? 'block' : 'hidden lg:flex'}`}>
+        <div 
+          ref={editorWorkspaceRef}
+          id="notepad-active-editor-pane"
+          className={`col-span-1 ${isFullTab ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col bg-[#050608]/40 ${!isMobileListOpen ? 'block' : 'hidden lg:flex'}`}
+        >
           {activeNote ? (
             <div className="flex flex-col h-full flex-1">
               
@@ -946,6 +965,7 @@ export default function NotepadTab({
                     )}
 
                     <input
+                      ref={titleInputRef}
                       type="text"
                       value={activeNote.title}
                       onChange={(e) => handleUpdateActiveNote('title', e.target.value)}
