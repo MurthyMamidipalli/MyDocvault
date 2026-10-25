@@ -6730,10 +6730,6 @@ export default function App() {
 
           {activeTab === 'timeline' && (
             <TimelineTab 
-              milestones={milestones}
-              onAddMilestone={handleAddMilestone}
-              onUpdateMilestone={handleUpdateMilestone}
-              onDeleteMilestone={handleDeleteMilestone}
               experience={experience}
               education={education}
               currentJob={currentJob}
