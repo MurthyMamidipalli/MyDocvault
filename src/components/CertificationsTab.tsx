@@ -491,21 +491,25 @@ export default function CertificationsTab({
               key={cert.id} 
               className="bg-[#121215] border border-slate-850 rounded-[20px] p-6 relative group hover:border-slate-800 transition duration-300 flex flex-col justify-between"
             >
-              {/* Actions aligned beautifully */}
-              <div className="absolute top-4 right-4 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition z-10">
+              {/* Prominent Edit and Delete buttons visible clearly with comfortable spacing */}
+              <div className="absolute top-4 right-4 flex items-center gap-2.5 z-10">
                 <button 
+                  type="button"
                   onClick={() => handleStartEdit(cert)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-400 hover:bg-slate-900 cursor-pointer transition select-none"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
                   title="Edit credential"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit</span>
                 </button>
                 <button 
+                  type="button"
                   onClick={() => onDeleteCertification(cert.id)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-slate-900 cursor-pointer transition select-none"
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
                   title="Delete credential"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
                 </button>
               </div>
 

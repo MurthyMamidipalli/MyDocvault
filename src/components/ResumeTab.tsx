@@ -904,20 +904,22 @@ export default function ResumeTab({
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition duration-200">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <button 
                     onClick={() => handleStartEdit(res)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-400 hover:bg-slate-950 cursor-pointer transition select-none"
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
                     title="Edit record parameters"
                   >
                     <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit</span>
                   </button>
                   <button 
                     onClick={() => handleDeleteResume(res.id)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-rose-400 hover:bg-slate-950 cursor-pointer transition select-none"
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
                     title="Delete record from vault"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
                   </button>
                 </div>
               </div>
@@ -976,20 +978,22 @@ export default function ResumeTab({
                   <span>Active Link</span>
                 </span>
 
-                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition duration-200">
+                <div className="flex items-center gap-2.5 shrink-0">
                   <button 
                     onClick={() => handleStartEditLink(lk)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-400 hover:bg-slate-950 cursor-pointer transition select-none"
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
                     title="Edit portal link"
                   >
                     <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit</span>
                   </button>
                   <button 
                     onClick={() => onDeleteLink(lk.id)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-rose-400 hover:bg-slate-950 cursor-pointer transition select-none"
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
                     title="Remove Link"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
                   </button>
                 </div>
               </div>

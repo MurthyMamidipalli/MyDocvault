@@ -356,8 +356,9 @@ export default function ExperienceTab({
               <div className="flex flex-col items-end gap-1.5 text-xs font-mono text-gray-500 text-left md:text-right md:shrink-0">
                 {/* Delete option directly above the date */}
                 <button 
+                  type="button"
                   onClick={() => onDeleteExperience(exp.id)}
-                  className="p-1 rounded-lg text-gray-500 hover:text-rose-450 hover:bg-slate-950 cursor-pointer opacity-0 group-hover:opacity-100 transition flex items-center gap-1 text-[11px] font-mono"
+                  className="px-2.5 py-1 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
                   title="Delete Career Ledger"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

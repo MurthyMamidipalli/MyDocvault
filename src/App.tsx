@@ -36,6 +36,7 @@ import {
   AlertTriangle,
   CreditCard,
   Layers,
+  Target,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -44,6 +45,7 @@ import {
   PersonalProfile, 
   Skill, 
   Education, 
+  Specialization,
   Certification, 
   Experience, 
   CurrentJob, 
@@ -88,6 +90,7 @@ import OverviewTab from './components/OverviewTab';
 import ProfileTab from './components/ProfileTab';
 import SkillsTab from './components/SkillsTab';
 import EducationTab from './components/EducationTab';
+import SpecializationTab from './components/SpecializationTab';
 import CertificationsTab from './components/CertificationsTab';
 import ExperienceTab from './components/ExperienceTab';
 import CurrentJobTab from './components/CurrentJobTab';
@@ -216,11 +219,45 @@ export const deduplicateEducation = (items?: Education[]): Education[] => {
         grade: item.grade || existing.grade || '',
         percentage: item.percentage || existing.percentage || '',
         activities: item.activities || existing.activities || '',
+        specialization: item.specialization || existing.specialization || '',
         description: item.description || existing.description || ''
       };
     } else {
       if (idKey) seenKeys.add(`id:${idKey}`);
       if (normDeg) seenKeys.add(`deg:${normDeg}`);
+      result.push(item);
+    }
+  }
+  return result;
+};
+
+export const deduplicateSpecializations = (items?: Specialization[]): Specialization[] => {
+  if (!items || !Array.isArray(items)) return [];
+  const result: Specialization[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const item of items) {
+    if (!item || !item.name) continue;
+    const normName = item.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const idKey = item.id ? toUUID(item.id) : '';
+
+    let matchIdx = -1;
+    if (idKey && seenKeys.has(`id:${idKey}`)) {
+      matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
+    } else if (normName && seenKeys.has(`name:${normName}`)) {
+      matchIdx = result.findIndex(r => (r.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') === normName);
+    }
+
+    if (matchIdx >= 0) {
+      result[matchIdx] = {
+        ...result[matchIdx],
+        ...item,
+        id: result[matchIdx].id || item.id,
+        name: item.name || result[matchIdx].name
+      };
+    } else {
+      if (idKey) seenKeys.add(`id:${idKey}`);
+      if (normName) seenKeys.add(`name:${normName}`);
       result.push(item);
     }
   }
@@ -821,6 +858,20 @@ export default function App() {
     return [];
   });
 
+  const [specializations, setSpecializations] = useState<Specialization[]>(() => {
+    const email = getCurrentUserEmail();
+    if (email) {
+      const saved = localStorage.getItem(`${email}_specializations`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) return deduplicateSpecializations(parsed);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+
   const [certifications, setCertifications] = useState<Certification[]>(() => {
     const email = getCurrentUserEmail();
     if (email) {
@@ -1272,6 +1323,7 @@ export default function App() {
     setProducts(deduplicateProjects(getLocal('products', [])));
     setOthers(deduplicateProjects(getLocal('others', [])));
     setEducation(deduplicateEducation(getLocal('education', isUserLoggedIn ? [] : INITIAL_EDUCATION)));
+    setSpecializations(deduplicateSpecializations(getLocal('specializations', [])));
     setAchievements(deduplicateAchievements(getLocal('achievements', isUserLoggedIn ? [] : INITIAL_ACHIEVEMENTS)));
     setTestimonials(deduplicateTestimonials(getLocal('testimonials', isUserLoggedIn ? [] : INITIAL_TESTIMONIALS)));
     setLinks(deduplicateLinks(getLocal('links', isUserLoggedIn ? [] : INITIAL_LINKS)));
@@ -1633,7 +1685,7 @@ export default function App() {
       try {
         const [
           dProf, dJob, dCerts, dProjs, dProds, dOthers,
-          dEdu, dSkills, dExp, dCt, dCal, dNotes,
+          dEdu, dSpec, dSkills, dExp, dCt, dCal, dNotes,
           dRes, dLinks, dMil, dAch, dTest
         ] = await Promise.all([
           heavyStorage.get(`${email}_profile`).catch(() => null),
@@ -1643,6 +1695,7 @@ export default function App() {
           heavyStorage.get(`${email}_products`).catch(() => null),
           heavyStorage.get(`${email}_others`).catch(() => null),
           heavyStorage.get(`${email}_education`).catch(() => null),
+          heavyStorage.get(`${email}_specializations`).catch(() => null),
           heavyStorage.get(`${email}_skills`).catch(() => null),
           heavyStorage.get(`${email}_experience`).catch(() => null),
           heavyStorage.get(`${email}_contacts`).catch(() => null),
@@ -1700,6 +1753,10 @@ export default function App() {
 
         if (dEdu && Array.isArray(dEdu) && dEdu.length > 0) {
           setEducation(prev => deduplicateEducation([...(prev || []), ...dEdu]));
+        }
+
+        if (dSpec && Array.isArray(dSpec) && dSpec.length > 0) {
+          setSpecializations(prev => deduplicateSpecializations([...(prev || []), ...dSpec]));
         }
 
         if (dSkills && Array.isArray(dSkills) && dSkills.length > 0) {
@@ -1953,6 +2010,7 @@ export default function App() {
                 degree: e.degree,
                 institution: e.institution,
                 fieldOfStudy: e.field_of_study || e.fieldOfStudy || '',
+                specialization: e.specialization || extraMeta.specialization || '',
                 startYear: e.start_year || e.startYear || '',
                 endYear: e.end_year || e.endYear || '',
                 grade: e.grade || '',
@@ -3170,6 +3228,7 @@ export default function App() {
         enrollmentId: newEd.enrollmentId || '',
         startDate: newEd.startDate || '',
         endDate: newEd.endDate || '',
+        specialization: newEd.specialization || '',
         isCurrentlyPursuing: !!newEd.isCurrentlyPursuing
       });
       const cleanPayload: any = {
@@ -3189,6 +3248,7 @@ export default function App() {
         enrollment_id: newEd.enrollmentId || '',
         start_date: newEd.startDate || '',
         end_date: newEd.endDate || '',
+        specialization: newEd.specialization || '',
         is_currently_pursuing: !!newEd.isCurrentlyPursuing,
         activities: newEd.activities || ''
       };
@@ -3226,13 +3286,30 @@ export default function App() {
 
   const handleDeleteEdu = async (id: string) => {
     const targetId = toUUID(id);
-    const updated = education.filter(e => e.id !== id && e.id !== targetId);
-    setEducation(updated);
+    let targetDegree = '';
+    let targetInst = '';
 
-    if (currentUser?.email) {
-      safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_education`, JSON.stringify(updated));
-      heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_education`, updated).catch(e => {});
-    }
+    setEducation(prev => {
+      const target = prev.find(e => e.id === id || e.id === targetId || toUUID(e.id) === targetId);
+      targetDegree = (target?.degree || '').trim().toLowerCase();
+      targetInst = (target?.institution || '').trim().toLowerCase();
+
+      const updated = prev.filter(e => {
+        if (e.id === id || e.id === targetId || toUUID(e.id) === targetId) return false;
+        if (targetDegree && targetInst && (e.degree || '').trim().toLowerCase() === targetDegree && (e.institution || '').trim().toLowerCase() === targetInst) {
+          return false;
+        }
+        return true;
+      });
+
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_education`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_education`, updated).catch(e => {});
+      }
+      return updated;
+    });
+
     triggerToast(`Removed academic snapshot.`);
 
     const userId = await getActiveUserId();
@@ -3241,6 +3318,9 @@ export default function App() {
         await supabase.from('education').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('education').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetDegree && targetInst) {
+          await supabase.from('education').delete().ilike('degree', targetDegree).ilike('institution', targetInst).eq('user_id', userId);
         }
         await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-edu-${id}`)).eq('user_id', userId);
         if (targetId) await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-edu-${targetId}`)).eq('user_id', userId);
@@ -3269,6 +3349,7 @@ export default function App() {
         enrollmentId: updatedEd.enrollmentId || '',
         startDate: updatedEd.startDate || '',
         endDate: updatedEd.endDate || '',
+        specialization: updatedEd.specialization || '',
         isCurrentlyPursuing: !!updatedEd.isCurrentlyPursuing
       });
       const cleanPayload: any = {
@@ -3288,6 +3369,7 @@ export default function App() {
         enrollment_id: updatedEd.enrollmentId || '',
         start_date: updatedEd.startDate || '',
         end_date: updatedEd.endDate || '',
+        specialization: updatedEd.specialization || '',
         is_currently_pursuing: !!updatedEd.isCurrentlyPursuing,
         activities: updatedEd.activities || ''
       };
@@ -3320,6 +3402,111 @@ export default function App() {
           is_public: true
         });
       } catch (mErr) { console.warn("[Supabase Career Timeline Edu Sync Error]", mErr); }
+    }
+  };
+
+  // Specialization Handlers
+  const handleAddSpecialization = async (name: string) => {
+    const id = generateUUID();
+    const item: Specialization = {
+      id,
+      name,
+      createdAt: new Date().toISOString()
+    };
+
+    setSpecializations(prev => {
+      const updated = deduplicateSpecializations([item, ...prev]);
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_specializations`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_specializations`, updated).catch(() => {});
+      }
+      return updated;
+    });
+
+    triggerToast(`Added specialization: ${name}`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
+      try {
+        await supabase.from('specializations').insert({
+          id,
+          user_id: userId,
+          name
+        });
+      } catch (err) {
+        console.warn("[Supabase Add Specialization Error]", err);
+      }
+    }
+  };
+
+  const handleUpdateSpecialization = async (updatedItem: Specialization) => {
+    const targetId = ensureUUID(updatedItem.id);
+    const item: Specialization = { ...updatedItem, id: targetId };
+
+    setSpecializations(prev => {
+      const updated = prev.map(s => (s.id === updatedItem.id || s.id === targetId || toUUID(s.id) === targetId || (s.name && s.name.trim().toLowerCase() === updatedItem.name.trim().toLowerCase())) ? item : s);
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_specializations`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_specializations`, updated).catch(() => {});
+      }
+      return updated;
+    });
+
+    triggerToast(`Updated specialization: ${updatedItem.name}`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
+      try {
+        await supabase.from('specializations').upsert({
+          id: targetId,
+          user_id: userId,
+          name: updatedItem.name
+        });
+      } catch (err) {
+        console.warn("[Supabase Update Specialization Error]", err);
+      }
+    }
+  };
+
+  const handleDeleteSpecialization = async (id: string) => {
+    const targetId = toUUID(id);
+    let targetName = '';
+
+    setSpecializations(prev => {
+      const target = prev.find(s => s.id === id || s.id === targetId || toUUID(s.id) === targetId);
+      targetName = target?.name ? target.name.trim().toLowerCase() : '';
+
+      const updated = prev.filter(s => {
+        if (s.id === id || s.id === targetId || toUUID(s.id) === targetId) return false;
+        if (targetName && s.name && s.name.trim().toLowerCase() === targetName) return false;
+        return true;
+      });
+
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_specializations`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_specializations`, updated).catch(() => {});
+      }
+      return updated;
+    });
+
+    triggerToast(`Specialization removed.`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
+      try {
+        await supabase.from('specializations').delete().eq('id', targetId).eq('user_id', userId);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('specializations').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetName) {
+          await supabase.from('specializations').delete().ilike('name', targetName).eq('user_id', userId);
+        }
+      } catch (err) {
+        console.warn("[Supabase Delete Specialization Error]", err);
+      }
     }
   };
 
@@ -3386,9 +3573,16 @@ export default function App() {
 
   const handleDeleteCert = async (id: string) => {
     const targetId = toUUID(id);
+    let targetTitle = '';
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     setCertifications(prev => {
-      const updated = prev.filter(c => c.id !== id && c.id !== targetId);
+      const target = prev.find(c => c.id === id || c.id === targetId || toUUID(c.id) === targetId);
+      targetTitle = (target?.title || '').trim().toLowerCase();
+      const updated = prev.filter(c => {
+        if (c.id === id || c.id === targetId || toUUID(c.id) === targetId) return false;
+        if (targetTitle && (c.title || '').trim().toLowerCase() === targetTitle) return false;
+        return true;
+      });
       if (email) {
         safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updated));
         heavyStorage.set(`${email}_certs`, updated).catch(e => {});
@@ -3403,6 +3597,9 @@ export default function App() {
         await supabase.from('certifications').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('certifications').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetTitle) {
+          await supabase.from('certifications').delete().ilike('title', targetTitle).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Cert Error]", err); }
     }
@@ -3516,14 +3713,30 @@ export default function App() {
 
   const handleDeleteExp = async (id: string) => {
     const targetId = toUUID(id);
-    const updated = experience.filter(e => e.id !== id && e.id !== targetId);
-    setExperience(updated);
+    let targetRole = '';
+    let targetCompany = '';
 
-    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
-    if (email) {
-      safeLocalStorageSetItem(`${currentUser?.email?.toLowerCase().trim() || email}_experience`, JSON.stringify(updated));
-      heavyStorage.set(`${email}_experience`, updated).catch(e => {});
-    }
+    setExperience(prev => {
+      const target = prev.find(e => e.id === id || e.id === targetId || toUUID(e.id) === targetId);
+      targetRole = (target?.role || '').trim().toLowerCase();
+      targetCompany = (target?.company || '').trim().toLowerCase();
+
+      const updated = prev.filter(e => {
+        if (e.id === id || e.id === targetId || toUUID(e.id) === targetId) return false;
+        if (targetRole && targetCompany && (e.role || '').trim().toLowerCase() === targetRole && (e.company || '').trim().toLowerCase() === targetCompany) {
+          return false;
+        }
+        return true;
+      });
+
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_experience`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_experience`, updated).catch(e => {});
+      }
+      return updated;
+    });
+
     triggerToast(`Cleared historic experience milestone.`);
 
     const userId = await getActiveUserId();
@@ -3533,8 +3746,11 @@ export default function App() {
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('experience').delete().eq('id', id).eq('user_id', userId);
         }
+        if (targetRole && targetCompany) {
+          await supabase.from('experience').delete().ilike('role', targetRole).ilike('company', targetCompany).eq('user_id', userId);
+        }
         await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-exp-${id}`)).eq('user_id', userId);
-        if (targetId) await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-exp-${targetId}`)).eq('user_id', userId);
+        if (targetId) await supabase.from('career_timeline').delete().eq('id', ensureUUID(`auto-edu-${targetId}`)).eq('user_id', userId);
       } catch (err) { console.warn("[Supabase Delete Exp Error]", err); }
     }
   };
@@ -5658,6 +5874,7 @@ export default function App() {
     { id: 'projects', label: 'Projects & Products', icon: Rocket },
     { id: 'resume', label: 'Resume / CV', icon: FileText },
     { id: 'skills', label: 'Skills', icon: Cpu },
+    { id: 'specialization', label: 'Specialization', icon: Target },
     { id: 'testimonials', label: 'Testimonials', icon: MessageSquare }
   ];
 
@@ -6096,6 +6313,15 @@ export default function App() {
               onAddAchievement={handleAddAchievement}
               onDeleteAchievement={handleDeleteAchievement}
               onUpdateAchievement={handleUpdateAchievement}
+            />
+          )}
+
+          {activeTab === 'specialization' && (
+            <SpecializationTab 
+              specializations={specializations}
+              onAddSpecialization={handleAddSpecialization}
+              onUpdateSpecialization={handleUpdateSpecialization}
+              onDeleteSpecialization={handleDeleteSpecialization}
             />
           )}
 

@@ -38,6 +38,7 @@ export interface Education {
   institution: string;
   degree: string;
   fieldOfStudy: string;
+  specialization?: string;
   startYear: string;
   endYear: string;
   grade: string;
@@ -48,6 +49,12 @@ export interface Education {
   endDate?: string;
   description?: string;
   isCurrentlyPursuing?: boolean;
+}
+
+export interface Specialization {
+  id: string;
+  name: string;
+  createdAt?: string;
 }
 
 export interface Certification {

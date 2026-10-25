@@ -16,6 +16,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
     institution: '',
     degree: '',
     fieldOfStudy: '',
+    specialization: '',
     startYear: '',
     endYear: '',
     grade: '',
@@ -36,6 +37,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       institution: edu.institution,
       degree: edu.degree,
       fieldOfStudy: edu.fieldOfStudy,
+      specialization: edu.specialization || '',
       startYear: edu.startYear,
       endYear: edu.endYear,
       grade: edu.grade || '',
@@ -55,6 +57,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       institution: '',
       degree: '',
       fieldOfStudy: '',
+      specialization: '',
       startYear: '',
       endYear: '',
       grade: '',
@@ -80,6 +83,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       institution: formData.institution.trim(),
       degree: formData.degree.trim(),
       fieldOfStudy: formData.fieldOfStudy?.trim() || '',
+      specialization: formData.specialization?.trim() || '',
       startYear: sYear,
       endYear: eYear,
       startDate: formData.startDate || '',
@@ -105,6 +109,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       institution: '',
       degree: '',
       fieldOfStudy: '',
+      specialization: '',
       startYear: '',
       endYear: '',
       grade: '',
@@ -226,6 +231,18 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
               </div>
             </div>
 
+            {/* Specialization Field */}
+            <div className="space-y-1">
+              <label className="text-xs font-mono text-gray-400">Specialization (Optional)</label>
+              <input 
+                type="text" 
+                value={formData.specialization || ''}
+                onChange={e => setFormData({ ...formData, specialization: e.target.value })}
+                placeholder="Enter specialization name"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:border-emerald-500 outline-none placeholder:text-gray-600"
+              />
+            </div>
+
             {/* ID / Enrollment Number */}
             <div className="space-y-1">
               <label className="text-xs font-mono text-gray-400">ID / Enrollment Number (Optional)</label>
@@ -342,21 +359,28 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
       <div className="space-y-4">
         {education.map(edu => (
           <div key={edu.id} className="bg-slate-900/60 border border-slate-805/80 rounded-2xl p-5 md:p-6 relative group transition duration-205 hover:bg-slate-900/90">
-            {/* Actions aligned beautifully */}
-            <div className="absolute top-6 right-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition z-10">
+            {/* Prominent Edit and Delete buttons visible clearly with comfortable spacing */}
+            <div className="absolute top-5 right-5 flex items-center gap-2.5 z-10">
               <button 
+                type="button"
                 onClick={() => handleStartEdit(edu)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-400 hover:bg-slate-950 cursor-pointer transition select-none"
-                title="Edit ledger item"
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+                title="Edit Education Record"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Edit</span>
               </button>
               <button 
-                onClick={() => onDeleteEducation(edu.id)}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-slate-950 cursor-pointer transition select-none"
-                title="Delete ledger item"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteEducation(edu.id);
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+                title="Delete Education Record"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
               </button>
             </div>
 
@@ -364,7 +388,7 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
               <div className="p-3.5 bg-[#10b981]/15 border border-[#10b981]/25 rounded-full text-[#10b981] shrink-0">
                 <GraduationCap className="w-6 h-6" />
               </div>
-              <div className="space-y-2 flex-1 min-w-0 pr-16">
+              <div className="space-y-2 flex-1 min-w-0 pr-32">
                 <div>
                   {/* Institution name is the main bold title */}
                   <h3 className="text-white font-bold text-lg leading-tight tracking-tight">{edu.institution}</h3>
@@ -372,6 +396,14 @@ export default function EducationTab({ education, onAddEducation, onDeleteEducat
                   <p className="text-[#10b981] text-sm font-semibold mt-1">
                     {edu.degree}{edu.fieldOfStudy ? ` • ${edu.fieldOfStudy}` : ''}
                   </p>
+                  {edu.specialization && (
+                    <div className="mt-1.5">
+                      <span className="inline-flex items-center gap-1.5 bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs px-2.5 py-0.5 rounded-md font-medium">
+                        <span className="text-gray-400 font-mono text-[11px]">Specialization:</span>
+                        <strong className="text-white">{edu.specialization}</strong>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-y-1.5 gap-x-4 text-xs font-mono text-gray-400">
