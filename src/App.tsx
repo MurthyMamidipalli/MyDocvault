@@ -253,8 +253,8 @@ export const deduplicateSkills = (items?: Skill[]): Skill[] => {
         ...existing,
         ...item,
         id: existing.id || item.id,
-        yearsOfExp: item.yearsOfExp || existing.yearsOfExp,
-        endorsements: item.endorsements || existing.endorsements,
+        yearsOfExp: item.yearsOfExp !== undefined ? item.yearsOfExp : existing.yearsOfExp,
+        endorsements: item.endorsements !== undefined ? item.endorsements : existing.endorsements,
         description: item.description || existing.description,
         proficiency: item.proficiency || existing.proficiency
       };
@@ -1916,16 +1916,19 @@ export default function App() {
         try {
           const sData = sRes.status === 'fulfilled' ? sRes.value.data : null;
           if (sRes.status === 'fulfilled' && Array.isArray(sData)) {
-            const mapped = sData.map(s => ({
-              id: s.id,
-              name: s.name,
-              category: s.category || 'Technical',
-              proficiency: s.proficiency || 'Intermediate',
-              yearsOfExp: s.years_of_exp || 1,
-              endorsements: s.endorsements || 0,
-              description: s.description || '',
-              visibility: s.visibility || 'public'
-            }));
+            const mapped = sData.map(s => {
+              const expVal = typeof s.years_of_exp === 'number' ? s.years_of_exp : (s.years_of_exp !== null && s.years_of_exp !== undefined ? (parseInt(s.years_of_exp, 10) || 0) : 0);
+              return {
+                id: s.id,
+                name: s.name,
+                category: s.category || 'Technical',
+                proficiency: s.proficiency || 'Intermediate',
+                yearsOfExp: expVal,
+                endorsements: s.endorsements || 0,
+                description: s.description || '',
+                visibility: s.visibility || 'public'
+              };
+            });
             const updatedSkills = deduplicateSkills(mapped);
             setSkills(updatedSkills);
             if (currentUser?.email) {
@@ -3036,24 +3039,30 @@ export default function App() {
   // Skills
   const handleAddSkill = async (newSk: Omit<Skill, 'id'>) => {
     const id = generateUUID();
-    const skill: Skill = { ...newSk, id };
-    const updatedSkills = deduplicateSkills([skill, ...skills]);
-    setSkills(updatedSkills);
-    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
-    if (email) {
-      safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updatedSkills));
-    }
-    triggerToast(`Exposed technical skill capability: ${newSk.name}`);
+    const sanitizedExp = typeof newSk.yearsOfExp === 'number' ? newSk.yearsOfExp : (parseInt(String(newSk.yearsOfExp), 10) || 0);
+    const skill: Skill = { ...newSk, id, yearsOfExp: sanitizedExp };
+    
+    setSkills(prev => {
+      const updatedSkills = deduplicateSkills([skill, ...prev]);
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updatedSkills));
+        heavyStorage.set(`${email}_skills`, updatedSkills).catch(() => {});
+      }
+      return updatedSkills;
+    });
+    triggerToast(`Added skill capability: ${newSk.name}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('skills').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           name: newSk.name,
           category: newSk.category || 'Technical',
           proficiency: newSk.proficiency || 'Intermediate',
-          years_of_exp: newSk.yearsOfExp || 1,
+          years_of_exp: sanitizedExp,
           endorsements: newSk.endorsements || 0,
           description: newSk.description || '',
           visibility: newSk.visibility || 'public'
@@ -3064,27 +3073,38 @@ export default function App() {
 
   const handleUpdateSkill = async (upSkill: Skill) => {
     const targetId = ensureUUID(upSkill.id);
-    const updatedSkill = { ...upSkill, id: targetId };
-    const updatedSkills = skills.map(s => (s.id === upSkill.id || s.id === targetId) ? updatedSkill : s);
-    setSkills(updatedSkills);
-    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
-    if (email) {
-      safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updatedSkills));
-    }
-    triggerToast(`Optimized technical status: ${upSkill.name}`);
+    const sanitizedExp = typeof upSkill.yearsOfExp === 'number' ? upSkill.yearsOfExp : (parseInt(String(upSkill.yearsOfExp), 10) || 0);
+    const updatedSkill: Skill = { ...upSkill, id: targetId, yearsOfExp: sanitizedExp };
 
-    if (currentUser?.id) {
+    setSkills(prev => {
+      const updatedSkills = prev.map(s => {
+        const isMatch = s.id === upSkill.id || s.id === targetId || toUUID(s.id) === targetId || 
+          (s.name && upSkill.name && s.name.trim().toLowerCase() === upSkill.name.trim().toLowerCase());
+        return isMatch ? updatedSkill : s;
+      });
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updatedSkills));
+        heavyStorage.set(`${email}_skills`, updatedSkills).catch(() => {});
+      }
+      return updatedSkills;
+    });
+    triggerToast(`Updated skill: ${upSkill.name}`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('skills').upsert({
           id: targetId,
-          user_id: currentUser.id,
+          user_id: userId,
           name: upSkill.name,
           category: upSkill.category || 'Technical',
           proficiency: upSkill.proficiency || 'Intermediate',
-          years_of_exp: upSkill.yearsOfExp || 1,
+          years_of_exp: sanitizedExp,
           endorsements: upSkill.endorsements || 0,
           description: upSkill.description || '',
-          visibility: upSkill.visibility || 'public'
+          visibility: upSkill.visibility || 'public',
+          updated_at: new Date().toISOString()
         });
       } catch (err) { console.warn("[Supabase Update Skill Error]", err); }
     }
@@ -3092,15 +3112,27 @@ export default function App() {
 
   const handleDeleteSkill = async (id: string) => {
     const targetId = toUUID(id);
-    const updated = skills.filter(s => s.id !== id && s.id !== targetId);
-    setSkills(updated);
+    let targetSkillName = '';
 
-    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
-    if (email) {
-      safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updated));
-      heavyStorage.set(`${email}_skills`, updated).catch(() => {});
-    }
-    triggerToast(`Purged technical coordinate.`);
+    setSkills(prev => {
+      const target = prev.find(s => s.id === id || s.id === targetId || toUUID(s.id) === targetId);
+      targetSkillName = target?.name ? target.name.trim().toLowerCase() : '';
+      
+      const updated = prev.filter(s => {
+        if (s.id === id || s.id === targetId || toUUID(s.id) === targetId) return false;
+        if (targetSkillName && s.name && s.name.trim().toLowerCase() === targetSkillName) return false;
+        return true;
+      });
+
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        safeLocalStorageSetItem(`${email}_skills`, JSON.stringify(updated));
+        heavyStorage.set(`${email}_skills`, updated).catch(() => {});
+      }
+      return updated;
+    });
+
+    triggerToast(`Skill removed successfully.`);
 
     const userId = await getActiveUserId();
     if (userId) {
@@ -3108,6 +3140,9 @@ export default function App() {
         await supabase.from('skills').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('skills').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetSkillName) {
+          await supabase.from('skills').delete().ilike('name', targetSkillName).eq('user_id', userId);
         }
       } catch (err) { console.warn("[Supabase Delete Skill Error]", err); }
     }
@@ -5289,7 +5324,7 @@ export default function App() {
 
           const publicSharePayload = {
             profile: publicProfileObj,
-            skills: hasCustomSkills ? sData.map((s: any) => ({ id: s.id, name: s.name, category: s.category, yearsOfExp: s.years_of_exp, visibility: s.visibility || 'public' })) : (isDemo ? INITIAL_SKILLS : []),
+            skills: hasCustomSkills ? sData.map((s: any) => ({ id: s.id, name: s.name, category: s.category, yearsOfExp: typeof s.years_of_exp === 'number' ? s.years_of_exp : (parseInt(s.years_of_exp, 10) || 0), visibility: s.visibility || 'public' })) : (isDemo ? INITIAL_SKILLS : []),
             experience: hasCustomExp ? expData.map((exp: any) => ({ id: exp.id, company: exp.company, role: exp.role, startDate: exp.start_date, endDate: exp.end_date, description: exp.description, skillsUsed: exp.skills_used, links: exp.links, pdfUrl: exp.pdf_url })) : (isDemo ? INITIAL_EXPERIENCE : []),
             certifications: hasCustomCerts ? cData.map((c: any) => ({ id: c.id, title: c.title, issuer: c.issuer, dateIssued: c.issue_date || c.date_issued, credentialUrl: c.credential_url, fileName: c.file_name || c.fileName, fileUrl: c.file_url || c.fileUrl, visibility: c.visibility || 'public' })) : (isDemo ? INITIAL_CERTIFICATIONS : []),
             projects: hasCustomProjects ? [

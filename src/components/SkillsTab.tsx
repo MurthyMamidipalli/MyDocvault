@@ -31,23 +31,34 @@ export default function SkillsTab({
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newSkill.name) return;
-    onAddSkill(newSkill);
+    if (!newSkill.name.trim()) return;
+    const exp = typeof newSkill.yearsOfExp === 'number' ? newSkill.yearsOfExp : (parseInt(String(newSkill.yearsOfExp), 10) || 0);
+    onAddSkill({
+      ...newSkill,
+      name: newSkill.name.trim(),
+      yearsOfExp: exp
+    });
     setNewSkill({ name: '', visibility: 'public', yearsOfExp: 3, endorsements: 0 });
     setShowAddForm(false);
   };
 
   const handleUpdateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editForm) return;
-    onUpdateSkill(editForm);
+    if (!editForm || !editForm.name.trim()) return;
+    const exp = typeof editForm.yearsOfExp === 'number' ? editForm.yearsOfExp : (parseInt(String(editForm.yearsOfExp), 10) || 0);
+    onUpdateSkill({
+      ...editForm,
+      name: editForm.name.trim(),
+      yearsOfExp: exp
+    });
     setEditingId(null);
     setEditForm(null);
   };
 
   const handleStartEdit = (skill: Skill) => {
     setEditingId(skill.id);
-    setEditForm({ ...skill });
+    const exp = typeof skill.yearsOfExp === 'number' ? skill.yearsOfExp : (parseInt(String(skill.yearsOfExp), 10) || 0);
+    setEditForm({ ...skill, yearsOfExp: exp });
   };
 
   const filteredSkills = activeFilter === 'all' 
@@ -70,7 +81,7 @@ export default function SkillsTab({
         </div>
         <button
           onClick={() => setShowAddForm(!showAddForm)}
-          className="bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition shrink-0"
+          className="bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition shrink-0 shadow-sm"
         >
           <Plus className="w-4 h-4" />
           <span>Add Skill</span>
@@ -79,7 +90,7 @@ export default function SkillsTab({
 
       {/* Add New Skill Form Area */}
       {showAddForm && (
-        <form onSubmit={handleAddSubmit} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl grid grid-cols-1 md:grid-cols-4 gap-4">
+        <form onSubmit={handleAddSubmit} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl grid grid-cols-1 md:grid-cols-4 gap-4 shadow-lg">
           <div className="space-y-1 md:col-span-2">
             <label className="text-xs font-mono text-gray-400">Skill / Tech Name</label>
             <input 
@@ -109,9 +120,12 @@ export default function SkillsTab({
             <input 
               type="number"
               min="0"
-              max="40"
-              value={newSkill.yearsOfExp}
-              onChange={e=>setNewSkill({...newSkill, yearsOfExp: parseInt(e.target.value) || 0})}
+              max="50"
+              value={newSkill.yearsOfExp !== undefined ? newSkill.yearsOfExp : ''}
+              onChange={e=> {
+                const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+                setNewSkill({...newSkill, yearsOfExp: val});
+              }}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-sm text-white focus:border-emerald-500 outline-none"
             />
           </div>
@@ -126,7 +140,7 @@ export default function SkillsTab({
             </button>
             <button 
               type="submit" 
-              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-5 py-2 rounded-xl cursor-pointer"
+              className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-5 py-2 rounded-xl cursor-pointer font-bold shadow-md shadow-emerald-500/10"
             >
               Confirm Skill Addition
             </button>
@@ -161,62 +175,70 @@ export default function SkillsTab({
           const isEditing = editingId === skill.id;
 
           return (
-            <div key={skill.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4">
+            <div key={skill.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-4 hover:border-slate-700/80 transition-colors shadow-sm">
               {isEditing && editForm ? (
                 <form onSubmit={handleUpdateSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <label className="text-[10px] font-mono text-gray-500">Skill Name</label>
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-[10px] font-mono text-gray-400">Skill Name</label>
                       <input 
                         type="text"
                         required
                         value={editForm.name}
                         onChange={e=>setEditForm({...editForm, name: e.target.value})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:border-emerald-500 outline-none"
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-mono text-gray-500">Visibility Setting</label>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-gray-400">Visibility Setting</label>
                       <select
                         value={editForm.visibility}
                         onChange={e=>setEditForm({...editForm, visibility: e.target.value as 'public' | 'private'})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white h-[26px]"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 outline-none"
                       >
                         <option value="public">🌐 Public</option>
                         <option value="private">🔒 Private</option>
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-mono text-gray-500">Yrs Exp</label>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-gray-400">Years Experience</label>
                       <input 
                         type="number"
-                        value={editForm.yearsOfExp}
-                        onChange={e=>setEditForm({...editForm, yearsOfExp: parseInt(e.target.value) || 0})}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white"
+                        min="0"
+                        max="50"
+                        value={editForm.yearsOfExp !== undefined ? editForm.yearsOfExp : ''}
+                        onChange={e=> {
+                          const val = e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value, 10) || 0);
+                          setEditForm({...editForm, yearsOfExp: val});
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white focus:border-emerald-500 outline-none"
                       />
                     </div>
                   </div>
-                  <div className="flex justify-end gap-2">
+                  <div className="flex justify-end items-center gap-2.5 pt-2">
                     <button 
                       type="button" 
-                      onClick={() => setEditingId(null)}
-                      className="border border-slate-800 text-gray-400 px-2 py-1 rounded text-[11px]"
+                      onClick={() => {
+                        setEditingId(null);
+                        setEditForm(null);
+                      }}
+                      className="border border-slate-800 hover:border-slate-700 bg-slate-950 text-gray-400 hover:text-white px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer transition"
                     >
                       Cancel
                     </button>
                     <button 
                       type="submit" 
-                      className="bg-emerald-500 text-slate-950 px-2.5 py-1 rounded text-[11px] font-bold"
+                      className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-4 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition shadow-md shadow-emerald-500/20 active:scale-95"
                     >
-                      Save
+                      Save Changes
                     </button>
                   </div>
                 </form>
               ) : (
                 <>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-white font-bold text-sm tracking-tight">{skill.name}</h4>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-white font-bold text-sm tracking-tight truncate">{skill.name}</h4>
                       <span className={`inline-flex items-center gap-1 text-[9px] font-mono uppercase px-2 py-0.5 mt-1 border rounded-md font-medium ${getVisibilityBadgeStyle(skill.visibility)}`}>
                         {skill.visibility === 'public' ? (
                           <>
@@ -232,26 +254,38 @@ export default function SkillsTab({
                       </span>
                     </div>
                     
-                    <div className="flex gap-2">
+                    {/* Prominent Edit and Delete buttons with clear contrast and comfortable spacing */}
+                    <div className="flex items-center gap-2.5 shrink-0">
                       <button 
+                        type="button"
                         onClick={() => handleStartEdit(skill)}
-                        className="p-1 hover:bg-slate-800 text-gray-500 hover:text-white rounded transition"
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+                        title="Edit Skill"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
                       </button>
                       <button 
-                        onClick={() => onDeleteSkill(skill.id)}
-                        className="p-1 hover:bg-slate-800 text-gray-500 hover:text-rose-400 rounded transition"
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSkill(skill.id);
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95"
+                        title="Delete Skill"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
 
-                  <div className="flex justify-between items-center text-[11px] font-mono text-gray-500 pt-2 border-t border-slate-800/50">
-                    <div className="flex items-center gap-1">
-                      <span>Exp:</span>
-                      <strong className="text-gray-300 font-bold">{skill.yearsOfExp} years</strong>
+                  <div className="flex justify-between items-center text-xs font-mono text-gray-400 pt-3 border-t border-slate-800/80">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-gray-500">Experience:</span>
+                      <strong className="text-emerald-400 font-bold bg-slate-950 px-2 py-0.5 rounded-md border border-slate-800">
+                        {typeof skill.yearsOfExp === 'number' ? skill.yearsOfExp : (parseInt(String(skill.yearsOfExp), 10) || 0)} {skill.yearsOfExp === 1 ? 'year' : 'years'}
+                      </strong>
                     </div>
                   </div>
                 </>
