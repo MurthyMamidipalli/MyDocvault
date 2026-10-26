@@ -521,11 +521,17 @@ export const deduplicateResumes = (items?: ResumeItem[]): ResumeItem[] => {
   return result;
 };
 
+export const normalizeLinkUrl = (u?: string): string => {
+  if (!u) return '';
+  return u.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+};
+
 export const deduplicateLinks = (items?: PortfolioLink[]): PortfolioLink[] => {
   if (!items || !Array.isArray(items)) return [];
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: PortfolioLink[] = [];
   const seenIds = new Set<string>();
+  const seenUrls = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
@@ -533,19 +539,36 @@ export const deduplicateLinks = (items?: PortfolioLink[]): PortfolioLink[] => {
 
     const rawId = (item.id || '').trim();
     const idKey = rawId ? toUUID(rawId) : '';
+    const normUrl = normalizeLinkUrl(item.url);
 
     let matchIdx = -1;
     if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
     } else if (rawId && seenIds.has(`raw:${rawId}`)) {
       matchIdx = result.findIndex(r => r.id === rawId);
+    } else if (normUrl && seenUrls.has(normUrl)) {
+      matchIdx = result.findIndex(r => normalizeLinkUrl(r.url) === normUrl);
     }
 
     if (matchIdx >= 0) {
-      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+      const existing = result[matchIdx];
+      const bestId = (existing.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(existing.id))
+        ? existing.id
+        : (item.id || existing.id);
+
+      result[matchIdx] = {
+        ...existing,
+        ...item,
+        id: bestId,
+        label: existing.label || item.label || existing.platform || item.platform || 'Link',
+        platform: existing.platform || item.platform || 'Link',
+        url: existing.url || item.url,
+        isPublic: existing.isPublic !== false && item.isPublic !== false
+      };
     } else {
       if (idKey) seenIds.add(idKey);
       if (rawId) seenIds.add(`raw:${rawId}`);
+      if (normUrl) seenUrls.add(normUrl);
       result.push(item);
     }
   }
@@ -2666,6 +2689,54 @@ export default function App() {
         try {
           const lData = lRes.status === 'fulfilled' ? lRes.value.data : null;
           const rlkData = rlkRes.status === 'fulfilled' ? rlkRes.value.data : null;
+
+          // Read deleted link tombstones to prevent resurrecting deleted links on refresh
+          const deletedLinkIds = new Set<string>();
+          const deletedLinkUrls = new Set<string>();
+          if (email) {
+            try {
+              const rawDel = localStorage.getItem(`${email}_deleted_links`);
+              if (rawDel) {
+                const parsed: { id?: string; url?: string }[] = JSON.parse(rawDel);
+                parsed.forEach(d => {
+                  if (d.id) {
+                    deletedLinkIds.add(d.id.trim().toLowerCase());
+                    deletedLinkIds.add(toUUID(d.id).toLowerCase());
+                  }
+                  if (d.url) {
+                    deletedLinkUrls.add(normalizeLinkUrl(d.url));
+                  }
+                });
+              }
+            } catch (_) {}
+          }
+
+          const isNotDeleted = (l: PortfolioLink) => {
+            if (!l) return false;
+            const rawId = (l.id || '').trim().toLowerCase();
+            const idKey = rawId ? toUUID(rawId).toLowerCase() : '';
+            if (rawId && (deletedLinkIds.has(rawId) || (idKey && deletedLinkIds.has(idKey)))) return false;
+            const normUrl = normalizeLinkUrl(l.url);
+            if (normUrl && deletedLinkUrls.has(normUrl)) return false;
+            return true;
+          };
+
+          // Background purge from Supabase for any links previously marked deleted
+          if (userId && (deletedLinkIds.size > 0 || deletedLinkUrls.size > 0)) {
+            for (const dId of deletedLinkIds) {
+              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dId)) {
+                supabase.from('portfolio_links').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
+                supabase.from('resume_links').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
+                supabase.from('resumes').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
+              }
+            }
+            for (const dUrl of deletedLinkUrls) {
+              supabase.from('portfolio_links').delete().eq('user_id', userId).ilike('url', `%${dUrl}%`).then(() => {}, () => {});
+              supabase.from('resume_links').delete().eq('user_id', userId).ilike('url', `%${dUrl}%`).then(() => {}, () => {});
+              supabase.from('resumes').delete().eq('user_id', userId).ilike('file_url', `%${dUrl}%`).then(() => {}, () => {});
+            }
+          }
+
           let remoteLinks: PortfolioLink[] = [];
           if (lData && Array.isArray(lData) && lData.length > 0) {
             remoteLinks = lData.map(l => ({
@@ -2702,9 +2773,12 @@ export default function App() {
             if (rawR) localResumeLinks = JSON.parse(rawR);
           } catch (_) {}
 
-          const allLinks = deduplicateLinks([...remoteLinks, ...localLinks, ...localResumeLinks, ...(links || []), ...(resumeLinks || [])]);
+          // Filter out deleted links and deduplicate by ID and URL
+          const filteredPool = [...remoteLinks, ...localLinks, ...localResumeLinks].filter(isNotDeleted);
+          const allLinks = deduplicateLinks(filteredPool);
           setLinks(allLinks);
           setResumeLinks(allLinks);
+
           if (currentUser?.email) {
             const em = currentUser.email.toLowerCase().trim();
             safeLocalStorageSetItem(`${em}_links`, JSON.stringify(allLinks));
@@ -2713,9 +2787,10 @@ export default function App() {
             heavyStorage.set(`${em}_resume_links`, allLinks).catch(() => {});
           }
 
-          // Bidirectional sync: Push all links to Supabase portfolio_links, resume_links, and resumes tables
+          // Bidirectional sync: Push validated non-deleted links to Supabase
           if (userId && allLinks.length > 0) {
             for (const lk of allLinks) {
+              if (!isNotDeleted(lk)) continue;
               const targetId = ensureUUID(lk.id);
               supabase.from('portfolio_links').upsert({
                 id: targetId,
@@ -4438,15 +4513,44 @@ export default function App() {
 
   // Portfolio Links
   const handleAddLink = async (newLk: Omit<PortfolioLink, 'id'>) => {
+    const normNewUrl = normalizeLinkUrl(newLk.url);
+    const existing = links.find(l => normalizeLinkUrl(l.url) === normNewUrl);
+
+    if (existing) {
+      // If URL already exists, update the existing entry to prevent duplicates
+      await handleUpdateLink({
+        ...existing,
+        label: newLk.label || existing.label,
+        platform: newLk.platform || existing.platform,
+        url: newLk.url,
+        isPublic: newLk.isPublic !== false
+      });
+      return;
+    }
+
     const id = generateUUID();
     const link: PortfolioLink = { ...newLk, id, platform: newLk.platform || 'Link' };
     const updated = deduplicateLinks([link, ...links]);
     setLinks(updated);
+    setResumeLinks(updated);
 
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     if (email) {
       safeLocalStorageSetItem(`${email}_links`, JSON.stringify(updated));
+      safeLocalStorageSetItem(`${email}_resume_links`, JSON.stringify(updated));
       heavyStorage.set(`${email}_links`, updated).catch(() => {});
+      heavyStorage.set(`${email}_resume_links`, updated).catch(() => {});
+
+      // Clear any past deleted tombstone for this URL if user re-added it
+      try {
+        const rawDel = localStorage.getItem(`${email}_deleted_links`);
+        if (rawDel) {
+          const delList: { id?: string; url?: string }[] = JSON.parse(rawDel);
+          const filtered = delList.filter(d => normalizeLinkUrl(d.url) !== normNewUrl && d.id !== id);
+          safeLocalStorageSetItem(`${email}_deleted_links`, JSON.stringify(filtered));
+          heavyStorage.set(`${email}_deleted_links`, filtered).catch(() => {});
+        }
+      } catch (_) {}
     }
     triggerToast(`Published portal entry: ${newLk.label}`);
 
@@ -4495,26 +4599,69 @@ export default function App() {
 
   const handleDeleteLink = async (id: string) => {
     const targetId = toUUID(id);
-    const updated = links.filter(l => l.id !== id && l.id !== targetId);
+    const targetLink = links.find(l => l.id === id || l.id === targetId || toUUID(l.id) === targetId);
+    const targetUrlNorm = targetLink ? normalizeLinkUrl(targetLink.url) : '';
+
+    if (targetLink) {
+      addDeletedItem(targetLink, 'other', targetLink.label || targetLink.platform || 'Portfolio Link', targetLink.url);
+    }
+
+    // Filter out by ID and by normalized URL
+    const updated = links.filter(l => {
+      if (l.id === id || l.id === targetId || toUUID(l.id) === targetId) return false;
+      if (targetUrlNorm && normalizeLinkUrl(l.url) === targetUrlNorm) return false;
+      return true;
+    });
+
     setLinks(updated);
+    setResumeLinks(updated);
 
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     if (email) {
       safeLocalStorageSetItem(`${email}_links`, JSON.stringify(updated));
+      safeLocalStorageSetItem(`${email}_resume_links`, JSON.stringify(updated));
       heavyStorage.set(`${email}_links`, updated).catch(() => {});
+      heavyStorage.set(`${email}_resume_links`, updated).catch(() => {});
+
+      // Record tombstone so deleted link NEVER resurfaces on refresh or login
+      try {
+        const rawDel = localStorage.getItem(`${email}_deleted_links`);
+        const delList: { id: string; url: string }[] = rawDel ? JSON.parse(rawDel) : [];
+        delList.push({ id, url: targetLink?.url || '' });
+        safeLocalStorageSetItem(`${email}_deleted_links`, JSON.stringify(delList));
+        heavyStorage.set(`${email}_deleted_links`, delList).catch(() => {});
+      } catch (_) {}
     }
     triggerToast(`Closed link coordinates.`);
 
     const userId = await getActiveUserId();
     if (userId) {
       try {
+        // Delete from portfolio_links by ID and by URL
         await supabase.from('portfolio_links').delete().eq('id', targetId).eq('user_id', userId);
-        await supabase.from('resume_links').delete().eq('id', targetId).eq('user_id', userId);
-        await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
         if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetLink?.url) {
+          await supabase.from('portfolio_links').delete().eq('user_id', userId).eq('url', targetLink.url);
+        }
+
+        // Delete from resume_links by ID and by URL
+        await supabase.from('resume_links').delete().eq('id', targetId).eq('user_id', userId);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('resume_links').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetLink?.url) {
+          await supabase.from('resume_links').delete().eq('user_id', userId).eq('url', targetLink.url);
+        }
+
+        // Delete from resumes by ID and by file_url
+        await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
           await supabase.from('resumes').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetLink?.url) {
+          await supabase.from('resumes').delete().eq('user_id', userId).eq('file_url', targetLink.url);
         }
       } catch (err) { console.warn("[Supabase Delete Link Error]", err); }
     }
@@ -4523,13 +4670,16 @@ export default function App() {
   const handleUpdateLink = async (updatedLk: PortfolioLink) => {
     const targetId = ensureUUID(updatedLk.id);
     const item = { ...updatedLk, id: targetId, platform: updatedLk.platform || 'Link' };
-    const updated = deduplicateLinks(links.map(l => (l.id === updatedLk.id || l.id === targetId) ? item : l));
+    const updated = deduplicateLinks(links.map(l => (l.id === updatedLk.id || l.id === targetId || normalizeLinkUrl(l.url) === normalizeLinkUrl(updatedLk.url)) ? item : l));
     setLinks(updated);
+    setResumeLinks(updated);
 
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     if (email) {
       safeLocalStorageSetItem(`${email}_links`, JSON.stringify(updated));
+      safeLocalStorageSetItem(`${email}_resume_links`, JSON.stringify(updated));
       heavyStorage.set(`${email}_links`, updated).catch(() => {});
+      heavyStorage.set(`${email}_resume_links`, updated).catch(() => {});
     }
     triggerToast(`Updated portal entry: ${updatedLk.label}`);
 
