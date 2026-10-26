@@ -114,7 +114,7 @@ export interface CurrentJob {
   locationType?: 'on-site' | 'remote' | 'hybrid';
   currentProjects: { id: string; name: string; status: 'planning' | 'in-progress' | 'completed'; desc: string }[];
   dailyStandupText: string;
-  weeklyGoals: { id: string; text: string; completed: boolean }[];
+  weeklyGoals: { id: string; text: string; completed: boolean; date?: string; dueDate?: string }[];
   company?: string;
   employerId?: string;
   employeeId?: string;
@@ -815,6 +815,8 @@ export interface NotepadNote {
   isPublic?: boolean;
   type?: 'note' | 'task';
   completed?: boolean;
+  targetDate?: string;
+  dueDate?: string;
   tasks?: TaskItem[];
 }
 

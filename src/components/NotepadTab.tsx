@@ -131,6 +131,7 @@ export default function NotepadTab({
 
   // Subtask input state for active note
   const [newSubtaskText, setNewSubtaskText] = useState('');
+  const [newSubtaskDueDate, setNewSubtaskDueDate] = useState('');
 
   // Auto-activate first note if activeNoteId is not valid and notes are loaded
   useEffect(() => {
@@ -294,6 +295,8 @@ export default function NotepadTab({
       isPinned: false,
       type,
       completed: false,
+      targetDate: type === 'task' ? new Date().toISOString().substring(0, 10) : undefined,
+      dueDate: type === 'task' ? new Date().toISOString().substring(0, 10) : undefined,
       tasks: []
     };
     onUpdateNotes([newDoc, ...notes]);
@@ -405,10 +408,12 @@ export default function NotepadTab({
     const newTaskItem: TaskItem = {
       id: generateUUID(),
       text: newSubtaskText.trim(),
-      completed: false
+      completed: false,
+      dueDate: newSubtaskDueDate.trim() || undefined
     };
     handleUpdateActiveNote('tasks', [...currentTasks, newTaskItem]);
     setNewSubtaskText('');
+    setNewSubtaskDueDate('');
   };
 
   const handleToggleSubtask = (taskId: string) => {
@@ -826,7 +831,13 @@ export default function NotepadTab({
                         <Calendar className="w-2.5 h-2.5" />
                         {new Date(note.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                       </span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {isTask && (note.targetDate || note.dueDate) && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            <Calendar className="w-2.5 h-2.5 text-amber-400" />
+                            <span>Due: {note.targetDate || note.dueDate}</span>
+                          </span>
+                        )}
                         {isTask ? (
                           <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wider ${
                             note.completed ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' : 'bg-blue-950 text-blue-400 border border-blue-900'
@@ -1233,8 +1244,9 @@ export default function NotepadTab({
                   </div>
                 </div>
 
-                {/* 2. Tags/Metadata Inline Panel */}
+                {/* 2. Tags/Metadata & Target Date Inline Panel */}
                 <div className="flex flex-wrap items-center gap-3 text-xs select-none">
+                  {/* Category */}
                   <div className="flex items-center gap-1.5 text-gray-400 bg-slate-950 border border-slate-850 px-3 py-1.5 rounded-xl">
                     <Tag className="w-3.5 h-3.5 text-slate-500" />
                     <span className="font-mono text-[10px] uppercase font-bold text-gray-500 mr-1">Category</span>
@@ -1246,6 +1258,30 @@ export default function NotepadTab({
                       className="bg-transparent text-white focus:outline-none placeholder-gray-700 w-24 text-[11px] font-semibold"
                     />
                   </div>
+
+                  {/* Target Completion Date for Work Tasks */}
+                  {activeNote.type === 'task' && (
+                    <div className="flex items-center gap-2 text-gray-300 bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-xl shadow-sm">
+                      <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="font-mono text-[10px] uppercase font-bold text-amber-400 shrink-0">Target Completion Date:</span>
+                      <input
+                        type="date"
+                        value={activeNote.targetDate || activeNote.dueDate || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          handleUpdateActiveNote('targetDate' as any, val);
+                          handleUpdateActiveNote('dueDate' as any, val);
+                        }}
+                        className="bg-transparent text-amber-300 focus:outline-none font-mono text-xs font-semibold cursor-pointer"
+                        title="Set target completion date (e.g. 2026-10-27)"
+                      />
+                      {(activeNote.targetDate || activeNote.dueDate) && (
+                        <span className="text-[10px] font-mono text-amber-300/80 font-bold hidden sm:inline">
+                          ({activeNote.targetDate || activeNote.dueDate})
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <span className="text-[10px] font-mono text-gray-500 tracking-wider">
                     LAST SYNCED: {new Date(activeNote.updatedAt).toLocaleTimeString()}
@@ -1268,7 +1304,7 @@ export default function NotepadTab({
                     </div>
 
                     {/* Subtask Input */}
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         value={newSubtaskText}
@@ -1277,13 +1313,25 @@ export default function NotepadTab({
                         placeholder="Add subtask or work item..."
                         className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:border-blue-500 outline-none"
                       />
-                      <button
-                        type="button"
-                        onClick={handleAddSubtask}
-                        className="px-3 py-1.5 bg-blue-500 hover:bg-blue-400 text-slate-950 text-xs font-bold rounded-xl transition cursor-pointer"
-                      >
-                        Add
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1">
+                          <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
+                          <input 
+                            type="date"
+                            value={newSubtaskDueDate}
+                            onChange={e => setNewSubtaskDueDate(e.target.value)}
+                            title="Subtask Due Date"
+                            className="bg-transparent text-xs text-amber-300 outline-none font-mono cursor-pointer"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleAddSubtask}
+                          className="px-3.5 py-1.5 bg-blue-500 hover:bg-blue-400 text-slate-950 text-xs font-bold rounded-xl transition cursor-pointer shrink-0"
+                        >
+                          Add
+                        </button>
+                      </div>
                     </div>
 
                     {/* Subtask List */}
@@ -1307,6 +1355,12 @@ export default function NotepadTab({
                             <span className={`break-words ${task.completed ? 'line-through text-gray-500' : 'text-gray-300'}`}>
                               {task.text}
                             </span>
+                            {task.dueDate && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded shrink-0">
+                                <Calendar className="w-2.5 h-2.5" />
+                                {task.dueDate}
+                              </span>
+                            )}
                           </div>
                           <button
                             type="button"

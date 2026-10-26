@@ -91,7 +91,6 @@ import OverviewTab from './components/OverviewTab';
 import ProfileTab from './components/ProfileTab';
 import SkillsTab from './components/SkillsTab';
 import EducationTab from './components/EducationTab';
-import SpecializationTab from './components/SpecializationTab';
 import CertificationsTab from './components/CertificationsTab';
 import ExperienceTab from './components/ExperienceTab';
 import CurrentJobTab from './components/CurrentJobTab';
@@ -556,12 +555,16 @@ export const deduplicateLinks = (items?: PortfolioLink[]): PortfolioLink[] => {
         ? existing.id
         : (item.id || existing.id);
 
+      const resolvedLabel = (item.label && item.label !== 'Link' && item.label !== 'Direct Coordinate')
+        ? item.label
+        : (existing.label && existing.label !== 'Link' && existing.label !== 'Direct Coordinate' ? existing.label : (item.label || existing.label || item.platform || existing.platform || 'Link'));
+
       result[matchIdx] = {
         ...existing,
         ...item,
         id: bestId,
-        label: existing.label || item.label || existing.platform || item.platform || 'Link',
-        platform: existing.platform || item.platform || 'Link',
+        label: resolvedLabel,
+        platform: (existing.platform && existing.platform !== 'Link' ? existing.platform : (item.platform || existing.platform || 'Link')),
         url: existing.url || item.url,
         isPublic: existing.isPublic !== false && item.isPublic !== false
       };
@@ -2399,7 +2402,46 @@ export default function App() {
         try {
           const othData = othRes.status === 'fulfilled' ? othRes.value.data : null;
           if (othData && Array.isArray(othData) && othData.length > 0) {
-            const mapped = othData.map(p => ({
+            // A. Restore Old Data from Supabase
+            const oldRows = othData.filter(p => p.category === '__old_data__');
+            if (oldRows.length > 0) {
+              const now = Date.now();
+              const parsedOld: DeletedItem[] = oldRows.map(p => {
+                try {
+                  if (p.description && p.description.trim().startsWith('{')) {
+                    const parsed = JSON.parse(p.description);
+                    if (parsed && (parsed.title || parsed.originalId)) return parsed;
+                  }
+                } catch (_) {}
+                return {
+                  id: p.id,
+                  originalId: p.id,
+                  itemType: (p.type || 'other') as any,
+                  title: p.name || 'Deleted Record',
+                  subtitle: p.doc_type || undefined,
+                  deletedAt: p.date || p.created_at || new Date().toISOString(),
+                  expiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                  data: {}
+                };
+              }).filter(item => item && item.expiresAt && new Date(item.expiresAt).getTime() > now);
+
+              setOldData(prev => {
+                const map = new Map<string, DeletedItem>();
+                [...parsedOld, ...prev].forEach(item => {
+                  if (item && item.id) map.set(item.id, item);
+                });
+                const merged = Array.from(map.values());
+                if (email) {
+                  safeLocalStorageSetItem(`${email}_old_data`, JSON.stringify(merged));
+                  heavyStorage.set(`${email}_old_data`, merged).catch(() => {});
+                }
+                return merged;
+              });
+            }
+
+            // B. Documents & Reports (filtering out old data)
+            const nonOldRows = othData.filter(p => p.category !== '__old_data__');
+            const mapped = nonOldRows.map(p => ({
               id: p.id,
               name: p.name,
               category: p.category,
@@ -2661,6 +2703,11 @@ export default function App() {
                 } catch (_) {}
               }
 
+              const targetTag = tagArray.find((t: string) => t.startsWith('__target__:'));
+              const dueTag = tagArray.find((t: string) => t.startsWith('__due__:'));
+              const targetDate = targetTag ? targetTag.replace('__target__:', '') : (dueTag ? dueTag.replace('__due__:', '') : undefined);
+              const dueDate = dueTag ? dueTag.replace('__due__:', '') : targetDate;
+
               return {
                 id: n.id,
                 title: n.title,
@@ -2670,6 +2717,8 @@ export default function App() {
                 isPinned,
                 type: isTask ? ('task' as const) : ('note' as const),
                 completed: isCompleted,
+                targetDate,
+                dueDate,
                 tasks: subtasks,
                 isPublic: n.is_public !== false,
                 updatedAt: n.updated_at || new Date().toISOString()
@@ -3001,22 +3050,61 @@ export default function App() {
         try {
           const calData = calRes.status === 'fulfilled' ? calRes.value.data : null;
           if (calData && Array.isArray(calData) && calData.length > 0) {
-            const mapped = calData.map(cal => ({
-              id: cal.id,
-              title: cal.title,
-              date: cal.date,
-              startTime: cal.start_time,
-              endTime: cal.end_time,
-              type: cal.type,
-              description: cal.description,
-              isPublic: cal.is_public !== false
-            }));
+            const mapped = calData.map(cal => {
+              let rawDesc = cal.description || '';
+              let gmailAddress: string | undefined = undefined;
+              let sendGmail: boolean | undefined = undefined;
+              if (rawDesc.startsWith('__meta__:')) {
+                try {
+                  const idx = rawDesc.indexOf('\n');
+                  const metaStr = idx > -1 ? rawDesc.substring(9, idx) : rawDesc.substring(9);
+                  const meta = JSON.parse(metaStr);
+                  if (meta.gmailAddress) gmailAddress = meta.gmailAddress;
+                  if (meta.sendGmail !== undefined) sendGmail = meta.sendGmail;
+                  rawDesc = idx > -1 ? rawDesc.substring(idx + 1) : '';
+                } catch (_) {}
+              }
+              return {
+                id: cal.id,
+                title: cal.title,
+                date: cal.date,
+                startTime: cal.start_time,
+                endTime: cal.end_time,
+                type: cal.type,
+                description: rawDesc,
+                isPublic: cal.is_public !== false,
+                sendGmail: sendGmail !== undefined ? sendGmail : true,
+                gmailAddress
+              };
+            });
             const merged = deduplicateCalendarEvents(mapped);
             setCalendarEvents(merged);
             const em = currentUser?.email?.toLowerCase().trim() || email;
             if (em) {
               safeLocalStorageSetItem(`${em}_calendar_events`, JSON.stringify(merged));
               heavyStorage.set(`${em}_calendar_events`, merged).catch(() => {});
+            }
+
+            // Bidirectional sync: Push calendar events to Supabase
+            if (userId && merged.length > 0) {
+              for (const evt of merged) {
+                const targetId = ensureUUID(evt.id);
+                const metaHeader = (evt.gmailAddress || evt.sendGmail !== undefined)
+                  ? `__meta__:${JSON.stringify({ sendGmail: evt.sendGmail !== false, gmailAddress: evt.gmailAddress || '' })}\n`
+                  : '';
+                const fullDesc = `${metaHeader}${evt.description || ''}`;
+                supabase.from('calendar_events').upsert({
+                  id: targetId,
+                  user_id: userId,
+                  title: evt.title,
+                  date: evt.date,
+                  start_time: evt.startTime || '09:00',
+                  end_time: evt.endTime || '10:00',
+                  type: evt.type || 'meeting',
+                  description: fullDesc,
+                  is_public: evt.isPublic !== false
+                }).then(() => {}, (e) => console.warn("[Supabase Sync Calendar Event]", e));
+              }
             }
           }
         } catch (err) { console.warn("[Supabase Calendar Events Load]", err); }
@@ -3535,6 +3623,23 @@ export default function App() {
         heavyStorage.set(`${email}_old_data`, updated).catch(() => {});
       }
       return updated;
+    });
+
+    getActiveUserId().then(userId => {
+      if (userId) {
+        const targetId = ensureUUID(newItem.id);
+        supabase.from('others').upsert({
+          id: targetId,
+          user_id: userId,
+          name: (newItem.title || 'Deleted Record').substring(0, 255),
+          category: '__old_data__',
+          type: itemType || 'other',
+          doc_type: (newItem.subtitle || '').substring(0, 100),
+          description: JSON.stringify(newItem),
+          is_public: false,
+          date: newItem.deletedAt
+        }).then(() => {}, (e) => console.warn("[Supabase Sync Deleted Item Error]", e));
+      }
     });
   };
 
@@ -5267,6 +5372,10 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
+        const metaHeader = (newEvt.gmailAddress || newEvt.sendGmail !== undefined)
+          ? `__meta__:${JSON.stringify({ sendGmail: newEvt.sendGmail !== false, gmailAddress: newEvt.gmailAddress || '' })}\n`
+          : '';
+        const fullDesc = `${metaHeader}${newEvt.description || ''}`;
         await supabase.from('calendar_events').insert({
           id,
           user_id: userId,
@@ -5275,7 +5384,7 @@ export default function App() {
           start_time: newEvt.startTime,
           end_time: newEvt.endTime,
           type: newEvt.type,
-          description: newEvt.description,
+          description: fullDesc,
           is_public: newEvt.isPublic !== false
         });
       } catch (err) { console.warn("[Supabase Add Calendar Event Error]", err); }
@@ -5298,6 +5407,10 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
+        const metaHeader = (updatedEvt.gmailAddress || updatedEvt.sendGmail !== undefined)
+          ? `__meta__:${JSON.stringify({ sendGmail: updatedEvt.sendGmail !== false, gmailAddress: updatedEvt.gmailAddress || '' })}\n`
+          : '';
+        const fullDesc = `${metaHeader}${updatedEvt.description || ''}`;
         await supabase.from('calendar_events').upsert({
           id: targetId,
           user_id: userId,
@@ -5306,7 +5419,7 @@ export default function App() {
           start_time: updatedEvt.startTime,
           end_time: updatedEvt.endTime,
           type: updatedEvt.type,
-          description: updatedEvt.description,
+          description: fullDesc,
           is_public: updatedEvt.isPublic !== false
         });
       } catch (err) { console.warn("[Supabase Update Calendar Event Error]", err); }
@@ -5444,6 +5557,8 @@ export default function App() {
               ...(n.isPinned ? ['__pinned__'] : []),
               ...(n.type === 'task' ? ['__task__'] : []),
               ...(n.completed ? ['__completed__'] : []),
+              ...(n.targetDate ? [`__target__:${n.targetDate}`] : []),
+              ...(n.dueDate ? [`__due__:${n.dueDate}`] : []),
               ...(n.tasks && n.tasks.length > 0 ? [`__tasks__:${JSON.stringify(n.tasks)}`] : [])
             ];
             await supabase.from('notes').upsert({
@@ -5696,6 +5811,14 @@ export default function App() {
       return updated;
     });
 
+    getActiveUserId().then(userId => {
+      if (userId) {
+        const targetId = ensureUUID(item.id);
+        supabase.from('others').delete().eq('id', targetId).eq('user_id', userId).then(() => {}, () => {});
+        supabase.from('others').delete().eq('id', item.id).eq('user_id', userId).then(() => {}, () => {});
+      }
+    });
+
     triggerToast(`Data recovered successfully: ${item.title}`);
   };
 
@@ -5709,6 +5832,15 @@ export default function App() {
       }
       return updated;
     });
+
+    getActiveUserId().then(userId => {
+      if (userId) {
+        const targetId = ensureUUID(id);
+        supabase.from('others').delete().eq('id', targetId).eq('user_id', userId).then(() => {}, () => {});
+        supabase.from('others').delete().eq('id', id).eq('user_id', userId).then(() => {}, () => {});
+      }
+    });
+
     triggerToast("Archived record deleted permanently.");
   };
 
@@ -6728,7 +6860,6 @@ export default function App() {
     { id: 'projects', label: 'Projects & Products', icon: Rocket },
     { id: 'resume', label: 'Resume / CV', icon: FileText },
     { id: 'skills', label: 'Skills', icon: Cpu },
-    { id: 'specialization', label: 'Specialization', icon: Target },
     { id: 'testimonials', label: 'Testimonials', icon: MessageSquare }
   ];
 
@@ -7010,23 +7141,28 @@ export default function App() {
             </div>
             
             {/* User profile detail block as seen in top right of screenshot */}
-            <div className="flex items-center gap-2.5 border-l border-slate-900 pl-4">
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              title="View User Profile & Old Data"
+              className="flex items-center gap-2.5 border-l border-slate-900 pl-4 hover:opacity-85 transition cursor-pointer text-left group"
+            >
               <div className="text-right max-w-[150px]">
-                <p className="font-bold text-white text-[11px] truncate leading-none" title={profile.name || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || currentUser?.email || 'User'}>
+                <p className="font-bold text-white text-[11px] truncate leading-none group-hover:text-emerald-400 transition" title={profile.name || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || currentUser?.email || 'User'}>
                   {profile.name || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || currentUser?.email?.split('@')[0] || 'User'}
                 </p>
                 <p className="text-[9px] text-gray-400 font-mono truncate mt-0.5 font-medium max-w-[135px]" title={currentUser?.email || profile.email || 'user@example.com'}>
                   {currentUser?.email || profile.email || 'user@example.com'}
                 </p>
               </div>
-              <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 font-bold flex items-center justify-center text-emerald-400 select-none shrink-0 text-xs overflow-hidden">
+              <div className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 font-bold flex items-center justify-center text-emerald-400 select-none shrink-0 text-xs overflow-hidden group-hover:border-emerald-500/50 transition">
                 {profile.avatarUrl ? (
                   <img src={profile.avatarUrl} alt={profile.name || "Avatar"} className="w-full h-full object-cover" />
                 ) : (
                   getAvatarInitials(profile)
                 )}
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
@@ -7049,6 +7185,10 @@ export default function App() {
               profile={profile}
               onUpdateProfile={handleUpdateProfile}
               shareUrl={getFullShareUrl()}
+              oldData={oldData}
+              onRestoreOldData={handleRestoreOldData}
+              onPermanentlyDeleteOldData={handlePermanentlyDeleteOldData}
+              onAddDeletedItem={addDeletedItem}
             />
           )}
 
@@ -7165,15 +7305,6 @@ export default function App() {
               onAddAchievement={handleAddAchievement}
               onDeleteAchievement={handleDeleteAchievement}
               onUpdateAchievement={handleUpdateAchievement}
-            />
-          )}
-
-          {activeTab === 'specialization' && (
-            <SpecializationTab 
-              specializations={specializations}
-              onAddSpecialization={handleAddSpecialization}
-              onUpdateSpecialization={handleUpdateSpecialization}
-              onDeleteSpecialization={handleDeleteSpecialization}
             />
           )}
 

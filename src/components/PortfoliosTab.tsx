@@ -54,7 +54,7 @@ export default function PortfoliosTab({
     <div className="space-y-6 animate-fade-in" id="portfolios-links-pane">
       <div className="flex justify-between items-center pb-2 border-b border-slate-800">
         <div>
-          <h2 className="text-xl font-bold text-white">Dynamic Portfolios & Coordinates</h2>
+          <h2 className="text-xl font-bold text-white">Portfolio & Links</h2>
           <p className="text-xs text-gray-400 mt-1">Review unified entrypoints, social developer nodes, and live coordinate trees</p>
         </div>
         <button
@@ -184,12 +184,6 @@ export default function PortfoliosTab({
                   }`}>
                     {link.isPublic !== false ? 'Public' : 'Private'}
                   </span>
-                </div>
-
-                {/* URL display pill */}
-                <div className="bg-slate-950/80 border border-slate-850 px-3 py-2 rounded-xl text-xs text-gray-300 font-mono truncate select-all">
-                  <span className="text-emerald-450 mr-1.5 font-bold">URL:</span>
-                  <span>{link.url}</span>
                 </div>
               </div>
 

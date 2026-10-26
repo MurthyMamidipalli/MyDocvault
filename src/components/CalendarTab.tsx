@@ -117,7 +117,14 @@ export default function CalendarTab({
 
   // Helper to open Gmail: on mobile launches Gmail app via mailto, on desktop opens Gmail compose
   const sendGmailReminder = (evt: CalendarEvent, targetAddr?: string) => {
-    const emailTo = targetAddr || evt.gmailAddress || gmailAddress || userEmail || 'ramachandramurthymamidipalli1@gmail.com';
+    const rawEmailTo = targetAddr || evt.gmailAddress || gmailAddress || userEmail || 'ramachandramurthymamidipalli1@gmail.com';
+    // Support multiple email addresses separated by commas, semicolons or spaces
+    const emailList = rawEmailTo
+      .split(/[,;\s]+/)
+      .map(e => e.trim())
+      .filter(e => e.length > 0 && e.includes('@'));
+    const emailTo = emailList.length > 0 ? emailList.join(',') : rawEmailTo;
+
     const subject = encodeURIComponent(`📅 Calendar Reminder: ${evt.title}`);
     const bodyText = encodeURIComponent(
       `Hello,\n\nHere is your scheduled event notification from MyDocVault Calendar:\n\n` +
@@ -137,10 +144,10 @@ export default function CalendarTab({
 
     if (isMobile) {
       // In mobile, mailto link directly launches the installed Gmail app with prefilled fields
-      window.location.href = `mailto:${emailTo}?subject=${subject}&body=${bodyText}`;
+      window.location.href = `mailto:${encodeURIComponent(emailTo)}?subject=${subject}&body=${bodyText}`;
     } else {
-      // Desktop: opens Gmail web compose in a new tab
-      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${emailTo}&su=${subject}&body=${bodyText}`;
+      // Desktop: opens Gmail web compose in a new tab with all recipients
+      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailTo)}&su=${subject}&body=${bodyText}`;
       window.open(gmailUrl, '_blank');
     }
   };
@@ -929,16 +936,19 @@ export default function CalendarTab({
 
                 {sendGmail && (
                   <div className="space-y-1 pt-1 border-t border-slate-900">
-                    <label className="text-[10px] font-mono font-bold text-gray-400 uppercase">User's Gmail Option to Send Reminder Mails *</label>
+                    <label className="text-[10px] font-mono font-bold text-gray-400 uppercase flex items-center justify-between">
+                      <span>User's Gmail Option to Send Reminder Mails *</span>
+                      <span className="text-[9px] text-emerald-400 font-normal">Multiple recipients allowed</span>
+                    </label>
                     <input
-                      type="email"
+                      type="text"
                       value={gmailAddress}
                       onChange={e => setGmailAddress(e.target.value)}
-                      placeholder="e.g. yourname@gmail.com"
+                      placeholder="e.g. user1@gmail.com, user2@gmail.com, team@company.com"
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-white text-xs focus:border-rose-500 outline-none font-mono"
                     />
                     <p className="text-[10px] text-gray-500">
-                      Reminder mail will be dispatched to this mentioned Gmail ID. In mobile, tapping notification opens the Gmail app directly.
+                      Supports multiple email addresses! Separate multiple recipients with commas. On mobile, launches Gmail app; on desktop, opens Gmail compose with all recipients prefilled.
                     </p>
                   </div>
                 )}

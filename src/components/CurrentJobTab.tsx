@@ -17,7 +17,8 @@ import {
   Pencil,
   MapPin,
   Clock,
-  Shield
+  Shield,
+  Check
 } from 'lucide-react';
 import { CurrentJob } from '../types';
 
@@ -43,6 +44,10 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
   // Sub-trackers state (Weekly Goals & Initiatives)
   const [dailyStandupText, setDailyStandupText] = useState(currentJob?.dailyStandupText || '');
   const [newGoal, setNewGoal] = useState('');
+  const [newGoalDate, setNewGoalDate] = useState('');
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [editingGoalText, setEditingGoalText] = useState('');
+  const [editingGoalDate, setEditingGoalDate] = useState('');
   const [newProjName, setNewProjName] = useState('');
   const [newProjDesc, setNewProjDesc] = useState('');
 
@@ -132,17 +137,59 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
   const handleAddGoal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGoal.trim()) return;
+    const finalDate = newGoalDate.trim() || new Date().toISOString().substring(0, 10);
     const nextGoals = [
       ...weeklyGoals,
-      { id: `goal-${Date.now()}`, text: newGoal.trim(), completed: false }
+      { 
+        id: `goal-${Date.now()}`, 
+        text: newGoal.trim(), 
+        completed: false,
+        date: finalDate,
+        dueDate: finalDate
+      }
     ];
     onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects, dailyStandupText });
     setNewGoal('');
+    setNewGoalDate('');
+  };
+
+  const handleStartEditGoal = (g: { id: string; text: string; completed: boolean; date?: string; dueDate?: string }) => {
+    setEditingGoalId(g.id);
+    setEditingGoalText(g.text);
+    setEditingGoalDate(g.date || g.dueDate || '');
+  };
+
+  const handleSaveEditGoal = (id: string) => {
+    if (!editingGoalText.trim()) return;
+    const nextGoals = weeklyGoals.map(g => {
+      if (g.id === id) {
+        return {
+          ...g,
+          text: editingGoalText.trim(),
+          date: editingGoalDate.trim() || undefined,
+          dueDate: editingGoalDate.trim() || undefined
+        };
+      }
+      return g;
+    });
+    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects, dailyStandupText });
+    setEditingGoalId(null);
+    setEditingGoalText('');
+    setEditingGoalDate('');
+  };
+
+  const handleCancelEditGoal = () => {
+    setEditingGoalId(null);
+    setEditingGoalText('');
+    setEditingGoalDate('');
   };
 
   const handleDeleteGoal = (id: string) => {
     const nextGoals = weeklyGoals.filter(g => g.id !== id);
     onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects, dailyStandupText });
+    if (editingGoalId === id) {
+      handleCancelEditGoal();
+    }
   };
 
   const handleAddProject = (e: React.FormEvent) => {
@@ -336,56 +383,163 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
               </div>
 
               {/* Weekly Milestones */}
-              <div className="bg-[#111116] border border-slate-850/80 rounded-2xl p-6 space-y-4 flex flex-col justify-between shadow-md">
+              <div className="lg:col-span-3 bg-[#111116] border border-slate-850/80 rounded-2xl p-6 space-y-4 shadow-md">
                 <div className="space-y-4">
-                  <h3 className="text-white font-bold text-sm flex items-center gap-2">
-                    <Target className="w-4.5 h-4.5 text-amber-500" />
-                    Weekly Key Milestones
-                  </h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-850/80">
+                    <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                      <Target className="w-4.5 h-4.5 text-amber-500" />
+                      <span>Weekly Key Milestones & Daily Tasks</span>
+                    </h3>
+                    <span className="text-[11px] font-mono text-gray-400">
+                      {weeklyGoals.filter(g => g.completed).length} / {weeklyGoals.length} completed
+                    </span>
+                  </div>
 
-                  <form onSubmit={handleAddGoal} className="flex gap-2">
-                    <input 
-                      type="text"
-                      required
-                      placeholder="e.g. Audit API throughput limits"
-                      value={newGoal}
-                      onChange={e => setNewGoal(e.target.value)}
-                      className="flex-1 bg-[#09090b] border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-600 focus:border-amber-500 outline-none"
-                    />
-                    <button 
-                      type="submit" 
-                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white cursor-pointer transition"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
+                  {/* Add Milestone Form with Date Option */}
+                  <form onSubmit={handleAddGoal} className="bg-[#09090b]/80 border border-slate-800/80 p-3 rounded-xl space-y-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input 
+                        type="text"
+                        required
+                        placeholder="Milestone or daily task description..."
+                        value={newGoal}
+                        onChange={e => setNewGoal(e.target.value)}
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:border-amber-500 outline-none"
+                      />
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+                          <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <input 
+                            type="date"
+                            value={newGoalDate}
+                            onChange={e => setNewGoalDate(e.target.value)}
+                            title="Target Completion Date"
+                            className="bg-transparent text-xs text-amber-300 outline-none font-mono cursor-pointer"
+                          />
+                        </div>
+                        <button 
+                          type="submit" 
+                          className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition select-none shadow-sm shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Milestone</span>
+                        </button>
+                      </div>
+                    </div>
                   </form>
 
-                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {/* Milestones List */}
+                  <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
                     {weeklyGoals.length === 0 ? (
-                      <p className="text-gray-600 text-[11px] font-sans py-2 text-center select-none">No active milestones.</p>
+                      <div className="py-6 text-center border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
+                        <Target className="w-6 h-6 text-gray-600 mx-auto mb-1.5" />
+                        <p className="text-gray-500 text-xs font-sans">No weekly milestones or daily tasks added yet.</p>
+                        <p className="text-gray-600 text-[10px] mt-0.5">Add task deliverables with target dates above.</p>
+                      </div>
                     ) : (
-                      weeklyGoals.map(g => (
-                        <div key={g.id} className="flex items-center justify-between gap-1.5 text-xs bg-[#09090b]/40 p-2.5 rounded-lg border border-slate-850/60 transition hover:border-slate-800">
-                          <button 
-                            onClick={() => handleToggleGoal(g.id)}
-                            className="flex items-center gap-2 text-left cursor-pointer flex-1"
-                          >
-                            {g.completed ? (
-                              <CheckSquare className="w-4 h-4 text-emerald-500 shrink-0" />
-                            ) : (
-                              <Square className="w-4 h-4 text-gray-600 shrink-0" />
-                            )}
-                            <span className={`text-xs ${g.completed ? 'line-through text-gray-500' : 'text-gray-300'}`}>{g.text}</span>
-                          </button>
+                      weeklyGoals.map(g => {
+                        const isEditing = editingGoalId === g.id;
 
-                          <button 
-                            onClick={() => handleDeleteGoal(g.id)}
-                            className="text-gray-550 hover:text-rose-400 cursor-pointer transition p-1 rounded hover:bg-slate-900"
+                        if (isEditing) {
+                          return (
+                            <div key={g.id} className="bg-slate-950 p-3 rounded-xl border border-sky-500/50 space-y-2.5 shadow-md">
+                              <input 
+                                type="text"
+                                value={editingGoalText}
+                                onChange={e => setEditingGoalText(e.target.value)}
+                                className="w-full bg-[#111116] border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-sky-500 outline-none"
+                                placeholder="Edit milestone text"
+                                autoFocus
+                              />
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-1 bg-[#111116] border border-slate-700 rounded-lg px-2.5 py-1">
+                                  <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                  <input 
+                                    type="date"
+                                    value={editingGoalDate}
+                                    onChange={e => setEditingGoalDate(e.target.value)}
+                                    className="bg-transparent text-xs text-amber-300 outline-none font-mono cursor-pointer"
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleSaveEditGoal(g.id)}
+                                    className="px-3 py-1 rounded-lg bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-xs flex items-center gap-1 cursor-pointer transition shadow active:scale-95"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    <span>Save</span>
+                                  </button>
+                                  <button 
+                                    type="button"
+                                    onClick={handleCancelEditGoal}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 text-xs cursor-pointer transition active:scale-95"
+                                  >
+                                    <X className="w-3 h-3" />
+                                    <span>Cancel</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div 
+                            key={g.id} 
+                            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-[#09090b]/60 p-3 rounded-xl border border-slate-850 hover:border-slate-800 transition shadow-sm"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))
+                            {/* Checkbox + Title + Date */}
+                            <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                              <button 
+                                type="button"
+                                onClick={() => handleToggleGoal(g.id)}
+                                className="mt-0.5 text-left cursor-pointer shrink-0 transition"
+                                title={g.completed ? "Mark active" : "Mark completed"}
+                              >
+                                {g.completed ? (
+                                  <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                                ) : (
+                                  <Square className="w-4 h-4 text-gray-500 hover:text-white shrink-0" />
+                                )}
+                              </button>
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <p className={`text-xs font-semibold leading-relaxed break-words ${g.completed ? 'line-through text-gray-500' : 'text-gray-200'}`}>
+                                  {g.text}
+                                </p>
+                                {g.date && (
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 font-mono text-[10px] font-semibold">
+                                    <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
+                                    <span>Target Date: {g.date}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Clearly visible Edit and Delete buttons */}
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-850/60 w-full sm:w-auto justify-end">
+                              <button 
+                                type="button"
+                                onClick={() => handleStartEditGoal(g)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-400 hover:text-sky-300 text-xs font-semibold cursor-pointer transition select-none active:scale-95 shadow-sm"
+                                title="Edit milestone text and date"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-sky-400" />
+                                <span>Edit</span>
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => handleDeleteGoal(g.id)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 text-xs font-semibold cursor-pointer transition select-none active:scale-95 shadow-sm"
+                                title="Delete milestone"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                                <span>Delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
