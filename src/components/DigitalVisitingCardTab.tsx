@@ -52,6 +52,145 @@ export default function DigitalVisitingCardTab({
       ? avatarUrl 
       : '';
 
+  const drawRoundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(x, y, w, h, r);
+    } else {
+      ctx.rect(x, y, w, h);
+    }
+  };
+
+  const drawCardBackground = (ctx: CanvasRenderingContext2D, yOffset: number) => {
+    const bgGrad = ctx.createLinearGradient(0, yOffset, 700, yOffset + 420);
+    bgGrad.addColorStop(0, '#0a0d14');
+    bgGrad.addColorStop(0.5, '#0f172a');
+    bgGrad.addColorStop(1, '#020617');
+    ctx.fillStyle = bgGrad;
+    
+    ctx.beginPath();
+    drawRoundRect(ctx, 0, yOffset, 700, 420, 24);
+    ctx.fill();
+
+    ctx.strokeStyle = '#10b98155';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  };
+
+  const drawFrontContent = (ctx: CanvasRenderingContext2D, yOffset: number) => {
+    // Header Tag
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('DIGITAL VISITING CARD', 45, yOffset + 50);
+
+    // Branding Logo Text
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 12px sans-serif';
+    ctx.fillText('MYDOCVAULT', 570, yOffset + 50);
+
+    // User Name
+    ctx.fillStyle = displayName ? '#ffffff' : '#64748b';
+    ctx.font = 'bold 28px sans-serif';
+    ctx.fillText(displayName || 'Name Not Provided', 45, yOffset + 95);
+
+    // Designation
+    ctx.fillStyle = designation ? '#34d399' : '#64748b';
+    ctx.font = '600 15px sans-serif';
+    ctx.fillText(designation || 'Designation Not Provided', 45, yOffset + 122);
+
+    // Company Name
+    if (companyName) {
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '600 14px sans-serif';
+      ctx.fillText(`Company: ${companyName}`, 45, yOffset + 146);
+    }
+
+    // Divider
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(45, yOffset + 168);
+    ctx.lineTo(655, yOffset + 168);
+    ctx.stroke();
+
+    // Contact Section: Email ID
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('EMAIL ID', 45, yOffset + 205);
+    ctx.fillStyle = emailId ? '#f8fafc' : '#64748b';
+    ctx.font = '500 15px sans-serif';
+    ctx.fillText(emailId || 'Email Not Provided', 45, yOffset + 230);
+
+    // Contact Section: Mobile Number
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('MOBILE NUMBER', 45, yOffset + 280);
+    ctx.fillStyle = mobileNumber ? '#f8fafc' : '#64748b';
+    ctx.font = '500 16px sans-serif';
+    ctx.fillText(mobileNumber || 'Mobile Not Provided', 45, yOffset + 305);
+
+    // Footer Badge
+    ctx.fillStyle = '#10b981';
+    ctx.font = '500 11px sans-serif';
+    ctx.fillText('✓ Verified MyDocVault Profile', 45, yOffset + 375);
+  };
+
+  const drawBackContent = (ctx: CanvasRenderingContext2D, yOffset: number, onComplete: () => void) => {
+    // Brand Header Top
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText('MyDocVault', 45, yOffset + 50);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('Personal Document Saver', 45, yOffset + 70);
+
+    // Public Profile Badge
+    ctx.fillStyle = '#10b981';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText('PUBLIC PROFILE', 560, yOffset + 50);
+
+    // Load QR image onto canvas
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      // White background box for QR Code dead-centered
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      drawRoundRect(ctx, 260, yOffset + 105, 180, 180, 16);
+      ctx.fill();
+
+      ctx.drawImage(img, 270, yOffset + 115, 160, 160);
+
+      // Headline Instruction Centered Below QR
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('Scan to view my public profile', 350, yOffset + 325);
+
+      // Subtext
+      ctx.fillStyle = '#10b981';
+      ctx.font = '500 12px sans-serif';
+      ctx.fillText('✓ Direct Public Profile Access', 350, yOffset + 385);
+      ctx.textAlign = 'left';
+
+      onComplete();
+    };
+    img.onerror = () => {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('Scan to view my public profile', 350, yOffset + 325);
+
+      ctx.fillStyle = '#10b981';
+      ctx.font = '500 12px sans-serif';
+      ctx.fillText('✓ Direct Public Profile Access', 350, yOffset + 385);
+      ctx.textAlign = 'left';
+
+      onComplete();
+    };
+    img.src = qrApiUrl;
+  };
+
   const handleDownloadCard = () => {
     setDownloading(true);
     try {
@@ -64,161 +203,98 @@ export default function DigitalVisitingCardTab({
         return;
       }
 
-      const drawRoundRect = (x: number, y: number, w: number, h: number, r: number) => {
-        if (typeof (ctx as any).roundRect === 'function') {
-          (ctx as any).roundRect(x, y, w, h, r);
-        } else {
-          ctx.rect(x, y, w, h);
-        }
-      };
-
-      // Background Gradient
-      const bgGrad = ctx.createLinearGradient(0, 0, 700, 420);
-      bgGrad.addColorStop(0, '#0a0d14');
-      bgGrad.addColorStop(0.5, '#0f172a');
-      bgGrad.addColorStop(1, '#020617');
-      ctx.fillStyle = bgGrad;
-      
-      // Draw rounded rectangle card background
-      ctx.beginPath();
-      drawRoundRect(0, 0, 700, 420, 24);
-      ctx.fill();
-
-      // Border outline
-      ctx.strokeStyle = '#10b98155';
-      ctx.lineWidth = 4;
-      ctx.stroke();
+      drawCardBackground(ctx, 0);
 
       if (!isFlipped) {
         // --- FRONT SIDE ---
-        // Header Tag
-        ctx.fillStyle = '#10b981';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('DIGITAL VISITING CARD', 45, 50);
-
-        // Branding Logo Text
-        ctx.fillStyle = '#64748b';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('MYDOCVAULT', 570, 50);
-
-        // User Name
-        ctx.fillStyle = displayName ? '#ffffff' : '#64748b';
-        ctx.font = 'bold 28px sans-serif';
-        ctx.fillText(displayName || 'Name Not Provided', 45, 95);
-
-        // Designation
-        ctx.fillStyle = designation ? '#34d399' : '#64748b';
-        ctx.font = '600 15px sans-serif';
-        ctx.fillText(designation || 'Designation Not Provided', 45, 122);
-
-        // Company Name
-        if (companyName) {
-          ctx.fillStyle = '#cbd5e1';
-          ctx.font = '600 14px sans-serif';
-          ctx.fillText(`Company: ${companyName}`, 45, 146);
-        }
-
-        // Divider
-        ctx.strokeStyle = '#1e293b';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(45, 168);
-        ctx.lineTo(655, 168);
-        ctx.stroke();
-
-        // Contact Section: Email ID
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('EMAIL ID', 45, 205);
-        ctx.fillStyle = emailId ? '#f8fafc' : '#64748b';
-        ctx.font = '500 15px sans-serif';
-        ctx.fillText(emailId || 'Email Not Provided', 45, 230);
-
-        // Contact Section: Mobile Number
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('MOBILE NUMBER', 45, 280);
-        ctx.fillStyle = mobileNumber ? '#f8fafc' : '#64748b';
-        ctx.font = '500 16px sans-serif';
-        ctx.fillText(mobileNumber || 'Mobile Not Provided', 45, 305);
-
-        // Footer Badge
-        ctx.fillStyle = '#10b981';
-        ctx.font = '500 11px sans-serif';
-        ctx.fillText('✓ Verified MyDocVault Profile', 45, 375);
-
+        drawFrontContent(ctx, 0);
         const link = document.createElement('a');
         link.download = `visiting-card-front.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         setDownloading(false);
       } else {
-        // --- BACK SIDE (Centered Layout without public share link text) ---
-        // Brand Header Top
-        ctx.fillStyle = '#10b981';
-        ctx.font = 'bold 22px sans-serif';
-        ctx.fillText('MyDocVault', 45, 50);
-
-        ctx.fillStyle = '#94a3b8';
-        ctx.font = '12px sans-serif';
-        ctx.fillText('Personal Document Saver', 45, 70);
-
-        // Public Profile Badge
-        ctx.fillStyle = '#10b981';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('PUBLIC PROFILE', 560, 50);
-
-        // Centered QR Code & Texts
-        ctx.textAlign = 'center';
-
-        // Load QR image onto canvas
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-          // White background box for QR Code dead-centered
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          drawRoundRect(260, 105, 180, 180, 16);
-          ctx.fill();
-
-          ctx.drawImage(img, 270, 115, 160, 160);
-
-          // Headline Instruction Centered Below QR
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 18px sans-serif';
-          ctx.fillText('Scan to view my public profile', 350, 325);
-
-          // Subtext
-          ctx.fillStyle = '#10b981';
-          ctx.font = '500 12px sans-serif';
-          ctx.fillText('✓ Direct Public Profile Access', 350, 385);
-
-          ctx.textAlign = 'left';
-
+        // --- BACK SIDE ---
+        drawBackContent(ctx, 0, () => {
           const link = document.createElement('a');
           link.download = `visiting-card-back.png`;
           link.href = canvas.toDataURL('image/png');
           link.click();
           setDownloading(false);
-        };
-        img.onerror = () => {
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 18px sans-serif';
-          ctx.fillText('Scan to view my public profile', 350, 325);
-
-          ctx.fillStyle = '#10b981';
-          ctx.font = '500 12px sans-serif';
-          ctx.fillText('✓ Direct Public Profile Access', 350, 385);
-          ctx.textAlign = 'left';
-
-          const link = document.createElement('a');
-          link.download = `visiting-card-back.png`;
-          link.href = canvas.toDataURL('image/png');
-          link.click();
-          setDownloading(false);
-        };
-        img.src = qrApiUrl;
+        });
       }
+    } catch (e) {
+      console.error(e);
+      setDownloading(false);
+    }
+  };
+
+  // Download both front and back sides together at a time
+  const handleDownloadBothSides = () => {
+    setDownloading(true);
+    try {
+      // 1. Generate composite dual card (Front on top, Back on bottom)
+      const canvas = document.createElement('canvas');
+      canvas.width = 700;
+      canvas.height = 870; // 420 + 30 spacing + 420
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        setDownloading(false);
+        return;
+      }
+
+      // Canvas background fill
+      ctx.fillStyle = '#05070d';
+      ctx.fillRect(0, 0, 700, 870);
+
+      // Draw Front Card at top (y = 0)
+      drawCardBackground(ctx, 0);
+      drawFrontContent(ctx, 0);
+
+      // Draw Back Card at bottom (y = 450)
+      drawCardBackground(ctx, 450);
+      drawBackContent(ctx, 450, () => {
+        // Download composite image with both sides
+        const dualLink = document.createElement('a');
+        dualLink.download = `visiting-card-both-sides.png`;
+        dualLink.href = canvas.toDataURL('image/png');
+        dualLink.click();
+
+        // Also generate individual front and back files for complete convenience
+        setTimeout(() => {
+          try {
+            const frontCanvas = document.createElement('canvas');
+            frontCanvas.width = 700;
+            frontCanvas.height = 420;
+            const fCtx = frontCanvas.getContext('2d');
+            if (fCtx) {
+              drawCardBackground(fCtx, 0);
+              drawFrontContent(fCtx, 0);
+              const fLink = document.createElement('a');
+              fLink.download = `visiting-card-front.png`;
+              fLink.href = frontCanvas.toDataURL('image/png');
+              fLink.click();
+            }
+
+            const backCanvas = document.createElement('canvas');
+            backCanvas.width = 700;
+            backCanvas.height = 420;
+            const bCtx = backCanvas.getContext('2d');
+            if (bCtx) {
+              drawCardBackground(bCtx, 0);
+              drawBackContent(bCtx, 0, () => {
+                const bLink = document.createElement('a');
+                bLink.download = `visiting-card-back.png`;
+                bLink.href = backCanvas.toDataURL('image/png');
+                bLink.click();
+              });
+            }
+          } catch (e) {
+            console.warn("[Individual Side Export]", e);
+          }
+          setDownloading(false);
+        }, 300);
+      });
     } catch (e) {
       console.error(e);
       setDownloading(false);
@@ -243,22 +319,33 @@ export default function DigitalVisitingCardTab({
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             onClick={() => setIsFlipped(!isFlipped)}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 hover:text-emerald-300 px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer transition shadow-md active:scale-95"
+            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-400 hover:text-emerald-300 px-3.5 py-2 rounded-xl text-xs font-semibold cursor-pointer transition shadow-md active:scale-95"
           >
             <RotateCw className={`w-3.5 h-3.5 transition-transform duration-500 ${isFlipped ? 'rotate-180' : ''}`} />
-            Flip Card ({isFlipped ? 'Back' : 'Front'})
+            <span>Flip ({isFlipped ? 'Back' : 'Front'})</span>
           </button>
 
           <button
             onClick={handleDownloadCard}
             disabled={downloading}
-            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs cursor-pointer transition shadow-lg active:scale-95 disabled:opacity-50"
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-gray-200 hover:text-white font-medium px-3.5 py-2 rounded-xl text-xs cursor-pointer transition shadow-md active:scale-95 disabled:opacity-50"
+            title={`Download ${isFlipped ? 'Back Side' : 'Front Side'}`}
           >
             <Download className="w-3.5 h-3.5" />
-            {downloading ? 'Saving...' : 'Download Card'}
+            <span>{downloading ? 'Saving...' : `Download ${isFlipped ? 'Back' : 'Front'}`}</span>
+          </button>
+
+          <button
+            onClick={handleDownloadBothSides}
+            disabled={downloading}
+            className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs cursor-pointer transition shadow-lg shadow-emerald-500/20 active:scale-95 disabled:opacity-50"
+            title="Download both Front and Back sides at a time"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>{downloading ? 'Processing...' : 'Download Both Sides'}</span>
           </button>
         </div>
       </div>

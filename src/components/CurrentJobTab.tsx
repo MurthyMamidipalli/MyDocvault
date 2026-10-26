@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Briefcase, 
   Target, 
@@ -37,6 +37,7 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
   const [department, setDepartment] = useState('');
   const [startDate, setStartDate] = useState('');
   const [employmentType, setEmploymentType] = useState<'full-time' | 'part-time' | 'contract' | 'internship' | 'freelance'>('full-time');
+  const [contractCompany, setContractCompany] = useState(currentJob?.contractCompany || '');
   const [locationType, setLocationType] = useState<'on-site' | 'remote' | 'hybrid'>('on-site');
 
   // Sub-trackers state (Weekly Goals & Initiatives)
@@ -45,12 +46,26 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
   const [newProjName, setNewProjName] = useState('');
   const [newProjDesc, setNewProjDesc] = useState('');
 
+  // Keep local standup text in sync when currentJob updates
+  useEffect(() => {
+    if (currentJob?.dailyStandupText !== undefined) {
+      setDailyStandupText(currentJob.dailyStandupText);
+    }
+  }, [currentJob?.dailyStandupText]);
+
+  useEffect(() => {
+    if (currentJob?.contractCompany !== undefined) {
+      setContractCompany(currentJob.contractCompany);
+    }
+  }, [currentJob?.contractCompany]);
+
   const handleOpenEdit = () => {
     setEmployer(currentJob?.employer || currentJob?.company || '');
     setRole(currentJob?.role || '');
     setDepartment(currentJob?.department || '');
     setStartDate(currentJob?.startDate || currentJob?.joiningDate || '');
     setEmploymentType(currentJob?.employmentType || 'full-time');
+    setContractCompany(currentJob?.contractCompany || '');
     setLocationType(currentJob?.locationType || 'on-site');
     setShowModal(true);
   };
@@ -69,7 +84,11 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
       joiningDate: startDate.trim(),
       department: department.trim(),
       employmentType,
+      contractCompany: employmentType === 'contract' ? contractCompany.trim() : '',
       locationType,
+      weeklyGoals,
+      currentProjects,
+      dailyStandupText
     });
     
     setShowModal(false);
@@ -89,7 +108,11 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
       joiningDate: '',
       department: '',
       employmentType: undefined,
+      contractCompany: '',
       locationType: undefined,
+      weeklyGoals: [],
+      currentProjects: [],
+      dailyStandupText: ''
     });
     setShowDeleteConfirm(false);
   };
@@ -97,13 +120,13 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
   const weeklyGoals = Array.isArray(currentJob?.weeklyGoals) ? currentJob.weeklyGoals : [];
   const currentProjects = Array.isArray(currentJob?.currentProjects) ? currentJob.currentProjects : [];
 
-  // Keep original goal handlers
+  // Goal handlers with full workspace sync
   const handleToggleGoal = (id: string) => {
     const nextGoals = weeklyGoals.map(g => {
       if (g.id === id) return { ...g, completed: !g.completed };
       return g;
     });
-    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects });
+    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects, dailyStandupText });
   };
 
   const handleAddGoal = (e: React.FormEvent) => {
@@ -113,13 +136,13 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
       ...weeklyGoals,
       { id: `goal-${Date.now()}`, text: newGoal.trim(), completed: false }
     ];
-    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects });
+    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects, dailyStandupText });
     setNewGoal('');
   };
 
   const handleDeleteGoal = (id: string) => {
     const nextGoals = weeklyGoals.filter(g => g.id !== id);
-    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects });
+    onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects, dailyStandupText });
   };
 
   const handleAddProject = (e: React.FormEvent) => {
@@ -129,14 +152,14 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
       ...currentProjects,
       { id: `proj-${Date.now()}`, name: newProjName.trim(), status: 'planning' as const, desc: newProjDesc.trim() }
     ];
-    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects, weeklyGoals });
+    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects, weeklyGoals, dailyStandupText });
     setNewProjName('');
     setNewProjDesc('');
   };
 
   const handleDeleteProject = (id: string) => {
     const nextProjects = currentProjects.filter(p => p.id !== id);
-    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects, weeklyGoals });
+    onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects, weeklyGoals, dailyStandupText });
   };
 
   const handleSaveStandup = () => {
@@ -196,27 +219,34 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                       {currentJob.role}
                     </h3>
                     
-                    {/* Compact layout action buttons */}
-                    <div className="flex items-center">
+                    {/* Clearly visible Edit and Delete Action Buttons with generous spacing */}
+                    <div className="flex items-center gap-3">
                       <button 
                         onClick={handleOpenEdit}
-                        className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-gray-400 hover:text-white hover:bg-slate-850 cursor-pointer transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-400 hover:text-sky-300 text-xs font-semibold cursor-pointer transition select-none active:scale-95 shadow-sm"
                         title="Edit tenure information"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Edit</span>
                       </button>
                       <button 
                         onClick={handleDeleteJob}
-                        className="p-1.5 rounded-lg hover:bg-slate-900 text-rose-500 hover:text-rose-450 cursor-pointer ml-1.5 transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 text-xs font-semibold cursor-pointer transition select-none active:scale-95 shadow-sm"
                         title="Clear tenure record"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
                   
                   <p className="text-[#10b981] font-bold text-base tracking-wide">
                     {currentJob.employer}
+                    {currentJob.employmentType === 'contract' && currentJob.contractCompany && (
+                      <span className="text-xs font-normal text-amber-400 ml-2">
+                        (Contracted via <strong className="font-semibold underline decoration-amber-500/40">{currentJob.contractCompany}</strong>)
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -234,6 +264,14 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                   <Briefcase className="w-3.5 h-3.5 text-gray-500" />
                   <span>{currentJob.employmentType || 'Full-Time'}</span>
                 </div>
+
+                {/* Contract Company badge (only visible if contract) */}
+                {currentJob.employmentType === 'contract' && currentJob.contractCompany && (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs font-semibold text-amber-400 select-none">
+                    <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Contract: {currentJob.contractCompany}</span>
+                  </div>
+                )}
 
                 {/* Location Type badge */}
                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-950/45 border border-slate-850 rounded-lg text-xs font-semibold text-gray-450 uppercase select-none tracking-wider">
@@ -288,7 +326,10 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                   onChange={e => {
                     const text = e.target.value;
                     setDailyStandupText(text);
-                    onUpdateCurrentJob({ ...currentJob, dailyStandupText: text });
+                    onUpdateCurrentJob({ ...currentJob, dailyStandupText: text, weeklyGoals, currentProjects });
+                  }}
+                  onBlur={() => {
+                    onUpdateCurrentJob({ ...currentJob, dailyStandupText, weeklyGoals, currentProjects });
                   }}
                   className="w-full bg-[#09090b]/80 border border-slate-800/80 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 outline-none resize-none font-mono leading-relaxed"
                 />
@@ -537,6 +578,25 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                   </select>
                 </div>
               </div>
+
+              {/* Conditionally display Contract Company Name ONLY if Contract is selected */}
+              {employmentType === 'contract' && (
+                <div className="space-y-1.5 animate-fade-in">
+                  <label className="text-[11px] font-bold text-amber-400 block flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Contract Company Name *</span>
+                  </label>
+                  <input 
+                    type="text"
+                    required={employmentType === 'contract'}
+                    value={contractCompany}
+                    onChange={e => setContractCompany(e.target.value)}
+                    placeholder="Enter contracting company name (e.g. Apex Systems, Infosys)"
+                    className="w-full bg-[#131215] border border-amber-500/50 rounded-xl px-3 py-3 text-white text-xs focus:border-amber-400 outline-none transition duration-150"
+                  />
+                  <p className="text-[10px] text-gray-500">Provide the client or vendor company name for your contract role.</p>
+                </div>
+              )}
 
               {/* Submit trigger button */}
               <div className="pt-4 flex gap-2">

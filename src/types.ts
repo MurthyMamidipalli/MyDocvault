@@ -110,6 +110,7 @@ export interface CurrentJob {
   startDate: string;
   department: string;
   employmentType?: 'full-time' | 'part-time' | 'contract' | 'internship' | 'freelance';
+  contractCompany?: string;
   locationType?: 'on-site' | 'remote' | 'hybrid';
   currentProjects: { id: string; name: string; status: 'planning' | 'in-progress' | 'completed'; desc: string }[];
   dailyStandupText: string;
@@ -637,6 +638,7 @@ export const EMPTY_CURRENT_JOB: CurrentJob = {
   startDate: "",
   department: "",
   employmentType: "internship",
+  contractCompany: "",
   locationType: "on-site",
   currentProjects: [],
   dailyStandupText: "",
@@ -649,6 +651,7 @@ export const INITIAL_CURRENT_JOB: CurrentJob = {
   startDate: "2026-05-14",
   department: "Testing",
   employmentType: "internship",
+  contractCompany: "",
   locationType: "on-site",
   currentProjects: [
     { id: 'cp-1', name: 'UI Regression Tests', status: 'in-progress', desc: 'Writing Cypress integration tests for authentication forms.' },

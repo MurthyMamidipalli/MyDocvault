@@ -2202,6 +2202,39 @@ export default function App() {
         try {
           const jobData = jobRes.status === 'fulfilled' ? jobRes.value.data : null;
           if (jobData) {
+            // Read cached local job first so refresh NEVER deletes workspace board data
+            let cachedLocalJob: any = null;
+            if (email) {
+              try {
+                const raw = localStorage.getItem(`${email}_current_job`);
+                if (raw) cachedLocalJob = JSON.parse(raw);
+              } catch (e) {}
+            }
+
+            let parsedDesc = jobData.description || '';
+            let parsedContractCompany = jobData.contract_company || cachedLocalJob?.contractCompany || '';
+            let parsedWeeklyGoals = Array.isArray(jobData.weekly_goals) && jobData.weekly_goals.length > 0
+              ? jobData.weekly_goals
+              : (Array.isArray(cachedLocalJob?.weeklyGoals) ? cachedLocalJob.weeklyGoals : []);
+            let parsedCurrentProjects = Array.isArray(jobData.current_projects) && jobData.current_projects.length > 0
+              ? jobData.current_projects
+              : (Array.isArray(cachedLocalJob?.currentProjects) ? cachedLocalJob.currentProjects : []);
+            let parsedDailyStandup = jobData.daily_standup_text || cachedLocalJob?.dailyStandupText || '';
+
+            // Check if description contains packed JSON metadata
+            if (jobData.description && typeof jobData.description === 'string' && jobData.description.trim().startsWith('{')) {
+              try {
+                const meta = JSON.parse(jobData.description);
+                if (meta && typeof meta === 'object') {
+                  parsedDesc = meta.rawDescription !== undefined ? meta.rawDescription : (meta.description || '');
+                  if (meta.contractCompany) parsedContractCompany = meta.contractCompany;
+                  if (Array.isArray(meta.weeklyGoals) && meta.weeklyGoals.length > 0) parsedWeeklyGoals = meta.weeklyGoals;
+                  if (Array.isArray(meta.currentProjects) && meta.currentProjects.length > 0) parsedCurrentProjects = meta.currentProjects;
+                  if (meta.dailyStandupText) parsedDailyStandup = meta.dailyStandupText;
+                }
+              } catch (e) {}
+            }
+
             const loadedJob: CurrentJob = {
               company: jobData.company || '',
               employer: jobData.company || '',
@@ -2213,12 +2246,13 @@ export default function App() {
               location: jobData.location || '',
               locationType: jobData.location || 'on-site',
               employmentType: jobData.employment_type || 'full-time',
+              contractCompany: parsedContractCompany,
               salary: jobData.salary || '',
               manager: jobData.manager || '',
-              description: jobData.description || '',
-              weeklyGoals: Array.isArray(jobData.weekly_goals) ? jobData.weekly_goals : [],
-              currentProjects: Array.isArray(jobData.current_projects) ? jobData.current_projects : [],
-              dailyStandupText: jobData.daily_standup_text || ''
+              description: parsedDesc,
+              weeklyGoals: parsedWeeklyGoals,
+              currentProjects: parsedCurrentProjects,
+              dailyStandupText: parsedDailyStandup
             };
             setCurrentJob(loadedJob as any);
             if (email) {
@@ -2226,10 +2260,21 @@ export default function App() {
               heavyStorage.set(`${email}_current_job`, loadedJob).catch(() => {});
             }
           } else if (jobRes.status === 'fulfilled' && !jobData) {
-            setCurrentJob(EMPTY_CURRENT_JOB);
+            let cachedLocalJob: any = null;
             if (email) {
-              safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(EMPTY_CURRENT_JOB));
-              heavyStorage.set(`${email}_current_job`, EMPTY_CURRENT_JOB).catch(() => {});
+              try {
+                const raw = localStorage.getItem(`${email}_current_job`);
+                if (raw) cachedLocalJob = JSON.parse(raw);
+              } catch (e) {}
+            }
+            if (cachedLocalJob && (cachedLocalJob.role || cachedLocalJob.employer || cachedLocalJob.company)) {
+              setCurrentJob(cachedLocalJob);
+            } else {
+              setCurrentJob(EMPTY_CURRENT_JOB);
+              if (email) {
+                safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(EMPTY_CURRENT_JOB));
+                heavyStorage.set(`${email}_current_job`, EMPTY_CURRENT_JOB).catch(() => {});
+              }
             }
           }
         } catch (err) { console.warn("[Supabase Current Job Load]", err); }
@@ -3000,49 +3045,70 @@ export default function App() {
     const empName = newJob.company || newJob.employer || 'Current Employer';
     const roleTitle = newJob.role || 'Current Role';
     const joinDate = newJob.joiningDate || newJob.startDate || new Date().toISOString().substring(0, 10);
-    const empType = newJob.employmentType || 'Full-Time';
+    const empType = newJob.employmentType || 'full-time';
 
-    const normalizedJob = {
+    const normalizedJob: CurrentJob = {
       ...newJob,
       company: empName,
       employer: empName,
       role: roleTitle,
       joiningDate: joinDate,
       startDate: joinDate,
-      employmentType: empType
+      employmentType: empType,
+      contractCompany: newJob.employmentType === 'contract' ? (newJob.contractCompany || '').trim() : '',
+      weeklyGoals: Array.isArray(newJob.weeklyGoals) ? newJob.weeklyGoals : [],
+      currentProjects: Array.isArray(newJob.currentProjects) ? newJob.currentProjects : [],
+      dailyStandupText: newJob.dailyStandupText || ''
     };
 
-    setCurrentJob(normalizedJob as any);
+    setCurrentJob(normalizedJob);
     const email = currentUser?.email?.toLowerCase().trim();
     if (email) {
       safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(normalizedJob));
+      heavyStorage.set(`${email}_current_job`, normalizedJob).catch(() => {});
     }
 
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        const payload = {
+        const metadataJson = JSON.stringify({
+          rawDescription: normalizedJob.description || '',
+          contractCompany: normalizedJob.contractCompany || '',
+          dailyStandupText: normalizedJob.dailyStandupText || '',
+          weeklyGoals: normalizedJob.weeklyGoals || [],
+          currentProjects: normalizedJob.currentProjects || []
+        });
+
+        const basePayload: any = {
           user_id: userId,
           company: empName,
           role: roleTitle,
-          department: newJob.department || '',
-          employee_id: newJob.employeeId || '',
+          department: normalizedJob.department || '',
+          employee_id: normalizedJob.employeeId || '',
           joining_date: joinDate,
-          location: newJob.location || newJob.locationType || '',
+          location: normalizedJob.location || normalizedJob.locationType || '',
           employment_type: empType,
-          salary: newJob.salary || '',
-          manager: newJob.manager || '',
-          description: newJob.description || '',
+          salary: normalizedJob.salary || '',
+          manager: normalizedJob.manager || '',
+          description: metadataJson,
           updated_at: new Date().toISOString()
         };
 
-        const { error: upsertErr } = await supabase.from('current_jobs').upsert({
-          user_id: userId,
-          ...payload
-        }, { onConflict: 'user_id' });
+        const fullPayload = {
+          ...basePayload,
+          contract_company: normalizedJob.contractCompany || '',
+          daily_standup_text: normalizedJob.dailyStandupText || '',
+          weekly_goals: normalizedJob.weeklyGoals || [],
+          current_projects: normalizedJob.currentProjects || []
+        };
 
-        if (upsertErr) {
-          console.error("[Supabase Current Job Upsert Error]", upsertErr);
+        let upsertResult = await supabase.from('current_jobs').upsert(fullPayload, { onConflict: 'user_id' });
+        if (upsertResult.error && (upsertResult.error.message?.includes('column') || (upsertResult.error as any).code === 'PGRST204')) {
+          upsertResult = await supabase.from('current_jobs').upsert(basePayload, { onConflict: 'user_id' });
+        }
+
+        if (upsertResult.error) {
+          console.warn("[Supabase Current Job Upsert Fallback]", upsertResult.error);
           const { data: existing } = await supabase
             .from('current_jobs')
             .select('id')
@@ -3050,21 +3116,30 @@ export default function App() {
             .maybeSingle();
 
           if (existing && existing.id) {
-            const { error: updateErr } = await supabase.from('current_jobs').update(payload).eq('id', existing.id);
-            if (updateErr) {
-              console.error("[Supabase Current Job Update Error]", updateErr);
-              triggerToast(`Current Job Error: ${updateErr.message}`);
+            let updateRes = await supabase.from('current_jobs').update(fullPayload).eq('id', existing.id);
+            if (updateRes.error) {
+              updateRes = await supabase.from('current_jobs').update(basePayload).eq('id', existing.id);
+            }
+            if (updateRes.error) {
+              console.error("[Supabase Current Job Update Error]", updateRes.error);
+              triggerToast(`Current Job Error: ${updateRes.error.message}`);
             } else {
-              triggerToast("Current Job saved to Supabase successfully!");
+              triggerToast("Current Job and Workspace Board saved to Supabase successfully!");
             }
           } else {
-            const { error: insErr } = await supabase.from('current_jobs').insert({
+            let insRes = await supabase.from('current_jobs').insert({
               id: generateUUID(),
-              ...payload
+              ...fullPayload
             });
-            if (insErr) {
-              console.error("[Supabase Current Job Insert Error]", insErr);
-              triggerToast(`Current Job Error: ${insErr.message}`);
+            if (insRes.error) {
+              insRes = await supabase.from('current_jobs').insert({
+                id: generateUUID(),
+                ...basePayload
+              });
+            }
+            if (insRes.error) {
+              console.error("[Supabase Current Job Insert Error]", insRes.error);
+              triggerToast(`Current Job Error: ${insRes.error.message}`);
             } else {
               triggerToast("Current Job inserted to Supabase successfully!");
             }
