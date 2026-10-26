@@ -36,10 +36,17 @@ import {
   X,
   Volume2,
   VolumeX,
-  Bell
+  Bell,
+  Repeat,
+  Mail
 } from 'lucide-react';
 import { NotepadNote, TaskItem, generateUUID } from '../types';
-import { playNotificationSound } from '../lib/soundEffects';
+import { 
+  playNotificationSound, 
+  AVAILABLE_NOTIFICATION_SOUNDS, 
+  getUserPreferredSound, 
+  sendMorningEmailNotification 
+} from '../lib/soundEffects';
 
 interface NotepadTabProps {
   currentUserEmail?: string;
@@ -132,6 +139,7 @@ export default function NotepadTab({
   // Subtask input state for active note
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const [newSubtaskDueDate, setNewSubtaskDueDate] = useState('');
+  const [newSubtaskEveryDay, setNewSubtaskEveryDay] = useState(false);
 
   // Auto-activate first note if activeNoteId is not valid and notes are loaded
   useEffect(() => {
@@ -409,11 +417,13 @@ export default function NotepadTab({
       id: generateUUID(),
       text: newSubtaskText.trim(),
       completed: false,
-      dueDate: newSubtaskDueDate.trim() || undefined
+      dueDate: newSubtaskDueDate.trim() || undefined,
+      isEveryDay: newSubtaskEveryDay
     };
     handleUpdateActiveNote('tasks', [...currentTasks, newTaskItem]);
     setNewSubtaskText('');
     setNewSubtaskDueDate('');
+    setNewSubtaskEveryDay(false);
   };
 
   const handleToggleSubtask = (taskId: string) => {
@@ -836,6 +846,12 @@ export default function NotepadTab({
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
                             <Calendar className="w-2.5 h-2.5 text-amber-400" />
                             <span>Due: {note.targetDate || note.dueDate}</span>
+                          </span>
+                        )}
+                        {isTask && note.isEveryDay && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                            <Repeat className="w-2.5 h-2.5 text-emerald-400" />
+                            <span>Every Day</span>
                           </span>
                         )}
                         {isTask ? (
@@ -1283,6 +1299,119 @@ export default function NotepadTab({
                     </div>
                   )}
 
+                  {/* Every Day Option for Work Tasks */}
+                  {activeNote.type === 'task' && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextVal = !activeNote.isEveryDay;
+                          handleUpdateActiveNote('isEveryDay' as any, nextVal);
+                          if (!activeNote.notificationType) {
+                            handleUpdateActiveNote('notificationType' as any, 'both');
+                          }
+                          if (!activeNote.notificationSound) {
+                            handleUpdateActiveNote('notificationSound' as any, getUserPreferredSound());
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition active:scale-95 cursor-pointer ${
+                          activeNote.isEveryDay 
+                            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400 shadow-sm' 
+                            : 'bg-slate-950 border-slate-850 text-gray-400 hover:text-white'
+                        }`}
+                        title="Toggle daily recurring task with morning alert"
+                      >
+                        <Repeat className={`w-3.5 h-3.5 ${activeNote.isEveryDay ? 'text-emerald-400' : 'text-gray-500'}`} />
+                        <span>Every Day Option</span>
+                      </button>
+
+                      {activeNote.isEveryDay && (
+                        <div className="flex flex-wrap items-center gap-2 bg-slate-950/90 border border-slate-850 px-2.5 py-1 rounded-xl">
+                          {/* Channel selector: Sound / Mail / Both */}
+                          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateActiveNote('notificationType' as any, 'sound')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                                activeNote.notificationType === 'sound' ? 'bg-emerald-500 text-slate-950' : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              Sound
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateActiveNote('notificationType' as any, 'mail')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                                activeNote.notificationType === 'mail' ? 'bg-emerald-500 text-slate-950' : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              Mail
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateActiveNote('notificationType' as any, 'both')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${
+                                activeNote.notificationType === 'both' || !activeNote.notificationType ? 'bg-emerald-500 text-slate-950' : 'text-gray-400 hover:text-white'
+                              }`}
+                            >
+                              Both
+                            </button>
+                          </div>
+
+                          {/* Custom Notification Sound Dropdown (User's choice) */}
+                          {(activeNote.notificationType !== 'mail') && (
+                            <div className="flex items-center gap-1">
+                              <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                              <select
+                                value={activeNote.notificationSound || getUserPreferredSound()}
+                                onChange={(e) => handleUpdateActiveNote('notificationSound' as any, e.target.value)}
+                                className="bg-slate-900 border border-slate-800 text-emerald-300 text-[10px] rounded px-1.5 py-0.5 font-mono cursor-pointer outline-none"
+                              >
+                                {AVAILABLE_NOTIFICATION_SOUNDS.map(s => (
+                                  <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                                    {s.icon} {s.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => playNotificationSound(activeNote.notificationSound || getUserPreferredSound())}
+                                title="Play sound preview"
+                                className="text-gray-400 hover:text-emerald-400 p-0.5 cursor-pointer font-bold text-xs"
+                              >
+                                ▶
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Test Morning Alert button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const notifType = activeNote.notificationType || 'both';
+                              const sound = activeNote.notificationSound || getUserPreferredSound();
+                              if (notifType === 'sound' || notifType === 'both') {
+                                playNotificationSound(sound);
+                              }
+                              if (notifType === 'mail' || notifType === 'both') {
+                                sendMorningEmailNotification(
+                                  currentUserEmail || '',
+                                  [{ title: activeNote.title || 'Work Task', category: activeNote.category || 'Task', targetDate: activeNote.targetDate }]
+                                );
+                              }
+                              triggerToast("Morning test notification triggered!");
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold cursor-pointer transition active:scale-95 shadow-sm"
+                            title="Test morning notification (Sound & Mail)"
+                          >
+                            <Bell className="w-3 h-3 text-amber-400" />
+                            <span>Test Morning Alert</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <span className="text-[10px] font-mono text-gray-500 tracking-wider">
                     LAST SYNCED: {new Date(activeNote.updatedAt).toLocaleTimeString()}
                   </span>
@@ -1313,7 +1442,7 @@ export default function NotepadTab({
                         placeholder="Add subtask or work item..."
                         className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:border-blue-500 outline-none"
                       />
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 rounded-xl px-2.5 py-1">
                           <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
                           <input 
@@ -1324,6 +1453,15 @@ export default function NotepadTab({
                             className="bg-transparent text-xs text-amber-300 outline-none font-mono cursor-pointer"
                           />
                         </div>
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none text-[11px] text-gray-400 hover:text-emerald-400 px-1">
+                          <input 
+                            type="checkbox"
+                            checked={newSubtaskEveryDay}
+                            onChange={e => setNewSubtaskEveryDay(e.target.checked)}
+                            className="w-3.5 h-3.5 rounded text-emerald-500 bg-slate-900 border-slate-800"
+                          />
+                          <span>Every Day</span>
+                        </label>
                         <button
                           type="button"
                           onClick={handleAddSubtask}
@@ -1359,6 +1497,12 @@ export default function NotepadTab({
                               <span className="inline-flex items-center gap-1 text-[9px] font-mono font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded shrink-0">
                                 <Calendar className="w-2.5 h-2.5" />
                                 {task.dueDate}
+                              </span>
+                            )}
+                            {task.isEveryDay && (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded shrink-0">
+                                <Repeat className="w-2.5 h-2.5" />
+                                <span>Every Day</span>
                               </span>
                             )}
                           </div>

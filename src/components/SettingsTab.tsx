@@ -13,9 +13,17 @@ import {
   Award, 
   Target, 
   Archive,
-  FolderOpen
+  FolderOpen,
+  Volume2,
+  Bell
 } from 'lucide-react';
 import { DeletedItem } from '../types';
+import { 
+  AVAILABLE_NOTIFICATION_SOUNDS, 
+  getUserPreferredSound, 
+  setUserPreferredSound, 
+  playNotificationSound 
+} from '../lib/soundEffects';
 
 interface SettingsTabProps {
   onWipeData: () => void;
@@ -34,6 +42,7 @@ export default function SettingsTab({
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [offlineSync, setOfflineSync] = useState(true);
+  const [chosenSound, setChosenSound] = useState<string>(() => getUserPreferredSound());
 
   const getRemainingDays = (expiresAt: string): number => {
     try {
@@ -199,6 +208,81 @@ export default function SettingsTab({
           </div>
         </div>
 
+      </div>
+
+      {/* Morning Notification Sound Preferences (User's Choice) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-850">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl">
+              <Volume2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-sm tracking-tight flex items-center gap-2">
+                <span>Custom Morning Notification Sound (User's Choice)</span>
+                <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">
+                  Daily Alerts
+                </span>
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Select your preferred tone for daily morning task reminders and milestones. Test and preview anytime.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+          {AVAILABLE_NOTIFICATION_SOUNDS.map(sound => {
+            const isSelected = chosenSound === sound.id;
+
+            return (
+              <div 
+                key={sound.id}
+                onClick={() => {
+                  setChosenSound(sound.id);
+                  setUserPreferredSound(sound.id);
+                  playNotificationSound(sound.id);
+                }}
+                className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 select-none active:scale-[0.99] ${
+                  isSelected 
+                    ? 'bg-amber-500/15 border-amber-500/50 text-white shadow-md' 
+                    : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700 text-gray-300'
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{sound.icon}</span>
+                    <span className="text-xs font-bold truncate">{sound.name}</span>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1 line-clamp-1">{sound.description}</p>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setChosenSound(sound.id);
+                      setUserPreferredSound(sound.id);
+                      playNotificationSound(sound.id);
+                    }}
+                    className={`p-1.5 rounded-lg border text-xs font-bold transition cursor-pointer active:scale-95 ${
+                      isSelected 
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow' 
+                        : 'bg-slate-800 border-slate-700 text-gray-400 hover:text-white'
+                    }`}
+                    title="Play preview"
+                  >
+                    ▶
+                  </button>
+                  {isSelected && (
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Old Data (Stored for 30 Days) Section */}

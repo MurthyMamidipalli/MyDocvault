@@ -114,7 +114,19 @@ export interface CurrentJob {
   locationType?: 'on-site' | 'remote' | 'hybrid';
   currentProjects: { id: string; name: string; status: 'planning' | 'in-progress' | 'completed'; desc: string }[];
   dailyStandupText: string;
-  weeklyGoals: { id: string; text: string; completed: boolean; date?: string; dueDate?: string }[];
+  dailyStandupEveryDay?: boolean;
+  dailyStandupNotificationType?: 'sound' | 'mail' | 'both';
+  dailyStandupNotificationSound?: string;
+  weeklyGoals: { 
+    id: string; 
+    text: string; 
+    completed: boolean; 
+    date?: string; 
+    dueDate?: string;
+    isEveryDay?: boolean;
+    notificationType?: 'sound' | 'mail' | 'both';
+    notificationSound?: string;
+  }[];
   company?: string;
   employerId?: string;
   employeeId?: string;
@@ -803,6 +815,9 @@ export interface TaskItem {
   text: string;
   completed: boolean;
   dueDate?: string;
+  isEveryDay?: boolean;
+  notificationType?: 'sound' | 'mail' | 'both';
+  notificationSound?: string;
 }
 
 export interface NotepadNote {
@@ -817,6 +832,9 @@ export interface NotepadNote {
   completed?: boolean;
   targetDate?: string;
   dueDate?: string;
+  isEveryDay?: boolean;
+  notificationType?: 'sound' | 'mail' | 'both';
+  notificationSound?: string;
   tasks?: TaskItem[];
 }
 

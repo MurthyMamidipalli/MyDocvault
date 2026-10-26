@@ -18,16 +18,33 @@ import {
   MapPin,
   Clock,
   Shield,
-  Check
+  Check,
+  Repeat,
+  Bell,
+  Volume2,
+  Mail
 } from 'lucide-react';
 import { CurrentJob } from '../types';
+import { 
+  playNotificationSound, 
+  AVAILABLE_NOTIFICATION_SOUNDS, 
+  getUserPreferredSound, 
+  sendMorningEmailNotification 
+} from '../lib/soundEffects';
 
 interface CurrentJobTabProps {
   currentJob: CurrentJob;
   onUpdateCurrentJob: (job: CurrentJob) => void;
+  userEmail?: string;
+  userName?: string;
 }
 
-export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: CurrentJobTabProps) {
+export default function CurrentJobTab({ 
+  currentJob, 
+  onUpdateCurrentJob,
+  userEmail,
+  userName
+}: CurrentJobTabProps) {
   const [showModal, setShowModal] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -43,11 +60,23 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
 
   // Sub-trackers state (Weekly Goals & Initiatives)
   const [dailyStandupText, setDailyStandupText] = useState(currentJob?.dailyStandupText || '');
+  const [dailyStandupEveryDay, setDailyStandupEveryDay] = useState(Boolean((currentJob as any)?.dailyStandupEveryDay));
+  const [dailyStandupNotifType, setDailyStandupNotifType] = useState<'sound' | 'mail' | 'both'>((currentJob as any)?.dailyStandupNotificationType || 'both');
+  const [dailyStandupNotifSound, setDailyStandupNotifSound] = useState<string>((currentJob as any)?.dailyStandupNotificationSound || getUserPreferredSound());
+
   const [newGoal, setNewGoal] = useState('');
   const [newGoalDate, setNewGoalDate] = useState('');
+  const [newGoalEveryDay, setNewGoalEveryDay] = useState(false);
+  const [newGoalNotifType, setNewGoalNotifType] = useState<'sound' | 'mail' | 'both'>('both');
+  const [newGoalNotifSound, setNewGoalNotifSound] = useState(getUserPreferredSound());
+
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [editingGoalText, setEditingGoalText] = useState('');
   const [editingGoalDate, setEditingGoalDate] = useState('');
+  const [editingGoalEveryDay, setEditingGoalEveryDay] = useState(false);
+  const [editingGoalNotifType, setEditingGoalNotifType] = useState<'sound' | 'mail' | 'both'>('both');
+  const [editingGoalNotifSound, setEditingGoalNotifSound] = useState('morning_harp');
+
   const [newProjName, setNewProjName] = useState('');
   const [newProjDesc, setNewProjDesc] = useState('');
 
@@ -145,18 +174,25 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
         text: newGoal.trim(), 
         completed: false,
         date: finalDate,
-        dueDate: finalDate
+        dueDate: finalDate,
+        isEveryDay: newGoalEveryDay,
+        notificationType: newGoalNotifType,
+        notificationSound: newGoalNotifSound
       }
     ];
     onUpdateCurrentJob({ ...currentJob, weeklyGoals: nextGoals, currentProjects, dailyStandupText });
     setNewGoal('');
     setNewGoalDate('');
+    setNewGoalEveryDay(false);
   };
 
-  const handleStartEditGoal = (g: { id: string; text: string; completed: boolean; date?: string; dueDate?: string }) => {
+  const handleStartEditGoal = (g: any) => {
     setEditingGoalId(g.id);
     setEditingGoalText(g.text);
     setEditingGoalDate(g.date || g.dueDate || '');
+    setEditingGoalEveryDay(Boolean(g.isEveryDay));
+    setEditingGoalNotifType(g.notificationType || 'both');
+    setEditingGoalNotifSound(g.notificationSound || getUserPreferredSound());
   };
 
   const handleSaveEditGoal = (id: string) => {
@@ -167,7 +203,10 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
           ...g,
           text: editingGoalText.trim(),
           date: editingGoalDate.trim() || undefined,
-          dueDate: editingGoalDate.trim() || undefined
+          dueDate: editingGoalDate.trim() || undefined,
+          isEveryDay: editingGoalEveryDay,
+          notificationType: editingGoalNotifType,
+          notificationSound: editingGoalNotifSound
         };
       }
       return g;
@@ -176,12 +215,14 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
     setEditingGoalId(null);
     setEditingGoalText('');
     setEditingGoalDate('');
+    setEditingGoalEveryDay(false);
   };
 
   const handleCancelEditGoal = () => {
     setEditingGoalId(null);
     setEditingGoalText('');
     setEditingGoalDate('');
+    setEditingGoalEveryDay(false);
   };
 
   const handleDeleteGoal = (id: string) => {
@@ -190,6 +231,34 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
     if (editingGoalId === id) {
       handleCancelEditGoal();
     }
+  };
+
+  const handleTestMorningAlert = (g: { text: string; notificationType?: string; notificationSound?: string }) => {
+    const notifType = g.notificationType || 'both';
+    const sound = g.notificationSound || getUserPreferredSound();
+
+    if (notifType === 'sound' || notifType === 'both') {
+      playNotificationSound(sound);
+    }
+    if (notifType === 'mail' || notifType === 'both') {
+      sendMorningEmailNotification(
+        userEmail || '',
+        [{ title: g.text, category: 'Milestone / Daily Task' }],
+        userName
+      );
+    }
+  };
+
+  const handleSaveStandup = () => {
+    onUpdateCurrentJob({ 
+      ...currentJob, 
+      dailyStandupText, 
+      weeklyGoals, 
+      currentProjects,
+      dailyStandupEveryDay,
+      dailyStandupNotificationType: dailyStandupNotifType,
+      dailyStandupNotificationSound: dailyStandupNotifSound
+    } as any);
   };
 
   const handleAddProject = (e: React.FormEvent) => {
@@ -207,10 +276,6 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
   const handleDeleteProject = (id: string) => {
     const nextProjects = currentProjects.filter(p => p.id !== id);
     onUpdateCurrentJob({ ...currentJob, currentProjects: nextProjects, weeklyGoals, dailyStandupText });
-  };
-
-  const handleSaveStandup = () => {
-    onUpdateCurrentJob({ ...currentJob, dailyStandupText, weeklyGoals, currentProjects });
   };
 
   const formatDisplayDate = (dateStr?: string) => {
@@ -352,34 +417,142 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-4xl animate-slide-up">
               {/* Daily Sync Stand-up Draft */}
               <div className="lg:col-span-3 bg-[#111116] border border-slate-850/80 rounded-2xl p-6 space-y-4 shadow-md">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <h3 className="text-white font-bold text-sm flex items-center gap-2">
                     <FileText className="w-4.5 h-4.5 text-emerald-400" />
-                    Daily Checkout Sync Standup Draft
+                    <span>Daily Checkout Sync Standup Draft</span>
                   </h3>
-                  <button 
-                    onClick={handleSaveStandup}
-                    className="text-xs bg-emerald-950 border border-emerald-800 text-emerald-400 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-900 cursor-pointer select-none transition"
-                  >
-                    Sync Logs
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {dailyStandupEveryDay && (
+                      <button
+                        type="button"
+                        onClick={() => handleTestMorningAlert({
+                          text: dailyStandupText.trim() || 'Daily Standup Sync Check-in',
+                          notificationType: dailyStandupNotifType,
+                          notificationSound: dailyStandupNotifSound
+                        })}
+                        className="text-[11px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 px-2.5 py-1.5 rounded-lg font-bold cursor-pointer transition flex items-center gap-1 active:scale-95 shadow-sm"
+                        title="Test morning notification (Sound / Email)"
+                      >
+                        <Bell className="w-3 h-3 text-amber-400" />
+                        <span>Test Morning Alert</span>
+                      </button>
+                    )}
+                    <button 
+                      onClick={handleSaveStandup}
+                      className="text-xs bg-emerald-950 border border-emerald-800 text-emerald-400 px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-900 cursor-pointer select-none transition active:scale-95 shadow-sm"
+                    >
+                      Sync Logs
+                    </button>
+                  </div>
                 </div>
+
                 <p className="text-gray-500 text-[11px] font-sans leading-relaxed">
                   Maintain an ongoing ledger of today's technical accomplishments to push or paste into Slack/Teams checkout standup threads instantly.
                 </p>
+
                 <textarea
                   rows={3}
                   value={dailyStandupText}
                   onChange={e => {
                     const text = e.target.value;
                     setDailyStandupText(text);
-                    onUpdateCurrentJob({ ...currentJob, dailyStandupText: text, weeklyGoals, currentProjects });
+                    onUpdateCurrentJob({ 
+                      ...currentJob, 
+                      dailyStandupText: text, 
+                      weeklyGoals, 
+                      currentProjects,
+                      dailyStandupEveryDay,
+                      dailyStandupNotificationType: dailyStandupNotifType,
+                      dailyStandupNotificationSound: dailyStandupNotifSound
+                    } as any);
                   }}
                   onBlur={() => {
-                    onUpdateCurrentJob({ ...currentJob, dailyStandupText, weeklyGoals, currentProjects });
+                    handleSaveStandup();
                   }}
                   className="w-full bg-[#09090b]/80 border border-slate-800/80 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 outline-none resize-none font-mono leading-relaxed"
                 />
+
+                {/* Standup Every Day & Morning Notification Options */}
+                <div className="bg-[#09090b]/80 border border-slate-850 p-3 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input 
+                      type="checkbox"
+                      checked={dailyStandupEveryDay}
+                      onChange={e => {
+                        const val = e.target.checked;
+                        setDailyStandupEveryDay(val);
+                        onUpdateCurrentJob({
+                          ...currentJob,
+                          dailyStandupText,
+                          weeklyGoals,
+                          currentProjects,
+                          dailyStandupEveryDay: val,
+                          dailyStandupNotificationType: dailyStandupNotifType,
+                          dailyStandupNotificationSound: dailyStandupNotifSound
+                        } as any);
+                      }}
+                      className="w-4 h-4 rounded text-emerald-500 focus:ring-0 bg-slate-950 border-slate-700 cursor-pointer"
+                    />
+                    <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                      <Repeat className="w-3.5 h-3.5" />
+                      <span>Every Day Option (Notify Every Morning)</span>
+                    </span>
+                  </label>
+
+                  {dailyStandupEveryDay && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setDailyStandupNotifType('sound')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${dailyStandupNotifType === 'sound' ? 'bg-emerald-500 text-slate-950' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          Sound
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDailyStandupNotifType('mail')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${dailyStandupNotifType === 'mail' ? 'bg-emerald-500 text-slate-950' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          Mail
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDailyStandupNotifType('both')}
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${dailyStandupNotifType === 'both' ? 'bg-emerald-500 text-slate-950' : 'text-gray-400 hover:text-white'}`}
+                        >
+                          Both
+                        </button>
+                      </div>
+
+                      {(dailyStandupNotifType === 'sound' || dailyStandupNotifType === 'both') && (
+                        <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+                          <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <select
+                            value={dailyStandupNotifSound}
+                            onChange={e => setDailyStandupNotifSound(e.target.value)}
+                            className="bg-transparent text-emerald-300 text-[11px] font-mono outline-none cursor-pointer"
+                          >
+                            {AVAILABLE_NOTIFICATION_SOUNDS.map(s => (
+                              <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                                {s.icon} {s.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => playNotificationSound(dailyStandupNotifSound)}
+                            title="Play sound preview"
+                            className="text-gray-400 hover:text-emerald-400 cursor-pointer p-0.5 font-bold"
+                          >
+                            ▶
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Weekly Milestones */}
@@ -395,8 +568,8 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                     </span>
                   </div>
 
-                  {/* Add Milestone Form with Date Option */}
-                  <form onSubmit={handleAddGoal} className="bg-[#09090b]/80 border border-slate-800/80 p-3 rounded-xl space-y-2">
+                  {/* Add Milestone Form with Date & Every Day Option */}
+                  <form onSubmit={handleAddGoal} className="bg-[#09090b]/80 border border-slate-800/80 p-3.5 rounded-xl space-y-3">
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input 
                         type="text"
@@ -426,6 +599,77 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                         </button>
                       </div>
                     </div>
+
+                    {/* Every Day Toggle & Notification Controls */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-slate-850/80 text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={newGoalEveryDay}
+                          onChange={e => setNewGoalEveryDay(e.target.checked)}
+                          className="w-4 h-4 rounded text-amber-500 focus:ring-0 bg-slate-950 border-slate-700 cursor-pointer"
+                        />
+                        <span className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
+                          <Repeat className="w-3.5 h-3.5" />
+                          <span>Every Day Option (Notify Every Morning via Mail or Sound)</span>
+                        </span>
+                      </label>
+
+                      {newGoalEveryDay && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          {/* Channel selector: Sound / Mail / Both */}
+                          <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 rounded-lg p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setNewGoalNotifType('sound')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${newGoalNotifType === 'sound' ? 'bg-amber-500 text-slate-950' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              Sound
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewGoalNotifType('mail')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${newGoalNotifType === 'mail' ? 'bg-amber-500 text-slate-950' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              Mail
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNewGoalNotifType('both')}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold transition ${newGoalNotifType === 'both' ? 'bg-amber-500 text-slate-950' : 'text-gray-400 hover:text-white'}`}
+                            >
+                              Both
+                            </button>
+                          </div>
+
+                          {/* Custom Notification Sound dropdown (user's choice) */}
+                          {(newGoalNotifType === 'sound' || newGoalNotifType === 'both') && (
+                            <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+                              <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                              <select
+                                value={newGoalNotifSound}
+                                onChange={e => setNewGoalNotifSound(e.target.value)}
+                                className="bg-transparent text-amber-300 text-[11px] font-mono outline-none cursor-pointer"
+                              >
+                                {AVAILABLE_NOTIFICATION_SOUNDS.map(s => (
+                                  <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                                    {s.icon} {s.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => playNotificationSound(newGoalNotifSound)}
+                                title="Play sound preview"
+                                className="text-gray-400 hover:text-amber-400 cursor-pointer p-0.5 font-bold"
+                              >
+                                ▶
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </form>
 
                   {/* Milestones List */}
@@ -434,7 +678,7 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                       <div className="py-6 text-center border border-dashed border-slate-850 rounded-xl bg-slate-950/20">
                         <Target className="w-6 h-6 text-gray-600 mx-auto mb-1.5" />
                         <p className="text-gray-500 text-xs font-sans">No weekly milestones or daily tasks added yet.</p>
-                        <p className="text-gray-600 text-[10px] mt-0.5">Add task deliverables with target dates above.</p>
+                        <p className="text-gray-600 text-[10px] mt-0.5">Add deliverables with dates and Every Day option above.</p>
                       </div>
                     ) : (
                       weeklyGoals.map(g => {
@@ -442,7 +686,7 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
 
                         if (isEditing) {
                           return (
-                            <div key={g.id} className="bg-slate-950 p-3 rounded-xl border border-sky-500/50 space-y-2.5 shadow-md">
+                            <div key={g.id} className="bg-slate-950 p-3.5 rounded-xl border border-sky-500/50 space-y-3 shadow-md">
                               <input 
                                 type="text"
                                 value={editingGoalText}
@@ -461,6 +705,45 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                                     className="bg-transparent text-xs text-amber-300 outline-none font-mono cursor-pointer"
                                   />
                                 </div>
+
+                                <label className="flex items-center gap-1.5 cursor-pointer text-xs select-none">
+                                  <input 
+                                    type="checkbox"
+                                    checked={editingGoalEveryDay}
+                                    onChange={e => setEditingGoalEveryDay(e.target.checked)}
+                                    className="w-3.5 h-3.5 rounded text-amber-500 bg-slate-900 border-slate-700"
+                                  />
+                                  <span className="text-amber-400 font-semibold">Every Day</span>
+                                </label>
+
+                                {editingGoalEveryDay && (
+                                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                    <select
+                                      value={editingGoalNotifType}
+                                      onChange={e => setEditingGoalNotifType(e.target.value as any)}
+                                      className="bg-[#111116] border border-slate-700 text-amber-300 text-[10px] rounded px-1.5 py-1 font-mono"
+                                    >
+                                      <option value="both">Sound & Mail</option>
+                                      <option value="sound">Sound Only</option>
+                                      <option value="mail">Mail Only</option>
+                                    </select>
+
+                                    {(editingGoalNotifType === 'sound' || editingGoalNotifType === 'both') && (
+                                      <select
+                                        value={editingGoalNotifSound}
+                                        onChange={e => setEditingGoalNotifSound(e.target.value)}
+                                        className="bg-[#111116] border border-slate-700 text-amber-300 text-[10px] rounded px-1.5 py-1 font-mono"
+                                      >
+                                        {AVAILABLE_NOTIFICATION_SOUNDS.map(s => (
+                                          <option key={s.id} value={s.id} className="bg-slate-900 text-white">
+                                            {s.icon} {s.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    )}
+                                  </div>
+                                )}
+
                                 <div className="flex items-center gap-2">
                                   <button 
                                     type="button"
@@ -489,7 +772,7 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                             key={g.id} 
                             className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-[#09090b]/60 p-3 rounded-xl border border-slate-850 hover:border-slate-800 transition shadow-sm"
                           >
-                            {/* Checkbox + Title + Date */}
+                            {/* Checkbox + Title + Date + Every Day badge */}
                             <div className="flex items-start gap-2.5 min-w-0 flex-1">
                               <button 
                                 type="button"
@@ -507,22 +790,43 @@ export default function CurrentJobTab({ currentJob, onUpdateCurrentJob }: Curren
                                 <p className={`text-xs font-semibold leading-relaxed break-words ${g.completed ? 'line-through text-gray-500' : 'text-gray-200'}`}>
                                   {g.text}
                                 </p>
-                                {g.date && (
-                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 font-mono text-[10px] font-semibold">
-                                    <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
-                                    <span>Target Date: {g.date}</span>
-                                  </div>
-                                )}
+                                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                                  {g.date && (
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-400 font-mono text-[10px] font-semibold">
+                                      <Calendar className="w-3 h-3 text-amber-400 shrink-0" />
+                                      <span>Target Date: {g.date}</span>
+                                    </div>
+                                  )}
+
+                                  {g.isEveryDay && (
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[10px] font-bold">
+                                      <Repeat className="w-3 h-3 text-emerald-400 shrink-0" />
+                                      <span>Every Day • Morning {g.notificationType === 'mail' ? 'Mail' : (g.notificationType === 'sound' ? 'Sound' : 'Sound & Mail')}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
-                            {/* Clearly visible Edit and Delete buttons */}
+                            {/* Clearly visible Actions: Test Alert, Edit, and Delete */}
                             <div className="flex items-center gap-2 shrink-0 self-end sm:self-center pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-850/60 w-full sm:w-auto justify-end">
+                              {g.isEveryDay && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleTestMorningAlert(g)}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold cursor-pointer transition select-none active:scale-95 shadow-sm"
+                                  title="Test morning notification alert (Sound / Mail)"
+                                >
+                                  <Bell className="w-3.5 h-3.5 text-amber-400" />
+                                  <span>Test Alert</span>
+                                </button>
+                              )}
+
                               <button 
                                 type="button"
                                 onClick={() => handleStartEditGoal(g)}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-400 hover:text-sky-300 text-xs font-semibold cursor-pointer transition select-none active:scale-95 shadow-sm"
-                                title="Edit milestone text and date"
+                                title="Edit milestone text, date, and Every Day option"
                               >
                                 <Pencil className="w-3.5 h-3.5 text-sky-400" />
                                 <span>Edit</span>

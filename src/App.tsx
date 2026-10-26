@@ -38,7 +38,10 @@ import {
   Layers,
   Target,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Volume2,
+  Mail,
+  Bell
 } from 'lucide-react';
 
 import { 
@@ -111,6 +114,11 @@ import AuthPage from './components/AuthPage';
 import { heavyStorage } from './lib/heavyStorage';
 import { handleOAuthCallback } from './lib/googleDrive';
 import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from './lib/supabase';
+import { 
+  playNotificationSound, 
+  sendMorningEmailNotification, 
+  getUserPreferredSound 
+} from './lib/soundEffects';
 
 
 // ==========================================
@@ -1187,6 +1195,15 @@ export default function App() {
     return [];
   });
 
+  const [morningAlertItems, setMorningAlertItems] = useState<{ 
+    title: string; 
+    category?: string; 
+    targetDate?: string; 
+    type?: string; 
+    sound?: string; 
+    notifType?: string 
+  }[] | null>(null);
+
   const VALID_APP_TABS = [
     'overview', 'profile', 'skills', 'education', 'certifications', 'experience',
     'current-job', 'projects', 'resume', 'portfolios', 'timeline', 'contacts',
@@ -2246,6 +2263,9 @@ export default function App() {
               ? jobData.current_projects
               : (Array.isArray(cachedLocalJob?.currentProjects) ? cachedLocalJob.currentProjects : []);
             let parsedDailyStandup = jobData.daily_standup_text || cachedLocalJob?.dailyStandupText || '';
+            let parsedStandupEveryDay = cachedLocalJob?.dailyStandupEveryDay || false;
+            let parsedStandupNotifType = cachedLocalJob?.dailyStandupNotificationType || 'both';
+            let parsedStandupNotifSound = cachedLocalJob?.dailyStandupNotificationSound || 'morning_harp';
 
             // Check if description contains packed JSON metadata
             if (jobData.description && typeof jobData.description === 'string' && jobData.description.trim().startsWith('{')) {
@@ -2257,6 +2277,9 @@ export default function App() {
                   if (Array.isArray(meta.weeklyGoals) && meta.weeklyGoals.length > 0) parsedWeeklyGoals = meta.weeklyGoals;
                   if (Array.isArray(meta.currentProjects) && meta.currentProjects.length > 0) parsedCurrentProjects = meta.currentProjects;
                   if (meta.dailyStandupText) parsedDailyStandup = meta.dailyStandupText;
+                  if (meta.dailyStandupEveryDay !== undefined) parsedStandupEveryDay = meta.dailyStandupEveryDay;
+                  if (meta.dailyStandupNotificationType) parsedStandupNotifType = meta.dailyStandupNotificationType;
+                  if (meta.dailyStandupNotificationSound) parsedStandupNotifSound = meta.dailyStandupNotificationSound;
                 }
               } catch (e) {}
             }
@@ -2278,7 +2301,10 @@ export default function App() {
               description: parsedDesc,
               weeklyGoals: parsedWeeklyGoals,
               currentProjects: parsedCurrentProjects,
-              dailyStandupText: parsedDailyStandup
+              dailyStandupText: parsedDailyStandup,
+              dailyStandupEveryDay: parsedStandupEveryDay,
+              dailyStandupNotificationType: parsedStandupNotifType,
+              dailyStandupNotificationSound: parsedStandupNotifSound
             };
             setCurrentJob(loadedJob as any);
             if (email) {
@@ -2708,6 +2734,12 @@ export default function App() {
               const targetDate = targetTag ? targetTag.replace('__target__:', '') : (dueTag ? dueTag.replace('__due__:', '') : undefined);
               const dueDate = dueTag ? dueTag.replace('__due__:', '') : targetDate;
 
+              const isEveryDay = tagArray.includes('__every_day__');
+              const notifTypeTag = tagArray.find((t: string) => t.startsWith('__notif_type__:'));
+              const notificationType = notifTypeTag ? notifTypeTag.replace('__notif_type__:', '') : undefined;
+              const notifSoundTag = tagArray.find((t: string) => t.startsWith('__notif_sound__:'));
+              const notificationSound = notifSoundTag ? notifSoundTag.replace('__notif_sound__:', '') : undefined;
+
               return {
                 id: n.id,
                 title: n.title,
@@ -2719,6 +2751,9 @@ export default function App() {
                 completed: isCompleted,
                 targetDate,
                 dueDate,
+                isEveryDay,
+                notificationType: (notificationType as any) || 'both',
+                notificationSound: notificationSound || 'morning_harp',
                 tasks: subtasks,
                 isPublic: n.is_public !== false,
                 updatedAt: n.updated_at || new Date().toISOString()
@@ -3214,6 +3249,107 @@ export default function App() {
     loadSupabaseUserData();
   }, [currentUser]);
 
+  // Morning Daily Reminder Notification Scheduler for Weekly Milestones & Tasks
+  useEffect(() => {
+    try {
+      const activeAlerts: {
+        title: string;
+        category?: string;
+        targetDate?: string;
+        type?: string;
+        sound?: string;
+        notifType?: string;
+      }[] = [];
+
+      // 1. Weekly Key Milestones with "Every Day" option
+      if (currentJob?.weeklyGoals && Array.isArray(currentJob.weeklyGoals)) {
+        currentJob.weeklyGoals.forEach(g => {
+          if (g.isEveryDay && g.status !== 'completed') {
+            activeAlerts.push({
+              title: g.goal || 'Weekly Milestone',
+              category: 'Weekly Milestone',
+              targetDate: g.targetDate,
+              type: 'milestone',
+              sound: g.notificationSound || getUserPreferredSound(),
+              notifType: g.notificationType || 'sound'
+            });
+          }
+        });
+      }
+
+      // 2. Daily Standup if "Every Day" option enabled
+      if (currentJob?.dailyStandupEveryDay) {
+        activeAlerts.push({
+          title: currentJob.dailyStandup?.completedYesterday 
+            ? `Daily Standup: ${currentJob.dailyStandup.completedYesterday.slice(0, 50)}...`
+            : 'Daily Standup & Working Plan',
+          category: 'Daily Tasks & Standup',
+          type: 'standup',
+          sound: currentJob.dailyStandupNotificationSound || getUserPreferredSound(),
+          notifType: currentJob.dailyStandupNotificationType || 'sound'
+        });
+      }
+
+      // 3. Notepad Tasks & Notes with "Every Day" option
+      if (notes && Array.isArray(notes)) {
+        notes.forEach(n => {
+          if (n.isEveryDay && !n.isCompleted) {
+            activeAlerts.push({
+              title: n.title || 'Every Day Task',
+              category: 'Notepad Task',
+              targetDate: n.targetDate,
+              type: 'task',
+              sound: n.notificationSound || getUserPreferredSound(),
+              notifType: n.notificationType || 'sound'
+            });
+          }
+          // Also check subtasks
+          if (Array.isArray(n.subtasks)) {
+            n.subtasks.forEach(st => {
+              if (st.isEveryDay && !st.completed) {
+                activeAlerts.push({
+                  title: `${n.title ? `${n.title} → ` : ''}${st.text}`,
+                  category: 'Subtask',
+                  targetDate: st.targetDate,
+                  type: 'subtask',
+                  sound: st.notificationSound || getUserPreferredSound(),
+                  notifType: st.notificationType || 'sound'
+                });
+              }
+            });
+          }
+        });
+      }
+
+      if (activeAlerts.length > 0) {
+        setMorningAlertItems(activeAlerts);
+
+        // Check if daily morning notification sound was already triggered today
+        const todayDateStr = new Date().toISOString().split('T')[0];
+        const userEmailKey = (currentUser?.email || profile.email || 'user').toLowerCase().trim();
+        const alertStorageKey = `nexus_morning_alert_played_${todayDateStr}_${userEmailKey}`;
+        const hasTriggeredToday = localStorage.getItem(alertStorageKey);
+
+        if (!hasTriggeredToday) {
+          // Play notification sound if any alert has sound or both enabled
+          const shouldPlaySound = activeAlerts.some(a => a.notifType === 'sound' || a.notifType === 'both' || !a.notifType);
+          if (shouldPlaySound) {
+            const preferredSound = activeAlerts.find(a => a.sound)?.sound || getUserPreferredSound();
+            const timer = setTimeout(() => {
+              playNotificationSound(preferredSound);
+            }, 1200);
+            localStorage.setItem(alertStorageKey, 'true');
+            return () => clearTimeout(timer);
+          }
+        }
+      } else {
+        setMorningAlertItems(null);
+      }
+    } catch (err) {
+      console.warn('[Morning Reminder Scheduler]', err);
+    }
+  }, [currentJob, notes, currentUser, profile.email]);
+
   const getActiveUserId = async (): Promise<string | null> => {
     if (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
       return currentUser.id;
@@ -3305,7 +3441,10 @@ export default function App() {
       contractCompany: newJob.employmentType === 'contract' ? (newJob.contractCompany || '').trim() : '',
       weeklyGoals: Array.isArray(newJob.weeklyGoals) ? newJob.weeklyGoals : [],
       currentProjects: Array.isArray(newJob.currentProjects) ? newJob.currentProjects : [],
-      dailyStandupText: newJob.dailyStandupText || ''
+      dailyStandupText: newJob.dailyStandupText || '',
+      dailyStandupEveryDay: (newJob as any).dailyStandupEveryDay,
+      dailyStandupNotificationType: (newJob as any).dailyStandupNotificationType,
+      dailyStandupNotificationSound: (newJob as any).dailyStandupNotificationSound
     };
 
     setCurrentJob(normalizedJob);
@@ -3323,7 +3462,10 @@ export default function App() {
           contractCompany: normalizedJob.contractCompany || '',
           dailyStandupText: normalizedJob.dailyStandupText || '',
           weeklyGoals: normalizedJob.weeklyGoals || [],
-          currentProjects: normalizedJob.currentProjects || []
+          currentProjects: normalizedJob.currentProjects || [],
+          dailyStandupEveryDay: (normalizedJob as any).dailyStandupEveryDay,
+          dailyStandupNotificationType: (normalizedJob as any).dailyStandupNotificationType,
+          dailyStandupNotificationSound: (normalizedJob as any).dailyStandupNotificationSound
         });
 
         const basePayload: any = {
@@ -5559,6 +5701,9 @@ export default function App() {
               ...(n.completed ? ['__completed__'] : []),
               ...(n.targetDate ? [`__target__:${n.targetDate}`] : []),
               ...(n.dueDate ? [`__due__:${n.dueDate}`] : []),
+              ...(n.isEveryDay ? ['__every_day__'] : []),
+              ...(n.notificationType ? [`__notif_type__:${n.notificationType}`] : []),
+              ...(n.notificationSound ? [`__notif_sound__:${n.notificationSound}`] : []),
               ...(n.tasks && n.tasks.length > 0 ? [`__tasks__:${JSON.stringify(n.tasks)}`] : [])
             ];
             await supabase.from('notes').upsert({
@@ -7167,7 +7312,104 @@ export default function App() {
         </header>
 
         {/* Dynamic State tab routing area */}
-        <div className="p-4 sm:p-6 md:p-8 flex-1 max-w-6xl w-full mx-auto overflow-y-auto">
+        <div className="p-4 sm:p-6 md:p-8 flex-1 max-w-6xl w-full mx-auto overflow-y-auto space-y-5">
+          {/* Every Day Morning Notification Alert Banner */}
+          {morningAlertItems && morningAlertItems.length > 0 && (
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-600/15 border border-amber-500/35 p-4 sm:p-5 shadow-2xl backdrop-blur-md transition-all">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
+                    <span className="text-xl">🌅</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-sm sm:text-base font-bold text-white tracking-wide">
+                        Every Day Morning Reminders
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                        {morningAlertItems.length} active {morningAlertItems.length === 1 ? 'task' : 'tasks'} today
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+                      You have daily milestones & tasks scheduled for every day. Notification alerts are active with your custom preferred sound.
+                    </p>
+                    {/* Item chips */}
+                    <div className="flex flex-wrap gap-1.5 mt-2.5">
+                      {morningAlertItems.slice(0, 5).map((item, idx) => (
+                        <span 
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] bg-slate-900/80 text-amber-200 border border-amber-500/25 font-medium truncate max-w-[260px]"
+                          title={item.title}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                          <span className="truncate">{item.title}</span>
+                          {item.targetDate && (
+                            <span className="text-[9px] text-amber-400/80 font-mono">({item.targetDate})</span>
+                          )}
+                        </span>
+                      ))}
+                      {morningAlertItems.length > 5 && (
+                        <span className="px-2 py-1 rounded-lg text-[10px] bg-slate-900/80 text-gray-400 border border-slate-700 font-medium">
+                          +{morningAlertItems.length - 5} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions: Play Chime, Send Mail, Dismiss */}
+                <div className="flex items-center gap-2 self-end md:self-center shrink-0 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const soundToPlay = morningAlertItems[0]?.sound || getUserPreferredSound();
+                      playNotificationSound(soundToPlay);
+                    }}
+                    title="Play custom notification chime"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition active:scale-95 shadow-sm"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>Play Chime</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetEmail = currentUser?.email || profile.email;
+                      if (!targetEmail) {
+                        alert('Please configure your email in profile settings to receive notifications.');
+                        return;
+                      }
+                      sendMorningEmailNotification({
+                        toEmail: targetEmail,
+                        userName: profile.name || currentUser?.firstName || 'User',
+                        items: morningAlertItems.map(a => ({
+                          title: a.title,
+                          category: a.category,
+                          targetDate: a.targetDate
+                        }))
+                      });
+                    }}
+                    title="Open morning email summary in mail client or Gmail"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/40 transition active:scale-95 shadow-sm"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Send Mail</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMorningAlertItems(null)}
+                    title="Dismiss notification banner"
+                    className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/80 transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'overview' && (
             <OverviewTab 
               profile={profile}
@@ -7232,6 +7474,8 @@ export default function App() {
             <CurrentJobTab 
               currentJob={currentJob}
               onUpdateCurrentJob={handleUpdateCurrentJob}
+              userEmail={currentUser?.email || profile.email}
+              userName={profile.name || currentUser?.firstName}
             />
           )}
 
