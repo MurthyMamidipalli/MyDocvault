@@ -33,9 +33,13 @@ import {
   RotateCcw,
   ListTodo,
   CheckCircle2,
-  X
+  X,
+  Volume2,
+  VolumeX,
+  Bell
 } from 'lucide-react';
 import { NotepadNote, TaskItem, generateUUID } from '../types';
+import { playNotificationSound } from '../lib/soundEffects';
 
 interface NotepadTabProps {
   currentUserEmail?: string;
@@ -73,6 +77,27 @@ export default function NotepadTab({
   // Dialog & Warning states
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [warningTask, setWarningTask] = useState<{ id: string; title: string } | null>(null);
+
+  // Task Notifications & Sound state
+  const [taskSoundEnabled, setTaskSoundEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('task_sound_enabled');
+      return stored !== null ? stored === 'true' : true;
+    } catch (_) {
+      return true;
+    }
+  });
+
+  const toggleTaskSound = () => {
+    const next = !taskSoundEnabled;
+    setTaskSoundEnabled(next);
+    try {
+      localStorage.setItem('task_sound_enabled', String(next));
+    } catch (_) {}
+    if (next) {
+      playNotificationSound('complete');
+    }
+  };
 
   // Rich Text Editor states
   const [activeFont, setActiveFont] = useState('Inter, sans-serif');
@@ -276,6 +301,10 @@ export default function NotepadTab({
     setIsMobileListOpen(false); // Mobile: switch directly to active editor
     triggerToast(`New ${type === 'task' ? 'work task' : 'document'} opened in editor.`);
 
+    if (type === 'task' && taskSoundEnabled) {
+      playNotificationSound('task');
+    }
+
     // Focus and scroll directly into the main editor workspace where notes are already open
     setTimeout(() => {
       titleInputRef.current?.focus();
@@ -345,6 +374,9 @@ export default function NotepadTab({
 
     if (willBeCompleted) {
       // User clicked tick -> complete work and remove from active tasks view
+      if (taskSoundEnabled) {
+        playNotificationSound('complete');
+      }
       const updated = notes.map(n => {
         if (n.id === noteItem.id) {
           return {
@@ -359,6 +391,9 @@ export default function NotepadTab({
       triggerToast(`Task "${noteItem.title}" completed and removed from active work list.`);
     } else {
       // User clicked untick -> show warning that work is not completed!
+      if (taskSoundEnabled) {
+        playNotificationSound('alert');
+      }
       setWarningTask({ id: noteItem.id, title: noteItem.title });
     }
   };
@@ -384,11 +419,17 @@ export default function NotepadTab({
 
     if (!targetTask.completed) {
       // Tick: mark complete and remove or cross out
+      if (taskSoundEnabled) {
+        playNotificationSound('complete');
+      }
       const updatedTasks = currentTasks.map(t => t.id === taskId ? { ...t, completed: true } : t);
       handleUpdateActiveNote('tasks', updatedTasks);
       triggerToast('Task item checked off as completed.');
     } else {
       // Untick: warning
+      if (taskSoundEnabled) {
+        playNotificationSound('alert');
+      }
       setWarningTask({ id: taskId, title: targetTask.text });
     }
   };
@@ -402,6 +443,9 @@ export default function NotepadTab({
   // Confirm unticking task after warning modal
   const handleConfirmUntick = () => {
     if (!warningTask) return;
+    if (taskSoundEnabled) {
+      playNotificationSound('alert');
+    }
     // Check if it's the root note or a subtask
     const isRootNote = notes.some(n => n.id === warningTask.id);
     if (isRootNote) {
@@ -525,6 +569,41 @@ export default function NotepadTab({
           >
             <ListTodo className="w-4 h-4 shrink-0 stroke-[2.5]" />
             <span>New Task</span>
+          </button>
+
+          {/* Task Sound Toggle */}
+          <button
+            type="button"
+            onClick={toggleTaskSound}
+            title={taskSoundEnabled ? 'Task Notifications & Sound Enabled (Click to Mute)' : 'Task Sound Muted (Click to Unmute)'}
+            className={`flex items-center gap-1.5 py-2 px-3 text-xs font-bold rounded-xl active:scale-95 transition cursor-pointer select-none border ${
+              taskSoundEnabled
+                ? 'bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20'
+                : 'bg-slate-900 text-gray-500 border-slate-800 hover:text-white'
+            }`}
+          >
+            {taskSoundEnabled ? (
+              <>
+                <Volume2 className="w-4 h-4 text-blue-400" />
+                <span>Task Sound: ON</span>
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-4 h-4 text-gray-500" />
+                <span>Task Sound: OFF</span>
+              </>
+            )}
+          </button>
+
+          {/* Test Task Sound Button */}
+          <button
+            type="button"
+            onClick={() => playNotificationSound('complete')}
+            title="Test task completion chime and phone vibration"
+            className="flex items-center gap-1.5 py-2 px-2.5 bg-slate-900 border border-slate-800 hover:border-blue-500/40 text-gray-300 hover:text-blue-400 text-xs font-bold rounded-xl active:scale-95 transition cursor-pointer select-none"
+          >
+            <Bell className="w-3.5 h-3.5 text-blue-400" />
+            <span>Test Sound</span>
           </button>
         </div>
       </div>

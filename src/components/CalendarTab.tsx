@@ -21,9 +21,12 @@ import {
   BellOff,
   Mail,
   Send,
-  Check
+  Check,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import { CalendarEvent } from '../types';
+import { playNotificationSound } from '../lib/soundEffects';
 
 interface CalendarTabProps {
   events: CalendarEvent[];
@@ -66,9 +69,28 @@ export default function CalendarTab({
 
   // Notification Enable/Disable State
   const [notifEnabled, setNotifEnabled] = useState<boolean>(true);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('calendar_sound_enabled');
+      return stored !== null ? stored === 'true' : true;
+    } catch (_) {
+      return true;
+    }
+  });
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
   );
+
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    try {
+      localStorage.setItem('calendar_sound_enabled', String(next));
+    } catch (_) {}
+    if (next) {
+      playNotificationSound('reminder');
+    }
+  };
 
   const toggleNotifications = async () => {
     if (notifEnabled) {
@@ -81,7 +103,8 @@ export default function CalendarTab({
           if (perm === 'granted') {
             setNotifEnabled(true);
           } else {
-            alert('Notification permission was denied. Please allow notifications in browser settings.');
+            alert('Notification permission was denied. In-app sound and chimes will still play.');
+            setNotifEnabled(true);
           }
         } catch (e) {
           console.error(e);
@@ -122,10 +145,8 @@ export default function CalendarTab({
     }
   };
 
-  // Live timer check for upcoming event notifications
+  // Live timer check for upcoming event notifications & sound alerts
   useEffect(() => {
-    if (!notifEnabled || notifPermission !== 'granted') return;
-
     const notifiedEvents = new Set<string>();
 
     const checkInterval = setInterval(() => {
@@ -142,15 +163,22 @@ export default function CalendarTab({
           if (diffMins >= 0 && diffMins <= targetReminderMins && !notifiedEvents.has(`${evt.id}-${targetReminderMins}`)) {
             notifiedEvents.add(`${evt.id}-${targetReminderMins}`);
             
-            // Trigger desktop notification
-            new Notification(`🔔 Reminder: ${evt.title}`, {
-              body: diffMins === 0 
-                ? `Starting right now (${evt.startTime})${evt.location ? ` at ${evt.location}` : ''}`
-                : `Starting in ${diffMins} minute${diffMins > 1 ? 's' : ''} (${evt.startTime})${evt.location ? ` at ${evt.location}` : ''}`,
-              tag: evt.id
-            });
+            // 1. Play crystal notification chime and trigger phone vibration
+            if (soundEnabled) {
+              playNotificationSound('reminder');
+            }
 
-            // If sendGmail is enabled for this event, offer Gmail alert
+            // 2. Trigger desktop/browser notification if permitted
+            if (notifEnabled && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification(`🔔 Reminder: ${evt.title}`, {
+                body: diffMins === 0 
+                  ? `Starting right now (${evt.startTime})${evt.location ? ` at ${evt.location}` : ''}`
+                  : `Starting in ${diffMins} minute${diffMins > 1 ? 's' : ''} (${evt.startTime})${evt.location ? ` at ${evt.location}` : ''}`,
+                tag: evt.id
+              });
+            }
+
+            // 3. If sendGmail is enabled for this event, offer Gmail alert
             if (evt.sendGmail) {
               sendGmailReminder(evt);
             }
@@ -159,10 +187,10 @@ export default function CalendarTab({
           // invalid date parsing ignore
         }
       });
-    }, 20000); // Check every 20s
+    }, 15000); // Check every 15s
 
     return () => clearInterval(checkInterval);
-  }, [events, notifEnabled, notifPermission]);
+  }, [events, notifEnabled, soundEnabled]);
 
   const viewYear = currentDate.getFullYear();
   const viewMonth = currentDate.getMonth(); // 0-indexed
@@ -349,6 +377,41 @@ export default function CalendarTab({
                 <span>Enable Notifications</span>
               </>
             )}
+          </button>
+
+          {/* Sound Toggle (On/Off) */}
+          <button
+            type="button"
+            onClick={toggleSound}
+            title={soundEnabled ? 'Notification Sound Enabled (Click to Mute)' : 'Notification Sound Muted (Click to Unmute)'}
+            className={`font-bold px-3 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition shrink-0 border ${
+              soundEnabled
+                ? 'bg-sky-500/10 text-sky-400 border-sky-500/30 hover:bg-sky-500/20'
+                : 'bg-slate-900 text-gray-500 border-slate-800 hover:text-white'
+            }`}
+          >
+            {soundEnabled ? (
+              <>
+                <Volume2 className="w-4 h-4 text-sky-400" />
+                <span>Sound: ON</span>
+              </>
+            ) : (
+              <>
+                <VolumeX className="w-4 h-4 text-gray-500" />
+                <span>Sound: OFF</span>
+              </>
+            )}
+          </button>
+
+          {/* Test Sound Button */}
+          <button
+            type="button"
+            onClick={() => playNotificationSound('reminder')}
+            title="Test reminder chime and phone vibration"
+            className="bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-gray-300 hover:text-emerald-400 font-bold px-2.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition shrink-0"
+          >
+            <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Test Sound</span>
           </button>
 
           {/* Quick Gmail Alert trigger */}
