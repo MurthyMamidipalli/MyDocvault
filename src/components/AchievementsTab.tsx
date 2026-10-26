@@ -258,43 +258,51 @@ export default function AchievementsTab({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {achievements.map(ach => (
           <div key={ach.id} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl relative group hover:border-emerald-400/10 transition flex flex-col justify-between">
-            {/* Card Action Buttons: Edit and Delete */}
-            <div className="absolute top-5 right-5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition z-10">
-              <button 
-                onClick={() => handleStartEdit(ach)}
-                className="p-1 rounded hover:bg-slate-950 text-gray-400 hover:text-emerald-400 cursor-pointer transition"
-                title="Edit Award"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-              <button 
-                onClick={() => onDeleteAchievement(ach.id)}
-                className="p-1 rounded hover:bg-slate-950 text-gray-500 hover:text-rose-450 cursor-pointer transition"
-                title="Delete Award"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+            {/* Header row with Title, Award Icon and clearly visible Edit & Delete Action Buttons */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div className="flex gap-3.5 min-w-0 flex-1">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl h-fit shrink-0">
+                  <Award className="w-6 h-6 animate-pulse" />
+                </div>
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-white font-bold text-sm tracking-tight leading-tight">{ach.title}</h4>
+                    <span className={`text-[9px] font-mono uppercase font-bold px-1.5 py-0.5 rounded border ${
+                      ach.isPublic !== false 
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        : 'bg-red-500/10 text-rose-400 border-red-500/20'
+                    }`}>
+                      {ach.isPublic !== false ? 'Public' : 'Private'}
+                    </span>
+                  </div>
+                  <p className="text-emerald-450 text-xs font-mono font-medium">{ach.issuer}</p>
+                </div>
+              </div>
+
+              {/* Clearly visible Edit and Delete Action Buttons with space */}
+              <div className="flex items-center gap-3 shrink-0">
+                <button 
+                  type="button"
+                  onClick={() => handleStartEdit(ach)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-400 hover:text-sky-300 text-xs font-semibold cursor-pointer transition active:scale-95 shadow-sm"
+                  title="Edit Award"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => onDeleteAchievement(ach.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 text-xs font-semibold cursor-pointer transition active:scale-95 shadow-sm"
+                  title="Delete Award"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex gap-4">
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl h-fit">
-                <Award className="w-6 h-6 animate-pulse" />
-              </div>
-              <div className="space-y-1 flex-1 pr-12">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-white font-bold text-sm tracking-tight leading-tight">{ach.title}</h4>
-                  <span className={`text-[9px] font-mono uppercase font-bold px-1.5 py-0.5 rounded border ${
-                    ach.isPublic !== false 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                      : 'bg-red-500/10 text-rose-400 border-red-500/20'
-                  }`}>
-                    {ach.isPublic !== false ? 'Public' : 'Private'}
-                  </span>
-                </div>
-                <p className="text-emerald-450 text-xs font-mono font-medium">{ach.issuer}</p>
-                <p className="text-gray-400 text-xs mt-2 leading-relaxed">{ach.description}</p>
-              </div>
-            </div>
+            <p className="text-gray-400 text-xs mt-3 leading-relaxed">{ach.description}</p>
 
             {/* Document attachment if present */}
             {ach.fileName && (

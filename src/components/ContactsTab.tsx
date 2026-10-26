@@ -212,49 +212,49 @@ export default function ContactsTab({
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {contacts.map(ct => (
           <div key={ct.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 group relative hover:border-emerald-400/10 transition">
-            {/* CLEARLY VISIBLE ACTION BUTTONS: EDIT & DELETE WITH PROPER SPACE */}
-            <div className="absolute top-5 right-5 flex items-center gap-3">
-              <button 
-                type="button"
-                onClick={() => {
-                  setEditingContact(ct);
-                  setName(ct.name);
-                  setRole(ct.role);
-                  setCompany(ct.company || '');
-                  setEmail(ct.email || '');
-                  setPhone(ct.phone || '');
-                  setShowForm(true);
-                  document.getElementById('contacts-pane')?.scrollIntoView({ behavior: 'smooth' });
-                }}
-                className="flex items-center gap-1 px-2.5 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm active:scale-95"
-                title="Edit contact details"
-              >
-                <Edit2 className="w-3.5 h-3.5" />
-                <span>Edit</span>
-              </button>
-              <button 
-                type="button"
-                onClick={() => onDeleteContact(ct.id)}
-                className="flex items-center gap-1 px-2.5 py-1 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm active:scale-95"
-                title="Delete contact from Supabase"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete</span>
-              </button>
-            </div>
-
-            {/* Profile Line */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-850/80 pb-4 pr-28">
-              <div className="flex items-start gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-slate-950 border border-slate-850 flex items-center justify-center font-bold text-emerald-400 text-sm">
+            {/* Profile Line with integrated Edit & Delete action buttons */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-850/80 pb-4">
+              <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                <div className="w-11 h-11 rounded-xl bg-slate-950 border border-slate-850 flex items-center justify-center font-bold text-emerald-400 text-sm shrink-0">
                   {ct.name.split(' ').map(n=>n[0]).join('')}
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-white font-bold text-sm tracking-tight">{ct.name}</h3>
                   </div>
                   <p className="text-gray-400 text-xs mt-0.5">{ct.role || 'Career Network Contact'} • <strong className="text-gray-350 font-semibold">{ct.company}</strong></p>
                 </div>
+              </div>
+
+              {/* CLEARLY VISIBLE ACTION BUTTONS: EDIT & DELETE WITH PROPER SPACE */}
+              <div className="flex items-center gap-3 shrink-0">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setEditingContact(ct);
+                    setName(ct.name);
+                    setRole(ct.role);
+                    setCompany(ct.company || '');
+                    setEmail(ct.email || '');
+                    setPhone(ct.phone || '');
+                    setShowForm(true);
+                    document.getElementById('contacts-pane')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                  title="Edit contact details"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => onDeleteContact(ct.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/40 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                  title="Delete contact"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
               </div>
             </div>
 

@@ -978,10 +978,20 @@ export default function ResumeTab({
                   <span>Active Link</span>
                 </span>
 
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                  <a
+                    href={lk.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    title="Go to link in new tab"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Visit</span>
+                  </a>
                   <button 
                     onClick={() => handleStartEditLink(lk)}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    className="px-2.5 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-400 hover:text-sky-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
                     title="Edit portal link"
                   >
                     <Pencil className="w-3.5 h-3.5" />
@@ -989,7 +999,7 @@ export default function ResumeTab({
                   </button>
                   <button 
                     onClick={() => onDeleteLink(lk.id)}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    className="px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
                     title="Remove Link"
                   >
                     <Trash2 className="w-3.5 h-3.5" />

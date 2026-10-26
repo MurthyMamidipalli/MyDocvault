@@ -2864,29 +2864,60 @@ export default function App() {
         // 14. Contacts
         try {
           const ctData = ctRes.status === 'fulfilled' ? ctRes.value.data : null;
-          if (ctData && Array.isArray(ctData) && ctData.length > 0) {
-            const mapped = ctData.map(ct => ({
-              id: ct.id,
-              name: ct.name,
-              email: ct.email,
-              phone: ct.phone,
-              role: ct.role,
-              company: ct.company,
-              relationship: ct.category,
-              category: (ct.category || 'other') as 'recruiter' | 'mentor' | 'colleague' | 'client' | 'other',
-              relationshipStrength: ct.relationship_strength ?? ct.relationshipStrength ?? 3,
-              status: (ct.status || 'active') as 'active' | 'cold' | 'hot' | 'on-hold',
-              location: ct.location,
-              notes: ct.notes,
-              lastInteracted: ct.last_interacted || '',
-              interactionLogs: ct.interaction_logs || []
-            }));
-            const updatedContacts = deduplicateContacts(mapped);
-            setContacts(updatedContacts);
-            if (currentUser?.email) {
-              const em = currentUser.email.toLowerCase().trim();
-              safeLocalStorageSetItem(`${em}_contacts`, JSON.stringify(updatedContacts));
-              heavyStorage.set(`${em}_contacts`, updatedContacts).catch(() => {});
+          let localContacts: Contact[] = [];
+          if (email) {
+            try {
+              const raw = localStorage.getItem(`${email}_contacts`);
+              if (raw) localContacts = JSON.parse(raw);
+            } catch (_) {}
+          }
+          const remoteContacts = (ctData && Array.isArray(ctData)) ? ctData.map(ct => ({
+            id: ct.id,
+            name: ct.name,
+            email: ct.email,
+            phone: ct.phone,
+            role: ct.role,
+            company: ct.company,
+            relationship: ct.category,
+            category: (ct.category || 'other') as 'recruiter' | 'mentor' | 'colleague' | 'client' | 'other',
+            relationshipStrength: ct.relationship_strength ?? ct.relationshipStrength ?? 3,
+            status: (ct.status || 'active') as 'active' | 'cold' | 'hot' | 'on-hold',
+            location: ct.location,
+            notes: ct.notes,
+            lastInteracted: ct.last_interacted || '',
+            interactionLogs: ct.interaction_logs || []
+          })) : [];
+
+          const updatedContacts = deduplicateContacts([...remoteContacts, ...localContacts, ...(contacts || [])]);
+          setContacts(updatedContacts);
+          if (currentUser?.email) {
+            const em = currentUser.email.toLowerCase().trim();
+            safeLocalStorageSetItem(`${em}_contacts`, JSON.stringify(updatedContacts));
+            heavyStorage.set(`${em}_contacts`, updatedContacts).catch(() => {});
+          }
+
+          if (userId && updatedContacts.length > 0) {
+            for (const ct of updatedContacts) {
+              const targetId = ensureUUID(ct.id);
+              supabase.from('contacts').upsert({
+                id: targetId,
+                user_id: userId,
+                name: ct.name,
+                email: ct.email || '',
+                phone: ct.phone || '',
+                role: ct.role || '',
+                company: ct.company || '',
+                relationship: ct.relationship || ct.category || 'Professional',
+                category: ct.category || ct.relationship || 'Professional',
+                relationship_strength: ct.relationshipStrength ?? 3,
+                status: ct.status || 'active',
+                location: ct.location || '',
+                notes: ct.notes || '',
+                last_interacted: ct.lastInteracted || '',
+                interaction_logs: ct.interactionLogs || []
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Contact Error]", error);
+              }, (e) => console.warn("[Supabase Sync Contact]", e));
             }
           }
         } catch (err) { console.warn("[Supabase Contacts Load]", err); }
@@ -2918,45 +2949,98 @@ export default function App() {
         // 16. Achievements
         try {
           const aData = aRes.status === 'fulfilled' ? aRes.value.data : null;
-          if (aData && Array.isArray(aData) && aData.length > 0) {
-            const mapped = aData.map(a => ({
-              id: a.id,
-              title: a.title,
-              issuer: a.issuer,
-              date: a.date,
-              description: a.description,
-              badgeUrl: a.badge_url,
-              fileName: a.file_name,
-              fileUrl: a.file_url,
-              isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
-            }));
-            setAchievements(prev => {
-              const merged = deduplicateAchievements(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_achievements`, JSON.stringify(merged));
-              return merged;
-            });
+          let localAchievements: Achievement[] = [];
+          if (email) {
+            try {
+              const raw = localStorage.getItem(`${email}_achievements`);
+              if (raw) localAchievements = JSON.parse(raw);
+            } catch (_) {}
+          }
+          const remoteAchievements = (aData && Array.isArray(aData)) ? aData.map(a => ({
+            id: a.id,
+            title: a.title,
+            issuer: a.issuer,
+            date: a.date,
+            description: a.description,
+            badgeUrl: a.badge_url,
+            fileName: a.file_name,
+            fileUrl: a.file_url,
+            isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
+          })) : [];
+
+          const mergedAch = deduplicateAchievements([...remoteAchievements, ...localAchievements, ...(achievements || [])]);
+          setAchievements(mergedAch);
+          if (currentUser?.email) {
+            const em = currentUser.email.toLowerCase().trim();
+            safeLocalStorageSetItem(`${em}_achievements`, JSON.stringify(mergedAch));
+            heavyStorage.set(`${em}_achievements`, mergedAch).catch(() => {});
+          }
+
+          if (userId && mergedAch.length > 0) {
+            for (const ach of mergedAch) {
+              const targetId = ensureUUID(ach.id);
+              supabase.from('achievements').upsert({
+                id: targetId,
+                user_id: userId,
+                title: ach.title,
+                issuer: ach.issuer,
+                date: ach.date,
+                description: ach.description,
+                badge_url: ach.badgeUrl,
+                is_public: ach.isPublic !== false
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Achievement Error]", error);
+              }, (e) => console.warn("[Supabase Sync Achievement]", e));
+            }
           }
         } catch (err) { console.warn("[Supabase Achievements Load]", err); }
 
         // 17. Testimonials
         try {
           const tData = tRes.status === 'fulfilled' ? tRes.value.data : null;
-          if (tData && Array.isArray(tData) && tData.length > 0) {
-            const mapped = tData.map(t => ({
-              id: t.id,
-              name: t.name,
-              company: t.company,
-              role: t.role,
-              text: t.text,
-              relationship: t.relationship,
-              avatarColor: t.avatar_color,
-              isPublic: t.is_public !== false
-            }));
-            setTestimonials(prev => {
-              const merged = deduplicateTestimonials(mapped);
-              if (currentUser?.email) safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_testimonials`, JSON.stringify(merged));
-              return merged;
-            });
+          let localTestimonials: Testimonial[] = [];
+          if (email) {
+            try {
+              const raw = localStorage.getItem(`${email}_testimonials`);
+              if (raw) localTestimonials = JSON.parse(raw);
+            } catch (_) {}
+          }
+          const remoteTestimonials = (tData && Array.isArray(tData)) ? tData.map(t => ({
+            id: t.id,
+            name: t.name,
+            company: t.company,
+            role: t.role,
+            text: t.text,
+            relationship: t.relationship,
+            avatarColor: t.avatar_color,
+            isPublic: t.is_public !== false
+          })) : [];
+
+          const mergedTestimonials = deduplicateTestimonials([...remoteTestimonials, ...localTestimonials, ...(testimonials || [])]);
+          setTestimonials(mergedTestimonials);
+          if (currentUser?.email) {
+            const em = currentUser.email.toLowerCase().trim();
+            safeLocalStorageSetItem(`${em}_testimonials`, JSON.stringify(mergedTestimonials));
+            heavyStorage.set(`${em}_testimonials`, mergedTestimonials).catch(() => {});
+          }
+
+          if (userId && mergedTestimonials.length > 0) {
+            for (const t of mergedTestimonials) {
+              const targetId = ensureUUID(t.id);
+              supabase.from('testimonials').upsert({
+                id: targetId,
+                user_id: userId,
+                name: t.name,
+                company: t.company,
+                role: t.role,
+                text: t.text,
+                relationship: t.relationship,
+                avatar_color: t.avatarColor,
+                is_public: t.isPublic !== false
+              }).then(({ error }) => {
+                if (error) console.error("[Supabase Sync Testimonial Error]", error);
+              }, (e) => console.warn("[Supabase Sync Testimonial]", e));
+            }
           }
         } catch (err) { console.warn("[Supabase Testimonials Load]", err); }
       } catch (globalErr) {
@@ -4723,14 +4807,22 @@ export default function App() {
   const handleAddAchievement = async (newAch: Omit<Achievement, 'id'>) => {
     const id = generateUUID();
     const ach: Achievement = { ...newAch, id };
-    setAchievements(prev => deduplicateAchievements([ach, ...prev]));
+    const updated = deduplicateAchievements([ach, ...achievements]);
+    setAchievements(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_achievements`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_achievements`, updated).catch(() => {});
+    }
     triggerToast(`Acquired industry award validation!`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('achievements').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           title: newAch.title,
           issuer: newAch.issuer,
           date: newAch.date,
@@ -4744,6 +4836,10 @@ export default function App() {
 
   const handleDeleteAchievement = async (id: string) => {
     const targetId = toUUID(id);
+    const targetItem = achievements.find(a => a.id === id || a.id === targetId || toUUID(a.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'other', targetItem.title || 'Achievement', targetItem.issuer);
+    }
     const updated = achievements.filter(a => a.id !== id && a.id !== targetId);
     setAchievements(updated);
 
@@ -4768,14 +4864,22 @@ export default function App() {
   const handleUpdateAchievement = async (updatedAch: Achievement) => {
     const targetId = ensureUUID(updatedAch.id);
     const item = { ...updatedAch, id: targetId };
-    setAchievements(prev => deduplicateAchievements(prev.map(a => a.id === updatedAch.id ? item : a)));
+    const updated = deduplicateAchievements(achievements.map(a => (a.id === updatedAch.id || a.id === targetId) ? item : a));
+    setAchievements(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_achievements`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_achievements`, updated).catch(() => {});
+    }
     triggerToast(`Updated achievement details: ${updatedAch.title}`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('achievements').upsert({
           id: targetId,
-          user_id: currentUser.id,
+          user_id: userId,
           title: updatedAch.title,
           issuer: updatedAch.issuer,
           date: updatedAch.date,
@@ -4791,14 +4895,22 @@ export default function App() {
   const handleAddTestimonial = async (newRec: Omit<Testimonial, 'id'>) => {
     const id = generateUUID();
     const rec: Testimonial = { ...newRec, id };
-    setTestimonials(prev => deduplicateTestimonials([rec, ...prev]));
+    const updated = deduplicateTestimonials([rec, ...testimonials]);
+    setTestimonials(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_testimonials`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_testimonials`, updated).catch(() => {});
+    }
     triggerToast(`Published peer quote endorsement.`);
 
-    if (currentUser?.id) {
+    const userId = await getActiveUserId();
+    if (userId) {
       try {
         await supabase.from('testimonials').insert({
           id,
-          user_id: currentUser.id,
+          user_id: userId,
           name: newRec.name,
           company: newRec.company,
           role: newRec.role,
@@ -4811,8 +4923,43 @@ export default function App() {
     }
   };
 
+  const handleUpdateTestimonial = async (updatedRec: Testimonial) => {
+    const targetId = ensureUUID(updatedRec.id);
+    const item = { ...updatedRec, id: targetId };
+    const updated = deduplicateTestimonials(testimonials.map(t => (t.id === updatedRec.id || t.id === targetId) ? item : t));
+    setTestimonials(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_testimonials`, JSON.stringify(updated));
+      heavyStorage.set(`${email}_testimonials`, updated).catch(() => {});
+    }
+    triggerToast(`Updated peer quote endorsement: ${updatedRec.name}`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
+      try {
+        await supabase.from('testimonials').upsert({
+          id: targetId,
+          user_id: userId,
+          name: updatedRec.name,
+          company: updatedRec.company,
+          role: updatedRec.role,
+          text: updatedRec.text,
+          relationship: updatedRec.relationship,
+          avatar_color: updatedRec.avatarColor,
+          is_public: updatedRec.isPublic !== false
+        });
+      } catch (err) { console.warn("[Supabase Update Testimonial Error]", err); }
+    }
+  };
+
   const handleDeleteTestimonial = async (id: string) => {
     const targetId = toUUID(id);
+    const targetItem = testimonials.find(t => t.id === id || t.id === targetId || toUUID(t.id) === targetId);
+    if (targetItem) {
+      addDeletedItem(targetItem, 'other', targetItem.name || 'Testimonial', targetItem.company);
+    }
     const updated = testimonials.filter(t => t.id !== id && t.id !== targetId);
     setTestimonials(updated);
 
@@ -6885,6 +7032,7 @@ export default function App() {
               testimonials={testimonials}
               onAddTestimonial={handleAddTestimonial}
               onDeleteTestimonial={handleDeleteTestimonial}
+              onUpdateTestimonial={handleUpdateTestimonial}
             />
           )}
 

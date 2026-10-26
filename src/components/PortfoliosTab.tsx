@@ -152,50 +152,55 @@ export default function PortfoliosTab({
       {/* Grid Link aggregator */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {links.map(link => (
-          <div key={link.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex items-center justify-between group hover:border-emerald-500/20 transition-all">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 text-emerald-400">
+          <div key={link.id} className="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 group hover:border-emerald-500/20 transition-all shadow-sm">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800/80 text-emerald-400 shrink-0">
                 <Globe className="w-5 h-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className={`px-1.5 py-0.2 rounded text-[7px] font-mono uppercase font-bold border ${
+                  <span className={`px-2 py-0.5 rounded text-[8px] font-mono uppercase font-bold border ${
                     link.isPublic !== false 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' 
-                      : 'bg-red-500/10 text-rose-400 border-red-500/10'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-red-500/10 text-rose-400 border-red-500/30'
                   }`}>
                     {link.isPublic !== false ? 'Public' : 'Private'}
                   </span>
                 </div>
-                <p className="text-white text-sm font-semibold mt-1 truncate max-w-xs">{link.label}</p>
+                <p className="text-white text-sm font-semibold mt-1 truncate">{link.label}</p>
+                <p className="text-gray-400 text-[11px] truncate mt-0.5">{link.url}</p>
               </div>
             </div>
 
-            <div className="flex gap-2">
+            {/* Clearly visible Go to Link, Edit, and Delete action buttons with space */}
+            <div className="flex flex-wrap items-center gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/60">
               <a 
                 href={link.url}
                 target="_blank"
                 rel="noreferrer"
-                className="p-1 rounded text-gray-500 hover:text-white hover:bg-slate-800/80 transition"
-                title="Go to link"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 hover:text-emerald-300 text-xs font-semibold transition active:scale-95 shadow-sm"
+                title="Go to link in new tab"
               >
-                <ExternalLink className="w-4 h-4" />
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Visit</span>
               </a>
 
               <button 
                 onClick={() => handleStartEditLink(link)}
-                className="p-1 rounded text-gray-500 hover:text-emerald-400 hover:bg-slate-800/80 cursor-pointer opacity-0 group-hover:opacity-100 transition"
-                title="Edit Link"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-400 hover:text-sky-300 text-xs font-semibold cursor-pointer transition active:scale-95 shadow-sm"
+                title="Edit link"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Edit</span>
               </button>
 
               <button 
                 onClick={() => onDeleteLink(link.id)}
-                className="p-1 rounded text-gray-550 hover:text-rose-450 hover:bg-slate-800/80 cursor-pointer opacity-0 group-hover:opacity-100 transition"
-                title="Delete Link"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 text-xs font-semibold cursor-pointer transition active:scale-95 shadow-sm"
+                title="Delete link"
               >
-                <Trash2 className="w-4 h-4" />
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete</span>
               </button>
             </div>
           </div>

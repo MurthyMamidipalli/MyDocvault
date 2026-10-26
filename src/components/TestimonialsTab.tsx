@@ -1,23 +1,22 @@
 import React, { useState } from 'react';
-import { Plus, Users, Trash2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Plus, Users, Trash2, ShieldCheck, Sparkles, Pencil } from 'lucide-react';
 import { Testimonial } from '../types';
 
 interface TestimonialsTabProps {
   testimonials: Testimonial[];
   onAddTestimonial: (rec: Omit<Testimonial, 'id'>) => void;
   onDeleteTestimonial: (id: string) => void;
+  onUpdateTestimonial?: (rec: Testimonial) => void;
 }
 
 export default function TestimonialsTab({
   testimonials,
   onAddTestimonial,
-  onDeleteTestimonial
+  onDeleteTestimonial,
+  onUpdateTestimonial
 }: TestimonialsTabProps) {
   const [showForm, setShowForm] = useState(false);
-
-  // Delete State
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [deleteName, setDeleteName] = useState<string>('');
+  const [editingTestimonial, setEditingTestimonial] = useState<Testimonial | null>(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -29,32 +28,58 @@ export default function TestimonialsTab({
   // Local AI polishing template state
   const [polishing, setPolishing] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name || !text) return;
+  const handleStartEdit = (rec: Testimonial) => {
+    setEditingTestimonial(rec);
+    setName(rec.name || '');
+    setRole(rec.role || '');
+    setCompany(rec.company || '');
+    setRelationship(rec.relationship || '');
+    setText(rec.text || '');
+    setShowForm(true);
+    document.getElementById('testimonials-pane')?.scrollIntoView({ behavior: 'smooth' });
+  };
 
-    onAddTestimonial({
-      name,
-      role,
-      company,
-      relationship,
-      avatarColor: ['emerald', 'slate', 'indigo', 'sky', 'rose', 'pink'][Math.floor(Math.random() * 6)],
-      text
-    });
-
+  const handleCancelForm = () => {
     setName('');
     setRole('');
     setCompany('');
     setRelationship('');
     setText('');
+    setEditingTestimonial(null);
     setShowForm(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !text) return;
+
+    if (editingTestimonial && onUpdateTestimonial) {
+      onUpdateTestimonial({
+        ...editingTestimonial,
+        name,
+        role,
+        company,
+        relationship,
+        text
+      });
+    } else {
+      onAddTestimonial({
+        name,
+        role,
+        company,
+        relationship,
+        avatarColor: ['emerald', 'slate', 'indigo', 'sky', 'rose', 'pink'][Math.floor(Math.random() * 6)],
+        text
+      });
+    }
+
+    handleCancelForm();
   };
 
   const handleAIMagicRephrase = () => {
     if (!text.trim()) return;
     setPolishing(true);
     setTimeout(() => {
-      // Powerful rephraser simulator
       const prefixes = [
         "Highly technical, reliable, and thorough.",
         "Undeniable master of scalable engineering architecture.",
@@ -85,11 +110,17 @@ export default function TestimonialsTab({
           <p className="text-xs text-gray-400 mt-1">Review validation remarks, endorsements, and validated customer feedback quotes</p>
         </div>
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            if (editingTestimonial) {
+              handleCancelForm();
+            } else {
+              setShowForm(!showForm);
+            }
+          }}
           className="bg-emerald-500 hover:bg-emerald-600 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition shrink-0"
         >
           <Plus className="w-4 h-4" />
-          <span>Publish Endorsement</span>
+          <span>{editingTestimonial ? 'Cancel Edit' : 'Publish Endorsement'}</span>
         </button>
       </div>
 
@@ -164,16 +195,16 @@ export default function TestimonialsTab({
           <div className="flex justify-end gap-2 text-xs font-bold">
             <button 
               type="button" 
-              onClick={() => setShowForm(false)}
+              onClick={handleCancelForm}
               className="border border-slate-800 text-gray-400 px-4 py-2 rounded-xl hover:bg-slate-950 cursor-pointer"
             >
               Cancel
             </button>
             <button 
               type="submit" 
-              className="bg-emerald-500 text-slate-950 px-5 py-2 rounded-xl cursor-pointer"
+              className="bg-emerald-500 text-slate-950 px-5 py-2 rounded-xl cursor-pointer font-bold"
             >
-              Publish Testimonial
+              {editingTestimonial ? 'Update Testimonial' : 'Publish Testimonial'}
             </button>
           </div>
         </form>
@@ -182,85 +213,56 @@ export default function TestimonialsTab({
       {/* Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {testimonials.map(rec => (
-          <div key={rec.id} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl relative group flex flex-col justify-between">
-            <button 
-              onClick={() => {
-                setDeleteId(rec.id);
-                setDeleteName(rec.name);
-              }}
-              className="absolute top-4 right-4 p-1.5 bg-[#0e0e11]/90 hover:bg-rose-950 border border-slate-800 text-gray-400 hover:text-rose-400 rounded-lg cursor-pointer transition select-none opacity-100 md:opacity-0 md:group-hover:opacity-100"
-              title="Delete endorsement"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-
-            <div className="space-y-4">
-              {/* Quote bubble style */}
-              <p className="text-gray-300 text-xs md:text-sm leading-relaxed italic relative">
-                "{rec.text}"
-              </p>
-
-              <div className="flex items-center gap-3 border-t border-slate-850/60 pt-4">
-                <div className={`w-10 h-10 rounded-xl font-bold flex items-center justify-center text-xs border ${getAvatarColor(rec.avatarColor)}`}>
+          <div key={rec.id} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex flex-col justify-between space-y-4 hover:border-emerald-500/20 transition-all shadow-sm">
+            
+            {/* Header: User details & Action Buttons (Edit + Delete) */}
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className={`w-11 h-11 rounded-xl font-bold flex items-center justify-center text-xs border shrink-0 ${getAvatarColor(rec.avatarColor)}`}>
                   {rec.name.split(' ').map(n=>n[0]).join('')}
                 </div>
-                <div>
-                  <h4 className="text-white font-bold text-xs">{rec.name}</h4>
-                  <p className="text-gray-500 text-[10px]">{rec.role} • <strong className="text-gray-450 font-semibold">{rec.company}</strong></p>
+                <div className="min-w-0">
+                  <h4 className="text-white font-bold text-sm tracking-tight truncate">{rec.name}</h4>
+                  <p className="text-gray-400 text-xs truncate">{rec.role} • <strong className="text-gray-300 font-semibold">{rec.company}</strong></p>
                   {rec.relationship && (
-                    <span className="text-[9px] font-mono font-medium text-emerald-400/90 tracking-wide block mt-0.5 uppercase">
+                    <span className="text-[10px] font-mono font-medium text-emerald-400/90 tracking-wide block mt-0.5 uppercase">
                       {rec.relationship}
                     </span>
                   )}
                 </div>
               </div>
+
+              {/* Clearly visible Edit and Delete action buttons with gap-3 */}
+              <div className="flex items-center gap-3 shrink-0">
+                <button 
+                  type="button"
+                  onClick={() => handleStartEdit(rec)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                  title="Edit endorsement"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Edit</span>
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => onDeleteTestimonial(rec.id)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/40 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                  title="Delete endorsement"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
+                </button>
+              </div>
             </div>
+
+            {/* Quote bubble text */}
+            <p className="text-gray-300 text-xs md:text-sm leading-relaxed italic border-t border-slate-850/60 pt-3">
+              "{rec.text}"
+            </p>
           </div>
         ))}
       </div>
-
-      {/* Custom Confirmation Modal overlay for deletion */}
-      {deleteId && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#0e0e11] border border-slate-800/90 rounded-2xl w-full max-w-sm overflow-hidden flex flex-col shadow-2xl p-6 space-y-6">
-            <div className="text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/25 flex items-center justify-center mx-auto text-rose-500">
-                <Trash2 className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-white font-bold text-base font-sans">Delete Testimonial?</h3>
-                <p className="text-xs text-gray-400 leading-relaxed font-sans max-w-xs mx-auto">
-                  Are you absolutely sure you want to delete <strong className="text-gray-200">"{deleteName}"</strong>'s testimonial? This action is permanent and cannot be undone.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setDeleteId(null);
-                  setDeleteName('');
-                }}
-                className="flex-grow py-2.5 text-xs font-semibold border border-slate-800 text-gray-400 hover:text-white rounded-xl hover:bg-slate-950 transition cursor-pointer select-none text-center active:scale-95"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteTestimonial(deleteId);
-                  setDeleteId(null);
-                  setDeleteName('');
-                }}
-                className="flex-grow py-2.5 text-xs bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-lg transition cursor-pointer select-none text-center active:scale-95"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
