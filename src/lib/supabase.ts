@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Environment variable retrieval with safe fallback defaults
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://lmcxjeowowpdhkmqyofn.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_3XCxro5r8LPWlx3sgSxcQA_9ecRjmnB';
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || 'https://lmcxjeowowpdhkmqyofn.supabase.co';
+const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || 'sb_publishable_3XCxro5r8LPWlx3sgSxcQA_9ecRjmnB';
 
 export const isSupabaseConfigured = true;
 

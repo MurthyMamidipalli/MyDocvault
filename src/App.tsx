@@ -1155,6 +1155,20 @@ export default function App() {
   const [resumes, setResumes] = useState<ResumeItem[]>(() => {
     const email = getCurrentUserEmail();
     if (email) {
+      // Exclude tombstoned resumes so deleted records never resurrect
+      const deletedIds = new Set<string>();
+      const deletedNames = new Set<string>();
+      try {
+        const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
+        if (rawDel) {
+          const parsed: any[] = JSON.parse(rawDel);
+          parsed.forEach(d => {
+            if (d.id) deletedIds.add(String(d.id).trim().toLowerCase());
+            if (d.name) deletedNames.add(String(d.name).trim().toLowerCase());
+          });
+        }
+      } catch (_) {}
+
       const saved = localStorage.getItem(`${email}_nexus_vault_resumes`);
       if (saved) {
         try {
@@ -1164,7 +1178,11 @@ export default function App() {
               if (!r) return false;
               if (r.fileName === 'Simulated_Document.pdf') return false;
               const nameLower = (r.name || r.fileName || '').toLowerCase();
-              return !nameLower.includes('simulated') && !nameLower.includes('ai-generated');
+              if (nameLower.includes('simulated') || nameLower.includes('ai-generated')) return false;
+              const rawId = (r.id || '').trim().toLowerCase();
+              if (rawId && deletedIds.has(rawId)) return false;
+              if (nameLower && deletedNames.has(nameLower)) return false;
+              return true;
             }).map((r: any) => ({
               ...r,
               fileUrl: (r.fileUrl && !r.fileUrl.includes('example.com')) ? r.fileUrl : '',
@@ -1894,13 +1912,35 @@ export default function App() {
         }
 
         if (dRes && Array.isArray(dRes) && dRes.length > 0) {
+          const deletedIds = new Set<string>();
+          const deletedNames = new Set<string>();
+          if (email) {
+            try {
+              const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
+              if (rawDel) {
+                const parsed: any[] = JSON.parse(rawDel);
+                parsed.forEach(d => {
+                  if (d.id) {
+                    deletedIds.add(String(d.id).trim().toLowerCase());
+                    deletedIds.add(toUUID(String(d.id)).toLowerCase());
+                  }
+                  if (d.name) deletedNames.add(String(d.name).trim().toLowerCase());
+                });
+              }
+            } catch (_) {}
+          }
+
           setResumes(prev => {
             const existing = prev || [];
             const sanitizedDRes = dRes.filter((d: any) => {
               if (!d) return false;
               if (d.fileName === 'Simulated_Document.pdf') return false;
               const nameLower = (d.name || d.fileName || '').toLowerCase();
-              return !nameLower.includes('simulated') && !nameLower.includes('ai-generated');
+              if (nameLower.includes('simulated') || nameLower.includes('ai-generated')) return false;
+              const rawId = (d.id || '').trim().toLowerCase();
+              if (rawId && (deletedIds.has(rawId) || deletedIds.has(toUUID(rawId).toLowerCase()))) return false;
+              if (nameLower && deletedNames.has(nameLower)) return false;
+              return true;
             }).map((d: any) => ({
               ...d,
               fileUrl: (d.fileUrl && !d.fileUrl.includes('example.com')) ? d.fileUrl : '',
@@ -2531,6 +2571,57 @@ export default function App() {
         try {
           const resData = resRes.status === 'fulfilled' ? resRes.value.data : null;
           let remoteResumes: ResumeItem[] = [];
+
+          // Read deleted resume tombstones to prevent resurrecting deleted resumes on refresh
+          const deletedResumeIds = new Set<string>();
+          const deletedResumeNames = new Set<string>();
+          const deletedResumeUrls = new Set<string>();
+          if (email) {
+            try {
+              const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
+              if (rawDel) {
+                const parsed: any[] = JSON.parse(rawDel);
+                parsed.forEach(d => {
+                  if (d.id) {
+                    deletedResumeIds.add(String(d.id).trim().toLowerCase());
+                    deletedResumeIds.add(toUUID(String(d.id)).toLowerCase());
+                  }
+                  if (d.name) {
+                    deletedResumeNames.add(String(d.name).trim().toLowerCase());
+                  }
+                  if (d.url && !String(d.url).startsWith('data:')) {
+                    deletedResumeUrls.add(String(d.url).trim().toLowerCase());
+                  }
+                });
+              }
+            } catch (_) {}
+          }
+
+          const isResumeNotDeleted = (r: any) => {
+            if (!r) return false;
+            const rawId = (r.id || '').trim().toLowerCase();
+            const idKey = rawId ? toUUID(rawId).toLowerCase() : '';
+            if (rawId && (deletedResumeIds.has(rawId) || (idKey && deletedResumeIds.has(idKey)))) return false;
+            const cleanName = (r.name || r.fileName || r.title || '').trim().toLowerCase();
+            if (cleanName && deletedResumeNames.has(cleanName)) return false;
+            const rawUrl = (r.fileUrl || r.fileDataUrl || '').trim().toLowerCase();
+            if (rawUrl && !rawUrl.startsWith('data:') && deletedResumeUrls.has(rawUrl)) return false;
+            return true;
+          };
+
+          // Background purge from Supabase for any resumes previously marked deleted
+          if (userId && (deletedResumeIds.size > 0 || deletedResumeNames.size > 0)) {
+            for (const dId of deletedResumeIds) {
+              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dId)) {
+                supabase.from('resumes').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
+              }
+            }
+            for (const dName of deletedResumeNames) {
+              supabase.from('resumes').delete().eq('user_id', userId).eq('file_name', dName).then(() => {}, () => {});
+              supabase.from('resumes').delete().eq('user_id', userId).eq('title', dName).then(() => {}, () => {});
+            }
+          }
+
           if (resData && Array.isArray(resData) && resData.length > 0) {
             for (const r of resData) {
               if (r.file_type === 'Link' || r.type === 'Link') {
@@ -2553,6 +2644,14 @@ export default function App() {
             });
             remoteResumes = userRes.map(r => {
               const url = (r.file_url && !r.file_url.includes('example.com')) ? r.file_url : '';
+              const formatSize = typeof r.file_size === 'number' && r.file_size > 0
+                ? (r.file_size >= 1073741824 
+                    ? `${(r.file_size / 1073741824).toFixed(2)} GB`
+                    : (r.file_size >= 1048576 
+                        ? `${(r.file_size / 1048576).toFixed(1)} MB` 
+                        : `${Math.round(r.file_size / 1024)} KB`))
+                : (r.file_size || 'Document');
+
               return {
                 id: r.id,
                 name: r.title || r.file_name,
@@ -2561,7 +2660,7 @@ export default function App() {
                 fileUrl: url,
                 fileDataUrl: url,
                 storagePath: r.storage_path,
-                size: r.file_size,
+                size: formatSize,
                 fileSize: r.file_size,
                 type: r.file_type || 'Resume',
                 fileType: r.file_type,
@@ -2571,7 +2670,7 @@ export default function App() {
                 uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
                 category: 'SUPABASE'
               };
-            });
+            }).filter(isResumeNotDeleted);
           }
 
           let localResumes: ResumeItem[] = [];
@@ -2585,7 +2684,7 @@ export default function App() {
             if (r.fileName === 'Simulated_Document.pdf') return false;
             const clean = (r.name || r.fileName || '').toLowerCase();
             return !clean.includes('simulated') && !clean.includes('ai-generated');
-          });
+          }).filter(isResumeNotDeleted);
 
           // Merge: Preserve genuine local base64 fileDataUrl if remote is empty or example.com
           const merged = remoteResumes.map(rem => {
@@ -2602,7 +2701,9 @@ export default function App() {
           if (currentUser?.email) {
             const em = currentUser.email.toLowerCase().trim();
             safeLocalStorageSetItem(`${em}_nexus_vault_resumes`, JSON.stringify(allResumes));
+            safeLocalStorageSetItem('global_nexus_vault_resumes', JSON.stringify(allResumes));
             heavyStorage.set(`${em}_nexus_vault_resumes`, allResumes).catch(() => {});
+            heavyStorage.set('global_nexus_vault_resumes', allResumes).catch(() => {});
           }
         } catch (err) { console.warn("[Supabase Resumes Load]", err); }
 
@@ -5593,6 +5694,73 @@ export default function App() {
     }
   };
 
+  // Resumes add handler for single or multiple document uploads
+  const handleAddResumes = async (newItems: ResumeItem[]) => {
+    if (!newItems || newItems.length === 0) return;
+    const combined = deduplicateResumes([...newItems, ...resumes]);
+    await handleUpdateResumes(combined);
+    triggerToast(`Added ${newItems.length} ${newItems.length === 1 ? 'document' : 'documents'} to vault.`);
+  };
+
+  // Dedicated single / batch resume delete handler with tombstone & Supabase purge
+  const handleDeleteResume = async (id: string) => {
+    const targetId = toUUID(id);
+    const targetResume = resumes.find(r => r.id === id || r.id === targetId || toUUID(r.id) === targetId);
+    const targetName = targetResume?.name || targetResume?.fileName || '';
+    const targetUrl = targetResume?.fileUrl || targetResume?.fileDataUrl || '';
+
+    if (targetResume) {
+      addDeletedItem(targetResume, 'other', targetResume.name || 'Resume', targetResume.type || 'Resume & CV');
+    }
+
+    const updated = resumes.filter(r => {
+      if (r.id === id || r.id === targetId || toUUID(r.id) === targetId) return false;
+      if (targetName && (r.fileName === targetName || r.name === targetName)) return false;
+      return true;
+    });
+
+    setResumes(updated);
+
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    if (email) {
+      safeLocalStorageSetItem(`${email}_nexus_vault_resumes`, JSON.stringify(updated));
+      safeLocalStorageSetItem('global_nexus_vault_resumes', JSON.stringify(updated));
+      heavyStorage.set(`${email}_nexus_vault_resumes`, updated).catch(() => {});
+      heavyStorage.set('global_nexus_vault_resumes', updated).catch(() => {});
+
+      // Persist tombstone to prevent resurrection from Supabase background re-fetches or IndexedDB
+      try {
+        const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
+        const delList: { id?: string; name?: string; url?: string }[] = rawDel ? JSON.parse(rawDel) : [];
+        delList.push({ id, name: targetName, url: targetUrl });
+        if (targetId && targetId !== id) delList.push({ id: targetId, name: targetName, url: targetUrl });
+        safeLocalStorageSetItem(`${email}_deleted_resumes`, JSON.stringify(delList));
+        heavyStorage.set(`${email}_deleted_resumes`, delList).catch(() => {});
+      } catch (_) {}
+    }
+    triggerToast(`Removed "${targetName || 'Resume'}" from vault.`);
+
+    const userId = await getActiveUserId();
+    if (userId) {
+      try {
+        await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
+        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+          await supabase.from('resumes').delete().eq('id', id).eq('user_id', userId);
+        }
+        if (targetName) {
+          await supabase.from('resumes').delete().eq('user_id', userId).eq('file_name', targetName);
+          await supabase.from('resumes').delete().eq('user_id', userId).eq('title', targetName);
+        }
+        if (targetUrl && !targetUrl.startsWith('data:')) {
+          await supabase.from('resumes').delete().eq('user_id', userId).eq('file_url', targetUrl);
+        }
+        if (targetResume?.storagePath) {
+          deleteFileFromSupabaseStorage(STORAGE_BUCKETS.RESUMES, targetResume.storagePath).catch(() => {});
+        }
+      } catch (err) { console.warn("[Supabase Delete Resume Error]", err); }
+    }
+  };
+
   // Resumes update handler
   const handleUpdateResumes = async (newResumes: ResumeItem[]) => {
     // Filter out simulated or AI-generated resumes
@@ -5611,17 +5779,47 @@ export default function App() {
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     if (email) {
       safeLocalStorageSetItem(`${email}_nexus_vault_resumes`, JSON.stringify(cleanResumes));
+      safeLocalStorageSetItem('global_nexus_vault_resumes', JSON.stringify(cleanResumes));
       heavyStorage.set(`${email}_nexus_vault_resumes`, cleanResumes).catch(() => {});
+      heavyStorage.set('global_nexus_vault_resumes', cleanResumes).catch(() => {});
+
+      if (deletedResumes.length > 0) {
+        try {
+          const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
+          const delList: { id?: string; name?: string; url?: string }[] = rawDel ? JSON.parse(rawDel) : [];
+          for (const d of deletedResumes) {
+            delList.push({ id: d.id, name: d.name || d.fileName, url: d.fileUrl || d.fileDataUrl });
+            const targetId = toUUID(d.id);
+            if (targetId && targetId !== d.id) {
+              delList.push({ id: targetId, name: d.name || d.fileName, url: d.fileUrl || d.fileDataUrl });
+            }
+          }
+          safeLocalStorageSetItem(`${email}_deleted_resumes`, JSON.stringify(delList));
+          heavyStorage.set(`${email}_deleted_resumes`, delList).catch(() => {});
+        } catch (_) {}
+      }
     }
 
     const userId = await getActiveUserId();
     if (userId) {
       for (const del of deletedResumes) {
         const targetId = toUUID(del.id);
+        const delName = del.name || del.fileName || '';
+        const delUrl = del.fileUrl || del.fileDataUrl || '';
         try {
           await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
           if (del.id && del.id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(del.id)) {
             await supabase.from('resumes').delete().eq('id', del.id).eq('user_id', userId);
+          }
+          if (delName) {
+            await supabase.from('resumes').delete().eq('user_id', userId).eq('file_name', delName);
+            await supabase.from('resumes').delete().eq('user_id', userId).eq('title', delName);
+          }
+          if (delUrl && !delUrl.startsWith('data:')) {
+            await supabase.from('resumes').delete().eq('user_id', userId).eq('file_url', delUrl);
+          }
+          if (del.storagePath) {
+            deleteFileFromSupabaseStorage(STORAGE_BUCKETS.RESUMES, del.storagePath).catch(() => {});
           }
         } catch (err) { console.warn("[Supabase Delete Resume Error]", err); }
       }
@@ -5630,20 +5828,33 @@ export default function App() {
         for (const r of cleanResumes) {
           const targetId = ensureUUID(r.id);
           try {
-            // Convert string size (e.g. "120 KB") to integer for PostgreSQL BIGINT
+            // Convert string size (e.g. "120 KB", "1.5 MB", "0.5 GB") to integer for PostgreSQL BIGINT
             let numericSize = 0;
             if (typeof r.size === 'number') {
               numericSize = r.size;
             } else if (typeof r.size === 'string') {
-              const parsed = parseInt(r.size.replace(/[^0-9]/g, ''), 10);
-              numericSize = isNaN(parsed) ? 0 : parsed;
+              const str = r.size.toUpperCase();
+              const num = parseFloat(str.replace(/[^0-9.]/g, '')) || 0;
+              if (str.includes('GB')) {
+                numericSize = Math.round(num * 1024 * 1024 * 1024);
+              } else if (str.includes('MB')) {
+                numericSize = Math.round(num * 1024 * 1024);
+              } else if (str.includes('KB')) {
+                numericSize = Math.round(num * 1024);
+              } else {
+                numericSize = Math.round(num);
+              }
             } else if (r.fileSize) {
               const parsed = parseInt(String(r.fileSize).replace(/[^0-9]/g, ''), 10);
               numericSize = isNaN(parsed) ? 0 : parsed;
             }
 
             const rawUrl = r.fileUrl || r.fileDataUrl || r.linkUrl || '';
-            const cleanUrl = rawUrl.includes('example.com') ? (r.linkUrl || '') : rawUrl;
+            let cleanUrl = rawUrl.includes('example.com') ? (r.linkUrl || '') : rawUrl;
+            // Guard against PostgREST 413 payload limit by trimming massive base64 for database rows
+            if (cleanUrl.startsWith('data:') && cleanUrl.length > 1000000) {
+              cleanUrl = r.linkUrl || `vault://${encodeURIComponent(r.fileName || r.name || 'resume.pdf')}`;
+            }
 
             const { error } = await supabase.from('resumes').upsert({
               id: targetId,
@@ -5943,6 +6154,49 @@ export default function App() {
         const updated = deduplicateDocuments([restored, ...documents]);
         safeLocalStorageSetItem(`${email}_documents`, JSON.stringify(updated));
       }
+    } else if (item.itemType === 'resume' || (item.data && (item.data as any).fileName && (item.title?.toLowerCase().includes('resume') || item.subtitle?.toLowerCase().includes('resume')))) {
+      const restored = item.data as ResumeItem;
+      setResumes(prev => deduplicateResumes([restored, ...prev]));
+      const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+      if (email) {
+        const updated = deduplicateResumes([restored, ...resumes]);
+        safeLocalStorageSetItem(`${email}_nexus_vault_resumes`, JSON.stringify(updated));
+        safeLocalStorageSetItem('global_nexus_vault_resumes', JSON.stringify(updated));
+        heavyStorage.set(`${email}_nexus_vault_resumes`, updated).catch(() => {});
+        heavyStorage.set('global_nexus_vault_resumes', updated).catch(() => {});
+
+        // Un-tombstone the restored resume
+        try {
+          const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
+          if (rawDel) {
+            const parsed: any[] = JSON.parse(rawDel);
+            const filtered = parsed.filter(d => d.id !== restored.id && d.name !== (restored.name || restored.fileName));
+            safeLocalStorageSetItem(`${email}_deleted_resumes`, JSON.stringify(filtered));
+            heavyStorage.set(`${email}_deleted_resumes`, filtered).catch(() => {});
+          }
+        } catch (_) {}
+      }
+      getActiveUserId().then(userId => {
+        if (userId) {
+          const targetId = ensureUUID(restored.id);
+          const rawUrl = restored.fileUrl || restored.fileDataUrl || '';
+          let cleanUrl = rawUrl.includes('example.com') ? '' : rawUrl;
+          if (cleanUrl.startsWith('data:') && cleanUrl.length > 1000000) {
+            cleanUrl = `vault://${encodeURIComponent(restored.fileName || restored.name || 'resume.pdf')}`;
+          }
+          supabase.from('resumes').upsert({
+            id: targetId,
+            user_id: userId,
+            title: restored.name || 'Resume',
+            file_name: restored.fileName || 'resume.pdf',
+            file_url: cleanUrl,
+            storage_path: restored.storagePath || '',
+            file_size: 0,
+            file_type: restored.type || 'Resume',
+            is_public: restored.visibility === 'public'
+          }).then(() => {}, () => {});
+        }
+      });
     }
 
     // Remove from oldData
@@ -5983,6 +6237,8 @@ export default function App() {
         const targetId = ensureUUID(id);
         supabase.from('others').delete().eq('id', targetId).eq('user_id', userId).then(() => {}, () => {});
         supabase.from('others').delete().eq('id', id).eq('user_id', userId).then(() => {}, () => {});
+        supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId).then(() => {}, () => {});
+        supabase.from('resumes').delete().eq('id', id).eq('user_id', userId).then(() => {}, () => {});
       }
     });
 
@@ -7503,6 +7759,8 @@ export default function App() {
               onUpdateLink={handleUpdateLink}
               resumes={resumes}
               onUpdateResumes={handleUpdateResumes}
+              onDeleteResume={handleDeleteResume}
+              onAddResumes={handleAddResumes}
             />
           )}
 

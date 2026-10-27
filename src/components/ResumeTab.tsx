@@ -18,7 +18,9 @@ import {
   ExternalLink,
   Check,
   FileCheck,
-  Download
+  Download,
+  AlertCircle,
+  Files
 } from 'lucide-react';
 import { 
   PersonalProfile, 
@@ -33,6 +35,16 @@ import {
 import { heavyStorage } from '../lib/heavyStorage';
 import { openPdfInNewTab, downloadFileUrl, dataUrlToBlobUrl } from '../lib/pdfUtils';
 
+export interface SelectedUploadFile {
+  id: string;
+  name: string;
+  size: string;
+  rawSize: number;
+  dataUrl?: string;
+  fileObj?: File;
+  type?: string;
+}
+
 interface ResumeTabProps {
   profile: PersonalProfile;
   skills: Skill[];
@@ -45,6 +57,8 @@ interface ResumeTabProps {
   onUpdateLink: (link: PortfolioLink) => void;
   resumes: ResumeItem[];
   onUpdateResumes: (resumes: ResumeItem[]) => void;
+  onDeleteResume?: (id: string) => void;
+  onAddResumes?: (newResumes: ResumeItem[]) => void;
 }
 
 export default function ResumeTab({
@@ -58,7 +72,9 @@ export default function ResumeTab({
   onDeleteLink,
   onUpdateLink,
   resumes,
-  onUpdateResumes
+  onUpdateResumes,
+  onDeleteResume,
+  onAddResumes
 }: ResumeTabProps) {
   // Tabs and State indicators
   const [activeSubTab, setActiveSubTab] = useState<'documents' | 'links'>('documents');
@@ -70,10 +86,20 @@ export default function ResumeTab({
   const [editingResume, setEditingResume] = useState<ResumeItem | null>(null);
   const [editingLink, setEditingLink] = useState<PortfolioLink | null>(null);
 
-  const emailLower = (profile.email || '').toLowerCase().trim();
-  const storageKey = `${emailLower || 'global'}_nexus_vault_resumes`;
+  // Resolve user email accurately to match App.tsx localStorage & IndexedDB keys
+  const resolvedEmail = (profile.email || '').toLowerCase().trim() || (() => {
+    try {
+      const u = localStorage.getItem('nexus_current_user');
+      if (u) {
+        const parsed = JSON.parse(u);
+        return (parsed.email || '').toLowerCase().trim();
+      }
+    } catch (_) {}
+    return 'global';
+  })();
+  const storageKey = `${resolvedEmail}_nexus_vault_resumes`;
 
-  // Keep resumes synchronized with storage
+  // Keep resumes synchronized with storage across all devices & sessions
   const saveResumesToStorage = (updatedResumes: ResumeItem[]) => {
     onUpdateResumes(updatedResumes);
 
@@ -81,9 +107,15 @@ export default function ResumeTab({
     heavyStorage.set(storageKey, updatedResumes).catch(dbErr => {
       console.error(`IndexedDB put failed for resumes:`, dbErr);
     });
+    if (storageKey !== 'global_nexus_vault_resumes') {
+      heavyStorage.set('global_nexus_vault_resumes', updatedResumes).catch(() => {});
+    }
 
     try {
       localStorage.setItem(storageKey, JSON.stringify(updatedResumes));
+      if (storageKey !== 'global_nexus_vault_resumes') {
+        localStorage.setItem('global_nexus_vault_resumes', JSON.stringify(updatedResumes));
+      }
     } catch (error) {
       console.error(`Failed to save resumes to localStorage:`, error);
     }
@@ -106,10 +138,28 @@ export default function ResumeTab({
   const [visibility, setVisibility] = useState<'public' | 'private'>('private');
   const [isVisibilityDropdownOpen, setIsVisibilityDropdownOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ name: string; size: string; dataUrl?: string } | null>(null);
+  
+  // Multi-file upload states with 1GB per-file support & unlimited files
+  const [selectedFiles, setSelectedFiles] = useState<SelectedUploadFile[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const [isDragging, setIsDragging] = useState(false);
   const [sourceType, setSourceType] = useState<'file' | 'link'>('file');
   const [docLinkUrl, setDocLinkUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Maximum allowed file size per document is 1GB (1,073,741,824 bytes)
+  const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes >= 1024 * 1024 * 1024) {
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    }
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${Math.round(bytes / 1024)} KB`;
+  };
 
   // State managers for Link Form Data
   const [linkPlatform, setLinkPlatform] = useState('');
@@ -147,85 +197,195 @@ export default function ResumeTab({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(e.target.files);
     }
+    if (e.target) e.target.value = '';
   };
 
-  const processFile = (file: File) => {
-    const sizeKB = Math.round(file.size / 1024);
-    const sizeDisplay = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
-    
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setSelectedFile({
-        name: file.name,
-        size: sizeDisplay,
-        dataUrl: event.target?.result as string
-      });
-      // Fast record auto-naming if user hasn't specified one yet
-      if (!recordName) {
-        setRecordName(file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " "));
+  // Process single or multiple files (accepting files up to 1GB each, unlimited files)
+  const processFiles = (fileList: FileList | File[]) => {
+    setUploadError(null);
+    const filesArray = Array.from(fileList);
+    if (filesArray.length === 0) return;
+
+    // Check 1GB size limit
+    const oversized = filesArray.filter(f => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      const names = oversized.map(f => `${f.name} (${formatFileSize(f.size)})`).join(', ');
+      setUploadError(`The following file(s) exceed the 1GB limit and were skipped: ${names}. Each file must be under 1GB.`);
+    }
+
+    const validFiles = filesArray.filter(f => f.size <= MAX_FILE_SIZE);
+    if (validFiles.length === 0) return;
+
+    validFiles.forEach(file => {
+      const formattedSize = formatFileSize(file.size);
+      const fileId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+
+        setSelectedFiles(prev => {
+          if (prev.some(f => f.name === file.name && f.rawSize === file.size)) return prev;
+          return [
+            ...prev,
+            {
+              id: fileId,
+              name: file.name,
+              size: formattedSize,
+              rawSize: file.size,
+              dataUrl,
+              fileObj: file,
+              type: documentType
+            }
+          ];
+        });
+
+        // Set single file preview as well for backward compatibility
+        setSelectedFile({
+          name: file.name,
+          size: formattedSize,
+          dataUrl
+        });
+
+        // Auto record naming for first file if user hasn't typed one
+        setRecordName(curr => curr || file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " "));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleRemoveSelectedFile = (id: string) => {
+    setSelectedFiles(prev => {
+      const filtered = prev.filter(f => f.id !== id);
+      if (filtered.length === 0) {
+        setSelectedFile(null);
+      } else {
+        setSelectedFile({
+          name: filtered[0].name,
+          size: filtered[0].size,
+          dataUrl: filtered[0].dataUrl
+        });
       }
-    };
-    reader.readAsDataURL(file);
+      return filtered;
+    });
   };
 
-  // Submit secure uploads
+  // Submit secure uploads (handles single & multiple files, up to 1GB each, unlimited files)
   const handleSaveResume = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recordName.trim()) return;
+    setUploadError(null);
 
-    if (sourceType === 'file' && !selectedFile && !editingResume?.fileDataUrl) {
-      alert('Please select a PDF document file to upload.');
-      return;
-    }
+    if (sourceType === 'file') {
+      if (editingResume) {
+        // Updating existing resume entry
+        const activeFile = selectedFiles[0] || selectedFile;
+        const finalFileName = activeFile?.name || editingResume.fileName || "Resume.pdf";
+        const finalSize = activeFile?.size || editingResume.size || "Document";
+        const finalDataUrl = activeFile?.dataUrl || editingResume.fileDataUrl;
 
-    if (sourceType === 'link' && !docLinkUrl.trim()) {
-      alert('Please enter a valid document link URL.');
-      return;
-    }
+        const updatedResume: ResumeItem = {
+          ...editingResume,
+          name: recordName.trim() || editingResume.name,
+          type: documentType,
+          visibility: visibility,
+          fileName: finalFileName,
+          size: finalSize,
+          category: documentType,
+          fileDataUrl: finalDataUrl,
+          fileUrl: finalDataUrl
+        };
 
-    let finalFileName = editingResume?.fileName || "Resume.pdf";
-    let finalSize = editingResume?.size || "Document";
+        saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? updatedResume : r));
+      } else {
+        // Creating new resume entry or multiple resume entries
+        const filesToSave = selectedFiles.length > 0 
+          ? selectedFiles 
+          : (selectedFile ? [{
+              id: generateUUID(),
+              name: selectedFile.name,
+              size: selectedFile.size,
+              rawSize: 0,
+              dataUrl: selectedFile.dataUrl,
+              type: documentType
+            }] : []);
 
-    if (sourceType === 'file' && selectedFile) {
-      finalFileName = selectedFile.name;
-      finalSize = selectedFile.size;
-    } else if (sourceType === 'link') {
-      finalFileName = docLinkUrl ? docLinkUrl.replace(/(^\w+:|^)\/\//, '').substring(0, 30) : "External Link";
-      finalSize = "Cloud Link";
-    }
+        if (filesToSave.length === 0) {
+          setUploadError('Please select at least one document or PDF file to upload.');
+          return;
+        }
 
-    const newResume: ResumeItem = {
-      id: editingResume ? editingResume.id : generateUUID(),
-      name: recordName.trim(),
-      type: documentType,
-      visibility: visibility,
-      fileName: finalFileName,
-      size: finalSize,
-      uploadDate: new Date().toISOString().split('T')[0],
-      category: documentType,
-      fileDataUrl: sourceType === 'file' ? (selectedFile?.dataUrl || editingResume?.fileDataUrl) : undefined,
-      linkUrl: sourceType === 'link' ? docLinkUrl : undefined
-    };
+        const newItems: ResumeItem[] = filesToSave.map((sf, index) => {
+          const cleanTitle = (filesToSave.length === 1 && recordName.trim())
+            ? recordName.trim()
+            : sf.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
 
-    if (editingResume) {
-      saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? newResume : r));
+          return {
+            id: generateUUID(),
+            name: cleanTitle || `Resume Document ${index + 1}`,
+            type: sf.type || documentType,
+            visibility: visibility,
+            fileName: sf.name,
+            size: sf.size,
+            uploadDate: new Date().toISOString().split('T')[0],
+            category: sf.type || documentType,
+            fileDataUrl: sf.dataUrl,
+            fileUrl: sf.dataUrl
+          };
+        });
+
+        if (onAddResumes) {
+          onAddResumes(newItems);
+        } else {
+          saveResumesToStorage([...newItems, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
+        }
+      }
     } else {
-      saveResumesToStorage([newResume, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
+      // Link source type
+      if (!docLinkUrl.trim()) {
+        setUploadError('Please enter a valid document link URL.');
+        return;
+      }
+      const finalFileName = docLinkUrl ? docLinkUrl.replace(/(^\w+:|^)\/\//, '').substring(0, 30) : "External Link";
+      const cleanUrl = docLinkUrl.trim().startsWith('http') ? docLinkUrl.trim() : `https://${docLinkUrl.trim()}`;
+
+      const newResume: ResumeItem = {
+        id: editingResume ? editingResume.id : generateUUID(),
+        name: recordName.trim() || finalFileName,
+        type: documentType,
+        visibility: visibility,
+        fileName: finalFileName,
+        size: "Cloud Link",
+        uploadDate: new Date().toISOString().split('T')[0],
+        category: documentType,
+        linkUrl: cleanUrl,
+        fileUrl: cleanUrl
+      };
+
+      if (editingResume) {
+        saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? newResume : r));
+      } else {
+        if (onAddResumes) {
+          onAddResumes([newResume]);
+        } else {
+          saveResumesToStorage([newResume, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
+        }
+      }
     }
 
     // Reset fields
     setRecordName('');
-    setDocumentType('Resume & CV');
+    setDocumentType('Resume');
     setVisibility('private');
+    setSelectedFiles([]);
     setSelectedFile(null);
     setDocLinkUrl('');
     setSourceType('file');
@@ -237,17 +397,23 @@ export default function ResumeTab({
   const handleStartEdit = (res: ResumeItem) => {
     setEditingResume(res);
     setRecordName(res.name);
-    setDocumentType(res.type);
-    setVisibility(res.visibility);
+    setDocumentType(res.type || 'Resume');
+    setVisibility(res.visibility || 'private');
+    setSelectedFiles([]);
     setSelectedFile(res.fileName && !res.linkUrl ? { name: res.fileName, size: res.size, dataUrl: res.fileDataUrl } : null);
     setSourceType(res.linkUrl ? 'link' : 'file');
     setDocLinkUrl(res.linkUrl || '');
+    setUploadError(null);
     setShowUploadModal(true);
   };
 
-  // Delete action
+  // Delete action (invokes dedicated onDeleteResume handler to purge from Supabase & prevent resurrection)
   const handleDeleteResume = (id: string) => {
-    saveResumesToStorage(resumes.filter(r => r.id !== id));
+    if (onDeleteResume) {
+      onDeleteResume(id);
+    } else {
+      saveResumesToStorage(resumes.filter(r => r.id !== id));
+    }
   };
 
   // Start Edit Link action
@@ -598,15 +764,30 @@ export default function ResumeTab({
 
             </div>
 
+            {/* Upload error display */}
+            {uploadError && (
+              <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 text-xs flex items-center gap-2.5 animate-shake">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
             {/* Source Method Option Box and Toggle Section */}
             {sourceType === 'file' ? (
-              <div className="space-y-2">
-                <div className="flex justify-end pr-1">
+              <div className="space-y-3">
+                <div className="flex justify-between items-center pr-1">
+                  <span className="text-[11px] text-gray-400 font-mono">
+                    {selectedFiles.length > 0 
+                      ? `${selectedFiles.length} ${selectedFiles.length === 1 ? 'file' : 'files'} selected` 
+                      : 'Accepts files < 1GB • Unlimited files'}
+                  </span>
                   <button
                     type="button"
                     onClick={() => {
                       setSourceType('link');
                       setSelectedFile(null);
+                      setSelectedFiles([]);
+                      setUploadError(null);
                     }}
                     className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 transition duration-155 cursor-pointer select-none"
                   >
@@ -619,47 +800,91 @@ export default function ResumeTab({
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-8 transition-all flex flex-col items-center justify-center gap-3 bg-[#08090d] cursor-pointer relative ${
+                  className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 transition-all flex flex-col items-center justify-center gap-3 bg-[#08090d] cursor-pointer relative ${
                     isDragging 
                       ? 'border-emerald-500 bg-[#080d0d]' 
                       : 'border-slate-800/85 hover:border-slate-700/80 hover:bg-[#0c0e12]'
                   }`}
-                  title="Click or drag to select document files"
+                  title="Click or drag to select document files (multiple allowed, up to 1GB each)"
                 >
                   <input 
                     type="file" 
                     ref={fileInputRef} 
                     onChange={handleFileSelect} 
-                    accept=".pdf,.doc,.docx,.png,.txt"
+                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
+                    multiple
                     className="hidden" 
                   />
 
-                  {selectedFile ? (
-                    <>
-                      <FileCheck className="w-10 h-10 text-emerald-400 animate-pulse stroke-[1.5]" />
-                      <div className="text-center">
-                        <p className="text-xs font-bold text-white max-w-[280px] truncate select-none">
-                          {selectedFile.name}
-                        </p>
-                        <p className="text-[10px] text-emerald-400 font-bold font-mono mt-0.5 select-none">
-                          Ready to Upload ({selectedFile.size})
-                        </p>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <CloudUpload className="w-10 h-10 text-slate-500 stroke-[1.5]" />
-                      <div className="text-center">
-                        <p className="text-xs font-bold text-gray-300 font-mono select-none">
-                          Select Files (Max 20MB)
-                        </p>
-                        <p className="text-[10px] text-gray-500 font-medium select-none mt-1">
-                          Supports PDF, PNG and DOCX files.
-                        </p>
-                      </div>
-                    </>
-                  )}
+                  <CloudUpload className="w-10 h-10 text-emerald-400/80 stroke-[1.5]" />
+                  <div className="text-center">
+                    <p className="text-xs sm:text-sm font-bold text-gray-200 select-none">
+                      {selectedFiles.length > 0 ? '+ Click to Add More Files' : 'Select or Drag & Drop Documents'}
+                    </p>
+                    <p className="text-[11px] text-emerald-400 font-semibold font-mono select-none mt-1">
+                      Accepts files &lt; 1GB each • Add unlimited files • Multiple file upload
+                    </p>
+                    <p className="text-[10px] text-gray-500 select-none mt-0.5">
+                      Supports PDF, DOC, DOCX, PNG, JPG, and TXT
+                    </p>
+                  </div>
                 </div>
+
+                {/* Selected Files Queue List (Multiple Documents Display) */}
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-2 mt-3 pt-2 border-t border-slate-900">
+                    <div className="flex justify-between items-center px-1 text-xs">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <Files className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Ready to Upload ({selectedFiles.length})</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedFiles([]);
+                          setSelectedFile(null);
+                        }}
+                        className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold cursor-pointer select-none"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+
+                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                      {selectedFiles.map((f, idx) => (
+                        <div 
+                          key={f.id}
+                          className="flex items-center justify-between p-2.5 bg-slate-950/70 border border-slate-850 rounded-xl gap-2 hover:border-slate-800 transition"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <span className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center justify-center shrink-0">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-white truncate" title={f.name}>
+                                {f.name}
+                              </p>
+                              <p className="text-[10px] text-gray-400 font-mono">
+                                {f.size}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(ev) => {
+                              ev.stopPropagation();
+                              handleRemoveSelectedFile(f.id);
+                            }}
+                            className="p-1 rounded-lg text-gray-500 hover:text-rose-400 hover:bg-rose-950/30 transition cursor-pointer"
+                            title="Remove file from upload queue"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               /* Link URL Input Field */
@@ -694,7 +919,11 @@ export default function ResumeTab({
               className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-4 rounded-2xl transition duration-200 cursor-pointer text-center text-sm shadow-md shadow-emerald-500/10 active:scale-[0.99] block select-none mt-4"
               style={{ backgroundColor: '#10b981' }}
             >
-              {editingResume ? 'Update Record Parameters' : 'Save Record in Vault'}
+              {editingResume 
+                ? 'Update Record Parameters' 
+                : (selectedFiles.length > 1 
+                    ? `Upload All ${selectedFiles.length} Documents & Resumes` 
+                    : 'Save Record in Vault')}
             </button>
 
           </form>
@@ -904,21 +1133,23 @@ export default function ResumeTab({
                   )}
                 </div>
 
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex items-center gap-3 sm:gap-3.5 shrink-0">
                   <button 
+                    type="button"
                     onClick={() => handleStartEdit(res)}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-emerald-950/60 border border-slate-700/80 hover:border-emerald-500/50 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-900/90 hover:bg-emerald-600/20 text-emerald-300 hover:text-emerald-200 border border-emerald-500/50 hover:border-emerald-400 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all duration-200 shadow-md shadow-emerald-950/30 active:scale-95 select-none"
                     title="Edit record parameters"
                   >
-                    <Pencil className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 stroke-[2.2]" />
                     <span>Edit</span>
                   </button>
                   <button 
+                    type="button"
                     onClick={() => handleDeleteResume(res.id)}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-rose-950/60 border border-slate-700/80 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-900/90 hover:bg-rose-600/20 text-rose-300 hover:text-rose-200 border border-rose-500/50 hover:border-rose-400 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all duration-200 shadow-md shadow-rose-950/30 active:scale-95 select-none"
                     title="Delete record from vault"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 stroke-[2.2]" />
                     <span>Delete</span>
                   </button>
                 </div>
@@ -978,31 +1209,33 @@ export default function ResumeTab({
                   <span>Active Link</span>
                 </span>
 
-                <div className="flex flex-wrap items-center gap-3 shrink-0">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-3.5 shrink-0">
                   <a
                     href={lk.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 hover:text-emerald-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/50 text-emerald-300 hover:text-emerald-200 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all duration-200 shadow-sm select-none"
                     title="Go to link in new tab"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
+                    <ExternalLink className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 stroke-[2.2]" />
                     <span>Visit</span>
                   </a>
                   <button 
+                    type="button"
                     onClick={() => handleStartEditLink(lk)}
-                    className="px-2.5 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-400 hover:text-sky-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-900/90 hover:bg-sky-600/20 text-sky-300 hover:text-sky-200 border border-sky-500/50 hover:border-sky-400 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all duration-200 shadow-sm select-none"
                     title="Edit portal link"
                   >
-                    <Pencil className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-400 stroke-[2.2]" />
                     <span>Edit</span>
                   </button>
                   <button 
+                    type="button"
                     onClick={() => onDeleteLink(lk.id)}
-                    className="px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 font-semibold text-xs flex items-center gap-1.5 cursor-pointer transition select-none shadow-sm"
+                    className="px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-slate-900/90 hover:bg-rose-600/20 text-rose-300 hover:text-rose-200 border border-rose-500/50 hover:border-rose-400 font-bold text-xs flex items-center gap-1.5 cursor-pointer transition-all duration-200 shadow-sm select-none"
                     title="Remove Link"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 stroke-[2.2]" />
                     <span>Delete</span>
                   </button>
                 </div>
