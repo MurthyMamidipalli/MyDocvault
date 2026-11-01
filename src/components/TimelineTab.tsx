@@ -34,52 +34,98 @@ interface SyncedTimelineItem {
   isCurrent?: boolean;
 }
 
-// Helper to normalize dates in DD-MM-YYYY, YYYY-MM-DD, YYYY, etc. into ISO date, clean display, and epoch timestamp
-const normalizeTimelineDate = (dateStr?: string, isCurrent?: boolean): { isoDate: string; displayPeriod: string; timestamp: number } => {
-  if (isCurrent) {
-    return { isoDate: '9999-12-31', displayPeriod: 'Present', timestamp: Date.now() + 100000000000 };
-  }
-  if (!dateStr || !dateStr.trim()) {
-    return { isoDate: '1970-01-01', displayPeriod: '', timestamp: 0 };
-  }
+// Helper to cleanly format any date string into DD/MM/YYYY or MM/YYYY or preserve clean formatted text
+export const formatExactDateDisplay = (dateStr?: string): string => {
+  if (!dateStr || !dateStr.trim() || dateStr === 'Present') return '';
   const str = dateStr.trim();
 
   // 1. Matches DD-MM-YYYY or DD/MM/YYYY (e.g., "02-07-2024" or "25/09/2026")
+  const ddmmyyyy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (ddmmyyyy) {
+    const day = String(parseInt(ddmmyyyy[1], 10)).padStart(2, '0');
+    const month = String(parseInt(ddmmyyyy[2], 10)).padStart(2, '0');
+    const year = ddmmyyyy[3];
+    return `${day}/${month}/${year}`;
+  }
+
+  // 2. Matches YYYY-MM-DD
+  const yyyymmdd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (yyyymmdd) {
+    const year = yyyymmdd[1];
+    const month = String(parseInt(yyyymmdd[2], 10)).padStart(2, '0');
+    const day = String(parseInt(yyyymmdd[3], 10)).padStart(2, '0');
+    return `${day}/${month}/${year}`;
+  }
+
+  // 3. Matches YYYY-MM
+  const yyyymm = str.match(/^(\d{4})[-/](\d{1,2})$/);
+  if (yyyymm) {
+    const year = yyyymm[1];
+    const month = String(parseInt(yyyymm[2], 10)).padStart(2, '0');
+    return `${month}/${year}`;
+  }
+
+  // 4. Just a 4-digit year
+  const singleYear = str.match(/^\d{4}$/);
+  if (singleYear) {
+    return singleYear[0];
+  }
+
+  const parsed = Date.parse(str);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  return str;
+};
+
+// Helper to normalize dates in DD-MM-YYYY, YYYY-MM-DD, YYYY, etc. into ISO date, clean display, and epoch timestamp
+const normalizeTimelineDate = (dateStr?: string): { isoDate: string; displayPeriod: string; timestamp: number } => {
+  if (!dateStr || !dateStr.trim() || dateStr === 'Present') {
+    return { isoDate: '1970-01-01', displayPeriod: '', timestamp: 0 };
+  }
+  const str = dateStr.trim();
+  const displayPeriod = formatExactDateDisplay(str);
+
+  // 1. Matches DD-MM-YYYY or DD/MM/YYYY
   const ddmmyyyy = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
   if (ddmmyyyy) {
     const day = String(parseInt(ddmmyyyy[1], 10)).padStart(2, '0');
     const month = String(parseInt(ddmmyyyy[2], 10)).padStart(2, '0');
     const year = ddmmyyyy[3];
-    const isoDate = `${year}-${month}-${day}`;
     return {
-      isoDate,
+      isoDate: `${year}-${month}-${day}`,
       displayPeriod: `${day}/${month}/${year}`,
       timestamp: new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)).getTime()
     };
   }
 
-  // 2. Matches YYYY-MM-DD or YYYY-MM
-  const yyyymmdd = str.match(/^(\d{4})[-/](\d{1,2})[-/]?(\d{1,2})?/);
+  // 2. Matches YYYY-MM-DD
+  const yyyymmdd = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (yyyymmdd) {
     const year = yyyymmdd[1];
     const month = String(parseInt(yyyymmdd[2], 10)).padStart(2, '0');
-    const day = yyyymmdd[3] ? String(parseInt(yyyymmdd[3], 10)).padStart(2, '0') : '01';
-    const isoDate = `${year}-${month}-${day}`;
+    const day = String(parseInt(yyyymmdd[3], 10)).padStart(2, '0');
     return {
-      isoDate,
-      displayPeriod: `${year}-${month}`,
+      isoDate: `${year}-${month}-${day}`,
+      displayPeriod: `${day}/${month}/${year}`,
       timestamp: new Date(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10)).getTime()
     };
   }
 
-  // 3. Just a 4-digit year e.g. "2024"
-  const singleYear = str.match(/^\d{4}$/);
-  if (singleYear) {
-    const year = singleYear[0];
+  // 3. Matches YYYY-MM
+  const yyyymm = str.match(/^(\d{4})[-/](\d{1,2})/);
+  if (yyyymm) {
+    const year = yyyymm[1];
+    const month = String(parseInt(yyyymm[2], 10)).padStart(2, '0');
     return {
-      isoDate: `${year}-06-01`,
-      displayPeriod: year,
-      timestamp: new Date(parseInt(year, 10), 5, 1).getTime()
+      isoDate: `${year}-${month}-01`,
+      displayPeriod: `${month}/${year}`,
+      timestamp: new Date(parseInt(year, 10), parseInt(month, 10) - 1, 1).getTime()
     };
   }
 
@@ -89,7 +135,7 @@ const normalizeTimelineDate = (dateStr?: string, isCurrent?: boolean): { isoDate
     const year = yearMatch[0];
     return {
       isoDate: `${year}-06-01`,
-      displayPeriod: str,
+      displayPeriod: displayPeriod || year,
       timestamp: new Date(parseInt(year, 10), 5, 1).getTime()
     };
   }
@@ -98,12 +144,12 @@ const normalizeTimelineDate = (dateStr?: string, isCurrent?: boolean): { isoDate
   if (!isNaN(parsed)) {
     return {
       isoDate: new Date(parsed).toISOString().substring(0, 10),
-      displayPeriod: str,
+      displayPeriod,
       timestamp: parsed
     };
   }
 
-  return { isoDate: '1970-01-01', displayPeriod: str, timestamp: 0 };
+  return { isoDate: '1970-01-01', displayPeriod, timestamp: 0 };
 };
 
 export default function TimelineTab({
@@ -118,8 +164,10 @@ export default function TimelineTab({
   const activeRole = (currentJob?.role || '').trim();
 
   if (currentJob && activeCompany && activeRole && !isDemoItem(currentJob)) {
-    const rawDate = currentJob.startDate || currentJob.joiningDate || new Date().toISOString().substring(0, 7);
-    const norm = normalizeTimelineDate(rawDate, true);
+    // Show the EXACT date mentioned in Current Job
+    const rawJobDate = currentJob.startDate || currentJob.joiningDate || '';
+    const norm = normalizeTimelineDate(rawJobDate);
+    const startDisplay = formatExactDateDisplay(rawJobDate) || norm.displayPeriod || rawJobDate;
     
     currentJobLandmarks.push({
       id: 'synced-current-job',
@@ -128,8 +176,8 @@ export default function TimelineTab({
       title: `${activeRole} at ${activeCompany}`,
       subtitle: currentJob.department ? `Department: ${currentJob.department}` : undefined,
       date: norm.isoDate,
-      timestamp: norm.timestamp,
-      periodLabel: `${norm.displayPeriod || rawDate} – Present`,
+      timestamp: Date.now() + 100000000000,
+      periodLabel: startDisplay ? `${startDisplay} – Present` : 'Present',
       description: currentJob.description || `Active ${currentJob.employmentType || 'full-time'} engagement orchestrating core responsibilities in ${currentJob.department || 'the organization'}.`,
       intensity: 'high',
       isCurrent: true
@@ -151,11 +199,11 @@ export default function TimelineTab({
       return true;
     })
     .map(exp => {
-      const rawDate = exp.startDate || new Date().toISOString().substring(0, 7);
-      const startNorm = normalizeTimelineDate(rawDate, Boolean(exp.isCurrent));
+      const rawDate = exp.startDate || (exp as any).start_date || '';
+      const startNorm = normalizeTimelineDate(rawDate);
+      const startLabel = formatExactDateDisplay(rawDate) || startNorm.displayPeriod || rawDate;
       const endNorm = exp.endDate ? normalizeTimelineDate(exp.endDate) : null;
-      const endLabel = exp.isCurrent ? 'Present' : (endNorm?.displayPeriod || exp.endDate || 'Completed');
-      const startLabel = startNorm.displayPeriod || rawDate;
+      const endLabel = exp.isCurrent ? 'Present' : (formatExactDateDisplay(exp.endDate) || endNorm?.displayPeriod || exp.endDate || 'Completed');
       
       const narrative = Array.isArray(exp.description) && exp.description.length > 0
         ? exp.description.join(' ')
@@ -169,7 +217,7 @@ export default function TimelineTab({
         subtitle: exp.location ? `Location: ${exp.location}` : undefined,
         date: startNorm.isoDate,
         timestamp: exp.isCurrent ? (Date.now() + 5000000000) : startNorm.timestamp,
-        periodLabel: `${startLabel} – ${endLabel}`,
+        periodLabel: startLabel && endLabel ? `${startLabel} – ${endLabel}` : (startLabel || endLabel || 'Active'),
         description: narrative,
         intensity: exp.isCurrent ? 'high' : 'medium',
         isCurrent: Boolean(exp.isCurrent)
@@ -180,10 +228,24 @@ export default function TimelineTab({
   const educationLandmarks: SyncedTimelineItem[] = (education || [])
     .filter(edu => !isDemoItem(edu))
     .map(edu => {
-      const rawDate = edu.startDate || (edu.startYear ? `${edu.startYear}-06-01` : (edu.endYear ? `${edu.endYear}-05-01` : new Date().toISOString().substring(0, 7)));
-      const startNorm = normalizeTimelineDate(rawDate, Boolean(edu.isCurrentlyPursuing));
-      const startPeriod = edu.startYear || (edu.startDate ? normalizeTimelineDate(edu.startDate).displayPeriod : startNorm.displayPeriod);
-      const endPeriod = edu.isCurrentlyPursuing ? 'Present' : (edu.endYear || (edu.endDate ? normalizeTimelineDate(edu.endDate).displayPeriod : 'Completed'));
+      const isCurrentEdu = Boolean(
+        edu.isCurrentlyPursuing || 
+        edu.endDate === 'Present' || 
+        edu.endYear === 'Present' ||
+        (edu as any).is_currently_pursuing
+      );
+
+      // Prioritize the exact start date (startDate) over the 4-digit startYear
+      const rawStartDate = edu.startDate || (edu as any).start_date || edu.startYear || (edu as any).start_year || '';
+      const startNorm = normalizeTimelineDate(rawStartDate);
+      const startPeriod = formatExactDateDisplay(rawStartDate) || startNorm.displayPeriod || rawStartDate;
+
+      // Exact end date or 'Present' if currently pursuing
+      const rawEndDate = isCurrentEdu 
+        ? 'Present' 
+        : (edu.endDate || (edu as any).end_date || edu.endYear || (edu as any).end_year || '');
+      const endNorm = normalizeTimelineDate(rawEndDate);
+      const endPeriod = isCurrentEdu ? 'Present' : (formatExactDateDisplay(rawEndDate) || endNorm.displayPeriod || rawEndDate || 'Completed');
 
       const degreeTitle = `${edu.degree}${edu.fieldOfStudy ? ` in ${edu.fieldOfStudy}` : ''} at ${edu.institution}`;
       
@@ -202,6 +264,10 @@ export default function TimelineTab({
         }
       }
 
+      const periodLabel = startPeriod && endPeriod 
+        ? `${startPeriod} – ${endPeriod}` 
+        : (startPeriod || endPeriod || 'Active');
+
       return {
         id: `synced-edu-${edu.id}`,
         sourceType: 'education',
@@ -209,11 +275,11 @@ export default function TimelineTab({
         title: degreeTitle,
         subtitle: edu.institution,
         date: startNorm.isoDate,
-        timestamp: edu.isCurrentlyPursuing ? (Date.now() + 1000000000) : startNorm.timestamp,
-        periodLabel: `${startPeriod} – ${endPeriod}`,
+        timestamp: isCurrentEdu ? (Date.now() + 1000000000) : startNorm.timestamp,
+        periodLabel,
         description: narrative,
-        intensity: 'medium',
-        isCurrent: Boolean(edu.isCurrentlyPursuing)
+        intensity: isCurrentEdu ? 'high' : 'medium',
+        isCurrent: isCurrentEdu
       };
     });
 

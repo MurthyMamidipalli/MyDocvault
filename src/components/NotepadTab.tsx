@@ -38,7 +38,10 @@ import {
   VolumeX,
   Bell,
   Repeat,
-  Mail
+  Mail,
+  Highlighter,
+  Palette,
+  ChevronDown
 } from 'lucide-react';
 import { NotepadNote, TaskItem, generateUUID } from '../types';
 import { 
@@ -47,6 +50,21 @@ import {
   getUserPreferredSound, 
   sendMorningEmailNotification 
 } from '../lib/soundEffects';
+
+const HIGHLIGHT_COLORS = [
+  { name: 'Yellow', color: '#fef08a' },
+  { name: 'Emerald', color: '#a7f3d0' },
+  { name: 'Cyan', color: '#bae6fd' },
+  { name: 'Rose', color: '#fecdd3' },
+  { name: 'Purple', color: '#e9d5ff' },
+  { name: 'Orange', color: '#fed7aa' },
+  { name: 'Lime', color: '#d9f99d' },
+  { name: 'Sky', color: '#7dd3fc' },
+  { name: 'Pink', color: '#fbcfe8' },
+  { name: 'Amber', color: '#fde68a' },
+  { name: 'Violet', color: '#ddd6fe' },
+  { name: 'Teal', color: '#99f6e4' }
+];
 
 interface NotepadTabProps {
   currentUserEmail?: string;
@@ -68,8 +86,8 @@ export default function NotepadTab({
     return null;
   });
 
-  // Mode: All Documents vs Notes vs Tasks
-  const [viewMode, setViewMode] = useState<'all' | 'notes' | 'tasks'>('all');
+  // Mode: Notes vs Tasks (All option removed per user requirement)
+  const [viewMode, setViewMode] = useState<'notes' | 'tasks'>('notes');
   const [showCompletedTasks, setShowCompletedTasks] = useState(false);
 
   // Layout state
@@ -84,6 +102,21 @@ export default function NotepadTab({
   // Dialog & Warning states
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [warningTask, setWarningTask] = useState<{ id: string; title: string } | null>(null);
+
+  // Highlight Dropdown state
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const highlightDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close highlight dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (highlightDropdownRef.current && !highlightDropdownRef.current.contains(e.target as Node)) {
+        setShowHighlightPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Task Notifications & Sound state
   const [taskSoundEnabled, setTaskSoundEnabled] = useState<boolean>(() => {
@@ -154,14 +187,14 @@ export default function NotepadTab({
 
   const activeNote = notes.find(n => n.id === activeNoteId) || null;
 
-  // Sync editor HTML when activeNote changes
+  // Sync editor HTML when activeNote changes or loads from Supabase
   useEffect(() => {
     if (editorRef.current && activeNote) {
-      if (editorRef.current.innerHTML !== activeNote.content) {
+      if (document.activeElement !== editorRef.current && editorRef.current.innerHTML !== (activeNote.content || '')) {
         editorRef.current.innerHTML = activeNote.content || '';
       }
     }
-  }, [activeNoteId]);
+  }, [activeNoteId, activeNote?.content]);
 
   // Handle URL param ?new=true to instantiate note on load
   useEffect(() => {
@@ -285,13 +318,58 @@ export default function NotepadTab({
     }
   };
 
+  // Highlight Text with selected color
+  const applyHighlightColor = (color: string) => {
+    editorRef.current?.focus();
+    restoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed || !editorRef.current?.contains(sel.anchorNode)) {
+      triggerToast('Please select/highlight the text you want to color highlight.');
+      return;
+    }
+
+    try {
+      if (color === 'transparent') {
+        document.execCommand('removeFormat', false);
+      } else {
+        const ok = document.execCommand('hiliteColor', false, color) || document.execCommand('backColor', false, color);
+        if (!ok) {
+          const range = sel.getRangeAt(0);
+          const mark = document.createElement('mark');
+          mark.style.backgroundColor = color;
+          mark.style.color = '#0f172a';
+          mark.style.padding = '0.1em 0.25em';
+          mark.style.borderRadius = '0.25rem';
+          mark.appendChild(range.extractContents());
+          range.insertNode(mark);
+        }
+      }
+    } catch (_) {
+      try {
+        const range = sel.getRangeAt(0);
+        const mark = document.createElement('mark');
+        mark.style.backgroundColor = color;
+        mark.style.color = '#0f172a';
+        mark.style.padding = '0.1em 0.25em';
+        mark.style.borderRadius = '0.25rem';
+        mark.appendChild(range.extractContents());
+        range.insertNode(mark);
+      } catch (err) {}
+    }
+
+    saveSelection();
+    if (editorRef.current && activeNoteId) {
+      handleUpdateActiveNote('content', editorRef.current.innerHTML);
+    }
+    triggerToast(color === 'transparent' ? 'Highlight removed.' : 'Color highlight applied.');
+  };
+
   // Create Note or Task Document
   const handleCreateDocument = (type: 'note' | 'task' = 'note') => {
-    // If the active filter hides this type, switch to 'all' so it is visible in the list
-    if (type === 'task' && viewMode === 'notes') {
-      setViewMode('all');
-    } else if (type === 'note' && viewMode === 'tasks') {
-      setViewMode('all');
+    if (type === 'task') {
+      setViewMode('tasks');
+    } else {
+      setViewMode('notes');
     }
 
     const newDoc: NotepadNote = {
@@ -631,41 +709,30 @@ export default function NotepadTab({
           <div className={`col-span-1 lg:col-span-4 border-r border-slate-900/80 bg-[#0a0b0f]/80 flex flex-col ${isMobileListOpen ? 'block' : 'hidden lg:flex'}`}>
           
           <div className="p-4 border-b border-slate-900 space-y-3 shrink-0">
-            {/* View Mode Switcher: All | Notes | Tasks */}
+            {/* View Mode Switcher: Notes | Tasks (All option removed) */}
             <div className="flex items-center justify-between p-1 bg-[#050608] rounded-xl border border-slate-850 text-xs font-bold select-none">
               <button
                 type="button"
-                onClick={() => setViewMode('all')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition ${
-                  viewMode === 'all' 
-                    ? 'bg-slate-800 text-white shadow-sm' 
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
                 onClick={() => setViewMode('notes')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition flex items-center justify-center gap-1 ${
+                className={`flex-1 py-2 px-3 rounded-lg text-center transition flex items-center justify-center gap-1.5 ${
                   viewMode === 'notes' 
                     ? 'bg-emerald-500 text-slate-950 shadow-sm' 
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <FileText className="w-3 h-3" />
+                <FileText className="w-3.5 h-3.5" />
                 <span>Notes</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('tasks')}
-                className={`flex-1 py-1.5 px-2 rounded-lg text-center transition flex items-center justify-center gap-1 ${
+                className={`flex-1 py-2 px-3 rounded-lg text-center transition flex items-center justify-center gap-1.5 ${
                   viewMode === 'tasks' 
                     ? 'bg-blue-500 text-slate-950 shadow-sm' 
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                <CheckSquare className="w-3 h-3" />
+                <CheckSquare className="w-3.5 h-3.5" />
                 <span>Tasks</span>
               </button>
             </div>
@@ -802,10 +869,22 @@ export default function NotepadTab({
                             e.stopPropagation();
                             setActiveNoteId(note.id);
                             setIsMobileListOpen(false);
+                            if (editorRef.current) {
+                              editorRef.current.innerHTML = note.content || '';
+                            }
                             setTimeout(() => {
                               editorWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                              editorRef.current?.focus();
+                              if (editorRef.current) {
+                                editorRef.current.focus();
+                                const range = document.createRange();
+                                const sel = window.getSelection();
+                                range.selectNodeContents(editorRef.current);
+                                range.collapse(false);
+                                sel?.removeAllRanges();
+                                sel?.addRange(range);
+                              }
                             }, 50);
+                            triggerToast(`Editing: ${note.title || 'Document'}`);
                           }}
                           title="Edit document"
                           className="flex items-center gap-1 px-2.5 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-lg text-[10px] font-bold transition cursor-pointer shadow-sm active:scale-95"
@@ -929,11 +1008,28 @@ export default function NotepadTab({
                     <Pin className="w-3 h-3" />
                     <span className="hidden sm:inline">{activeNote.isPinned ? 'Pinned' : 'Pin'}</span>
                   </button>
-                  {/* Top Edit Mode Indicator */}
-                  <div className="flex items-center gap-1 px-2 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/30 rounded-xl text-[10px] font-bold font-mono uppercase">
-                    <Pencil className="w-3 h-3 shrink-0" />
+                  {/* Top Edit Document Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (editorRef.current) {
+                        editorRef.current.focus();
+                        const range = document.createRange();
+                        const sel = window.getSelection();
+                        range.selectNodeContents(editorRef.current);
+                        range.collapse(false);
+                        sel?.removeAllRanges();
+                        sel?.addRange(range);
+                      }
+                      editorWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                      triggerToast('Editor active: ready to type and format');
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-xl text-[11px] font-bold transition cursor-pointer active:scale-95 shadow-sm"
+                    title="Click to activate editing in document"
+                  >
+                    <Pencil className="w-3.5 h-3.5 shrink-0" />
                     <span>Edit Document</span>
-                  </div>
+                  </button>
                 </div>
 
                 {/* Editor operations: Full Tab toggle, Save, Copy, Export, and Delete */}
@@ -967,10 +1063,20 @@ export default function NotepadTab({
                   <button
                     type="button"
                     onClick={() => {
-                      if (editorRef.current) {
-                        handleUpdateActiveNote('content', editorRef.current.innerHTML);
-                      }
-                      handleUpdateActiveNote('updatedAt', new Date().toISOString());
+                      if (!activeNoteId || !activeNote) return;
+                      const currentContent = editorRef.current ? editorRef.current.innerHTML : (activeNote.content || '');
+                      const now = new Date().toISOString();
+                      const updated = notes.map(n => {
+                        if (n.id === activeNoteId) {
+                          return {
+                            ...n,
+                            content: currentContent,
+                            updatedAt: now
+                          };
+                        }
+                        return n;
+                      });
+                      onUpdateNotes(updated);
                       triggerToast('Document saved successfully in Supabase.');
                     }}
                     className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-xl active:scale-95 transition cursor-pointer select-none shadow-md shadow-emerald-500/10"
@@ -1214,6 +1320,96 @@ export default function NotepadTab({
                   >
                     <AlignJustify className="w-3.5 h-3.5" />
                   </button>
+                </div>
+
+                {/* Highlight Tool with Colors Popover */}
+                <div className="relative shrink-0" ref={highlightDropdownRef}>
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-850">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        saveSelection();
+                      }}
+                      onClick={() => setShowHighlightPicker(!showHighlightPicker)}
+                      className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold rounded-lg transition cursor-pointer select-none ${
+                        showHighlightPicker ? 'bg-amber-500/20 text-amber-300' : 'text-gray-300 hover:text-white hover:bg-slate-850'
+                      }`}
+                      title="Highlight text with colors"
+                    >
+                      <Highlighter className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Highlight</span>
+                      <ChevronDown className="w-3 h-3 text-gray-500" />
+                    </button>
+                  </div>
+
+                  {showHighlightPicker && (
+                    <div className="absolute left-0 top-full mt-2 w-64 p-3 bg-[#0d0f14] border border-slate-800 rounded-2xl shadow-2xl z-30 space-y-2.5">
+                      <div className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+                        <span>Highlight Colors</span>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            applyHighlightColor('transparent');
+                            setShowHighlightPicker(false);
+                          }}
+                          className="text-rose-400 hover:text-rose-300 text-[10px] lowercase underline cursor-pointer"
+                        >
+                          Clear Highlight
+                        </button>
+                      </div>
+
+                      {/* Color Palette Grid */}
+                      <div className="grid grid-cols-6 gap-2">
+                        {HIGHLIGHT_COLORS.map(c => (
+                          <button
+                            key={c.name}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              applyHighlightColor(c.color);
+                              setShowHighlightPicker(false);
+                            }}
+                            title={c.name}
+                            style={{ backgroundColor: c.color }}
+                            className="w-7 h-7 rounded-lg border border-black/40 hover:scale-110 active:scale-95 transition shadow-sm cursor-pointer"
+                          />
+                        ))}
+                      </div>
+
+                      {/* Custom Color Picker Input */}
+                      <div className="pt-2 border-t border-slate-850 flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-gray-400 font-mono">Custom Color:</span>
+                        <input
+                          type="color"
+                          defaultValue="#fef08a"
+                          onMouseDown={saveSelection}
+                          onChange={(e) => {
+                            applyHighlightColor(e.target.value);
+                          }}
+                          className="w-8 h-6 rounded border border-slate-700 bg-transparent cursor-pointer"
+                          title="Pick custom highlight color"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Font / Text Color Picker */}
+                <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-850 shrink-0">
+                  <Palette className="w-3.5 h-3.5 text-gray-400 ml-1.5" />
+                  <span className="text-[10px] text-gray-400 font-mono">Text</span>
+                  <input
+                    type="color"
+                    defaultValue="#ffffff"
+                    onMouseDown={saveSelection}
+                    onChange={(e) => {
+                      executeFormat('foreColor', e.target.value);
+                    }}
+                    className="w-6 h-5 rounded border-0 bg-transparent cursor-pointer pr-1"
+                    title="Change font / text color"
+                  />
                 </div>
 
               </div>
