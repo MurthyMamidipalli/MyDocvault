@@ -13,8 +13,11 @@ import {
   CheckCircle2, 
   ArrowRight,
   ShieldAlert,
-  ArrowLeft
+  ArrowLeft,
+  AlertTriangle,
+  LogOut
 } from 'lucide-react';
+import { getDeviceId, getDeviceLabel } from '../App';
 
 interface AuthPageProps {
   onLoginSuccess: (user: { id?: string; email: string; firstName?: string; lastName?: string }) => void;
@@ -51,6 +54,13 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
   
   // Dynamic validation spinner state
   const [isValidating, setIsValidating] = useState(false);
+
+  // Single Login Session Conflict state
+  const [previousSessionWarning, setPreviousSessionWarning] = useState<{
+    active: boolean;
+    deviceLabel?: string;
+    user?: any;
+  } | null>(null);
 
   // Forgot password flow states
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -385,6 +395,51 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
     }
   };
 
+  const handleLogoutAllPreviousDevices = async () => {
+    if (!previousSessionWarning?.user) return;
+    const user = previousSessionWarning.user;
+    setIsValidating(true);
+    try {
+      const curDevId = getDeviceId();
+      const curDevLabel = getDeviceLabel();
+      // Revoke all other device sessions on Supabase Auth
+      await supabase.auth.signOut({ scope: 'others' });
+      // Stamp this device as the authorized active session
+      await supabase.auth.updateUser({
+        data: {
+          active_device_id: curDevId,
+          active_device_label: curDevLabel,
+          active_device_login_at: Date.now()
+        }
+      });
+
+      const trimmedEmail = (user.email || email).trim().toLowerCase();
+      let userFirstName = user.user_metadata?.first_name || trimmedEmail.split('@')[0];
+      let userLastName = user.user_metadata?.last_name || '';
+      try {
+        const cachedP = localStorage.getItem(`${trimmedEmail}_profile`);
+        if (cachedP) {
+          const parsed = JSON.parse(cachedP);
+          if (parsed.firstName) userFirstName = parsed.firstName;
+          if (parsed.lastName) userLastName = parsed.lastName;
+        }
+      } catch (_) {}
+
+      setPreviousSessionWarning(null);
+      triggerToast(`Previous devices logged out successfully. Welcome ${userFirstName}!`);
+      onLoginSuccess({
+        id: user.id,
+        email: trimmedEmail,
+        firstName: userFirstName,
+        lastName: userLastName,
+      });
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to logout previous sessions. Please try again.');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -414,6 +469,31 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
 
       const user = data.user;
       if (!user) throw new Error('Authentication succeeded but no user session returned.');
+
+      const curDevId = getDeviceId();
+      const existingActiveDevId = user.user_metadata?.active_device_id;
+      const existingDevLabel = user.user_metadata?.active_device_label || 'Another browser / device';
+
+      // Check if another device/browser is already logged in
+      if (existingActiveDevId && existingActiveDevId !== curDevId) {
+        setPreviousSessionWarning({
+          active: true,
+          deviceLabel: existingDevLabel,
+          user: user
+        });
+        setIsValidating(false);
+        return;
+      }
+
+      // No conflicting session: stamp this device and proceed
+      await supabase.auth.signOut({ scope: 'others' }).catch(() => {});
+      await supabase.auth.updateUser({
+        data: {
+          active_device_id: curDevId,
+          active_device_label: getDeviceLabel(),
+          active_device_login_at: Date.now()
+        }
+      }).catch(() => {});
 
       // Check local cached profile first for instantaneous 0ms login display
       let userFirstName = user.user_metadata?.first_name || trimmedEmail.split('@')[0];
@@ -681,6 +761,42 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
                     </button>
                   </div>
                 </div>
+
+                {/* Multi-Device Login Session Conflict Alert */}
+                {previousSessionWarning?.active && (
+                  <div className="p-4 bg-amber-500/15 border border-amber-500/40 rounded-2xl space-y-3 text-left animate-fade-in mb-2">
+                    <div className="flex items-start gap-2.5">
+                      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-sm font-bold text-white">First logout previous login</h4>
+                        <p className="text-xs text-amber-200/90 mt-1 leading-relaxed">
+                          Your account is currently active on: <span className="font-semibold text-white">{previousSessionWarning.deviceLabel}</span>. 
+                          Please first logout previous login to access this device.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleLogoutAllPreviousDevices}
+                        className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 active:scale-95"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Logout all previous devices</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviousSessionWarning(null);
+                          supabase.auth.signOut().catch(() => {});
+                        }}
+                        className="px-3 py-2 text-xs text-gray-400 hover:text-white transition rounded-xl border border-slate-800"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Submit Button */}
                 <button

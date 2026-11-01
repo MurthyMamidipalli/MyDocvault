@@ -181,8 +181,9 @@ export default function NotepadTab({
   notesRef.current = notes;
   const activeNoteIdRef = useRef<string | null>(activeNoteId);
   activeNoteIdRef.current = activeNoteId;
+  const targetImageElementRef = useRef<HTMLImageElement | null>(null);
 
-  // Image Context Menu State (Copy Image, Open in New Tab, Open in New Window)
+  // Image Context Menu State (Copy Image, Open in New Tab, Open in New Window, Delete Image)
   const [imageContextMenu, setImageContextMenu] = useState<{
     visible: boolean;
     x: number;
@@ -190,7 +191,7 @@ export default function NotepadTab({
     imgSrc: string;
   }>({ visible: false, x: 0, y: 0, imgSrc: '' });
 
-  // Flush any pending typed updates immediately
+  // Flush any pending typed updates immediately to storage & Supabase
   const flushPendingUpdates = () => {
     if (saveDebounceTimeoutRef.current) {
       clearTimeout(saveDebounceTimeoutRef.current);
@@ -198,7 +199,16 @@ export default function NotepadTab({
     }
     const currentPending = { ...pendingUpdatesRef.current };
     const currentId = activeNoteIdRef.current;
-    if (Object.keys(currentPending).length > 0 && currentId) {
+    
+    // Always sync latest content from contentEditable DOM
+    if (editorRef.current && currentId) {
+      currentPending.content = editorRef.current.innerHTML;
+    }
+    if (titleInputRef.current && currentId && titleInputRef.current.value) {
+      currentPending.title = titleInputRef.current.value;
+    }
+
+    if (currentId) {
       pendingUpdatesRef.current = {};
       const updated = notesRef.current.map(n => {
         if (n.id === currentId) {
@@ -229,9 +239,14 @@ export default function NotepadTab({
     }, delay);
   };
 
-  // Flush on note switch or unmount
+  // Flush on note switch or unmount or beforeunload
   useEffect(() => {
+    const handleBeforeUnload = () => {
+      flushPendingUpdates();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       flushPendingUpdates();
     };
   }, [activeNoteId]);
@@ -290,6 +305,19 @@ export default function NotepadTab({
     if (win) {
       win.document.write(`<!DOCTYPE html><html><head><title>Notepad Image Window</title><style>body{margin:0;background:#090a0f;display:flex;align-items:center;justify-content:center;height:100vh;}img{max-width:95vw;max-height:95vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.8);}</style></head><body><img src="${imgSrc}" alt="Preview" /></body></html>`);
       win.document.close();
+    }
+    setImageContextMenu(prev => ({ ...prev, visible: false }));
+  };
+
+  // Delete Image Action
+  const handleDeleteImageAction = () => {
+    if (targetImageElementRef.current) {
+      targetImageElementRef.current.remove();
+      targetImageElementRef.current = null;
+      if (editorRef.current && activeNoteId) {
+        handleUpdateActiveNote('content', editorRef.current.innerHTML);
+      }
+      triggerToast('Image deleted from document.');
     }
     setImageContextMenu(prev => ({ ...prev, visible: false }));
   };
@@ -1576,6 +1604,22 @@ export default function NotepadTab({
                       }`}
                     />
                   </div>
+
+                  {/* Immediate Cloud Save Action Button */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        flushPendingUpdates();
+                        triggerToast('Document saved and synchronized to cloud!');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs transition active:scale-95 cursor-pointer shadow-md shadow-emerald-500/10 select-none"
+                      title="Save note content immediately to Supabase and profile"
+                    >
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      <span>Save Document</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* 2. Tags/Metadata & Target Date Inline Panel */}
@@ -1898,10 +1942,11 @@ export default function NotepadTab({
                         e.preventDefault();
                         e.stopPropagation();
                         const img = target as HTMLImageElement;
+                        targetImageElementRef.current = img;
                         setImageContextMenu({
                           visible: true,
                           x: Math.min(e.clientX, window.innerWidth - 220),
-                          y: Math.min(e.clientY, window.innerHeight - 180),
+                          y: Math.min(e.clientY, window.innerHeight - 220),
                           imgSrc: img.src
                         });
                       }
@@ -1950,6 +1995,15 @@ export default function NotepadTab({
                       >
                         <Maximize2 className="w-3.5 h-3.5 text-purple-400" />
                         <span>Open in New Window</span>
+                      </button>
+                      <div className="my-1 border-t border-slate-800/60" />
+                      <button
+                        type="button"
+                        onClick={handleDeleteImageAction}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-white hover:bg-rose-950/40 rounded-xl transition cursor-pointer select-none text-left"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Delete Image</span>
                       </button>
                     </div>
                   )}

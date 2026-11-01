@@ -515,8 +515,8 @@ export const deduplicateNotes = (items?: NotepadNote[]): NotepadNote[] => {
         ...existing,
         ...item,
         id: existing.id || item.id,
-        content: (item.content || '').length >= (existing.content || '').length ? item.content : existing.content,
-        title: item.title || existing.title,
+        content: item.content !== undefined ? item.content : existing.content,
+        title: item.title !== undefined ? item.title : existing.title,
         isPinned: item.isPinned !== undefined ? item.isPinned : existing.isPinned,
         type: item.type || existing.type,
         completed: item.completed !== undefined ? item.completed : existing.completed
@@ -2340,8 +2340,9 @@ export default function App() {
         const loadNotes = async () => {
           try {
             const { data: nData } = await supabase.from('notes').select('*').eq('user_id', userId);
+            let remoteNotes: NotepadNote[] = [];
             if (nData && Array.isArray(nData) && nData.length > 0) {
-              const mapped = nData.map(n => {
+              remoteNotes = nData.map(n => {
                 const tagArray = Array.isArray(n.tags) ? n.tags : [];
                 const categoryTag = tagArray.find((t: string) => !t.startsWith('__')) || 'General';
                 const isPinned = Boolean(n.is_pinned || tagArray.includes('__pinned__') || tagArray.includes('pinned'));
@@ -2386,12 +2387,45 @@ export default function App() {
                   updatedAt: n.updated_at || new Date().toISOString()
                 };
               });
-              const updatedNotes = deduplicateNotes(mapped);
-              setNotes(updatedNotes);
-              const em = currentUser?.email?.toLowerCase().trim() || email;
+            }
+
+            const em = currentUser?.email?.toLowerCase().trim() || email;
+            let localNotes: NotepadNote[] = [];
+            if (em) {
+              try {
+                const raw = localStorage.getItem(`${em}_notepad_notes`);
+                if (raw) localNotes = JSON.parse(raw);
+              } catch (_) {}
+            }
+
+            // Merge remote notes with local notes by latest updatedAt timestamp
+            const mergedMap = new Map<string, NotepadNote>();
+            for (const r of remoteNotes) {
+              mergedMap.set(r.id, r);
+            }
+            for (const l of localNotes) {
+              const existing = mergedMap.get(l.id);
+              if (!existing) {
+                mergedMap.set(l.id, l);
+              } else {
+                const existingTime = new Date(existing.updatedAt || 0).getTime();
+                const localTime = new Date(l.updatedAt || 0).getTime();
+                if (localTime > existingTime) {
+                  mergedMap.set(l.id, l);
+                }
+              }
+            }
+
+            const allNotes = deduplicateNotes(Array.from(mergedMap.values()));
+            if (allNotes.length > 0) {
+              setNotes(allNotes);
               if (em) {
-                safeLocalStorageSetItem(`${em}_notepad_notes`, JSON.stringify(updatedNotes));
-                heavyStorage.set(`${em}_notepad_notes`, updatedNotes).catch(() => {});
+                safeLocalStorageSetItem(`${em}_notepad_notes`, JSON.stringify(allNotes));
+                heavyStorage.set(`${em}_notepad_notes`, allNotes).catch(() => {});
+              }
+              // Push local-only notes to Supabase so they are visible on all other devices too
+              if (localNotes.length > remoteNotes.length) {
+                handleUpdateNotes(allNotes);
               }
             }
           } catch (err) { console.warn("[Supabase Notes Load]", err); }
@@ -3206,15 +3240,18 @@ export default function App() {
   }, [currentJob, notes, currentUser, profile.email]);
 
   const getActiveUserId = async (): Promise<string | null> => {
-    if (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
-      return currentUser.id;
-    }
+    // 1. Prioritize live Supabase Auth session token so user_id matches auth.uid() exactly for RLS
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user?.id) return session.user.id;
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.id) return user.id;
     } catch (e) {}
+
+    // 2. Check currentUser
+    if (currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
+      return currentUser.id;
+    }
 
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail()?.toLowerCase().trim();
     if (email) {
@@ -5612,7 +5649,7 @@ export default function App() {
               ...(n.notificationSound ? [`__notif_sound__:${n.notificationSound}`] : []),
               ...(n.tasks && n.tasks.length > 0 ? [`__tasks__:${JSON.stringify(n.tasks)}`] : [])
             ];
-            await supabase.from('notes').upsert({
+            const { error: noteUpsertErr } = await supabase.from('notes').upsert({
               id: targetId,
               user_id: userId,
               title: n.title || 'Untitled Document',
@@ -5621,6 +5658,18 @@ export default function App() {
               is_public: n.isPublic !== false,
               updated_at: n.updatedAt || new Date().toISOString()
             });
+            if (noteUpsertErr) {
+              console.warn("[Supabase Note Upsert Initial Attempt]", noteUpsertErr);
+              // Fallback retry without tags payload if tags schema mismatch occurs
+              await supabase.from('notes').upsert({
+                id: targetId,
+                user_id: userId,
+                title: n.title || 'Untitled Document',
+                content: n.content || '',
+                is_public: n.isPublic !== false,
+                updated_at: n.updatedAt || new Date().toISOString()
+              });
+            }
           } catch (err) { console.warn("[Supabase Note Upsert Error]", err); }
         }
       }

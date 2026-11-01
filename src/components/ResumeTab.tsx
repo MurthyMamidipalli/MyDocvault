@@ -210,7 +210,7 @@ export default function ResumeTab({
   };
 
   // Process single or multiple files (accepting files up to 1GB each, unlimited files)
-  // Per requirement: If user uploads PDFs, it saves IMMEDIATELY without waiting!
+  // Per requirement: selecting file queues the file; then user clicks "Save Record" to save!
   const processFiles = (fileList: FileList | File[]) => {
     setUploadError(null);
     const filesArray = Array.from(fileList);
@@ -226,63 +226,39 @@ export default function ResumeTab({
     const validFiles = filesArray.filter(f => f.size <= MAX_FILE_SIZE);
     if (validFiles.length === 0) return;
 
-    const newItems: ResumeItem[] = [];
+    const queuedFiles: SelectedUploadFile[] = [];
     let completedCount = 0;
 
     validFiles.forEach(file => {
       const formattedSize = formatFileSize(file.size);
-      const cleanTitle = (validFiles.length === 1 && recordName.trim())
-        ? recordName.trim()
-        : file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+      const cleanTitle = file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
 
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
 
-        const newResumeItem: ResumeItem = {
+        queuedFiles.push({
           id: generateUUID(),
-          name: cleanTitle || 'Resume Document',
-          type: documentType || 'Resume',
-          visibility: visibility || 'private',
-          fileName: file.name,
+          name: file.name,
           size: formattedSize,
-          uploadDate: new Date().toISOString().split('T')[0],
-          category: documentType || 'Resume',
-          fileDataUrl: dataUrl,
-          fileUrl: dataUrl
-        };
-
-        newItems.push(newResumeItem);
+          rawSize: file.size,
+          dataUrl: dataUrl,
+          fileObj: file,
+          type: documentType
+        });
         completedCount++;
 
-        // Once all selected files have loaded, save IMMEDIATELY!
+        // When all selected files are parsed, populate queue and keep modal open for "Save Record"
         if (completedCount === validFiles.length) {
-          if (editingResume) {
-            const updated = {
-              ...editingResume,
-              name: cleanTitle || editingResume.name,
-              fileName: file.name,
-              size: formattedSize,
-              fileDataUrl: dataUrl,
-              fileUrl: dataUrl,
-              type: documentType,
-              visibility: visibility
-            };
-            saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? updated : r));
-          } else {
-            if (onAddResumes) {
-              onAddResumes(newItems);
-            } else {
-              saveResumesToStorage([...newItems, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
-            }
+          setSelectedFiles(prev => [...prev, ...queuedFiles]);
+          setSelectedFile({
+            name: queuedFiles[0].name,
+            size: queuedFiles[0].size,
+            dataUrl: queuedFiles[0].dataUrl
+          });
+          if (!recordName.trim()) {
+            setRecordName(cleanTitle);
           }
-
-          // Close modal and reset fields immediately
-          setRecordName('');
-          setSelectedFiles([]);
-          setSelectedFile(null);
-          setEditingResume(null);
-          setShowUploadModal(false);
         }
       };
       reader.readAsDataURL(file);
@@ -321,6 +297,7 @@ export default function ResumeTab({
         name: recordName.trim() || editingResume.name,
         type: documentType,
         visibility: visibility,
+        isPublic: visibility === 'public',
         fileName: finalFileName,
         size: finalSize,
         category: documentType,
@@ -356,6 +333,7 @@ export default function ResumeTab({
           name: cleanTitle || `Resume Document ${index + 1}`,
           type: sf.type || documentType,
           visibility: visibility,
+          isPublic: visibility === 'public',
           fileName: sf.name,
           size: sf.size,
           uploadDate: new Date().toISOString().split('T')[0],
@@ -643,7 +621,15 @@ export default function ResumeTab({
             <p className="text-xs text-gray-400 mt-1">Host your professional records in the cloud vault.</p>
           </div>
 
-          <form onSubmit={handleSaveResume} className="space-y-5">
+          <form 
+            onSubmit={handleSaveResume} 
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+                e.preventDefault();
+              }
+            }} 
+            className="space-y-5"
+          >
             {/* Record Name */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Record Name</label>
@@ -759,7 +745,7 @@ export default function ResumeTab({
                     : 'Accepts PDF & documents < 1GB • Unlimited files'}
                 </span>
                 <span className="text-[11px] text-emerald-400 font-mono font-bold">
-                  ⚡ Saves Immediately on Upload
+                  ⚡ Staged for Vault Save
                 </span>
               </div>
 
@@ -773,7 +759,7 @@ export default function ResumeTab({
                     ? 'border-emerald-500 bg-[#080d0d]' 
                     : 'border-slate-800/85 hover:border-slate-700/80 hover:bg-[#0c0e12]'
                 }`}
-                title="Click or drag to select document files (saves immediately)"
+                title="Click or drag to select document files"
               >
                 <input 
                   type="file" 
@@ -790,7 +776,7 @@ export default function ResumeTab({
                     Select or Drag & Drop PDF Resume / CV
                   </p>
                   <p className="text-[11px] text-emerald-400 font-semibold font-mono select-none mt-1">
-                    Uploads & saves immediately into vault • No AI generation
+                    Select file, then click "Save Record in Vault"
                   </p>
                   <p className="text-[10px] text-gray-500 select-none mt-0.5">
                     Supports PDF, DOC, DOCX, PNG, JPG (up to 1GB)
@@ -1138,13 +1124,8 @@ export default function ResumeTab({
               className="bg-[#0f1115] border border-slate-900 rounded-2xl p-6 relative group flex flex-col justify-between transition-all duration-300 hover:border-slate-800"
             >
               
-              {/* Card Header row with badges and buttons */}
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <span className="bg-[#1a1a24] border border-slate-800 text-slate-400 text-[10px] px-2.5 py-1 rounded-full font-mono flex items-center gap-1.5 select-none">
-                  <Link2 className="w-3 h-3 text-emerald-400" />
-                  <span>Active Link</span>
-                </span>
-
+              {/* Card Header row with buttons */}
+              <div className="flex items-center justify-end gap-2 mb-4">
                 <div className="flex flex-wrap items-center gap-3 sm:gap-3.5 shrink-0">
                   <a
                     href={lk.url}
