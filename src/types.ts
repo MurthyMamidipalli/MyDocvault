@@ -61,7 +61,7 @@ export interface Specialization {
 export interface DeletedItem {
   id: string;
   originalId: string;
-  itemType: 'experience' | 'education' | 'skill' | 'certification' | 'specialization' | 'project' | 'contact' | 'document' | 'other';
+  itemType: 'experience' | 'education' | 'skill' | 'certification' | 'specialization' | 'project' | 'contact' | 'document' | 'resume' | 'other';
   title: string;
   subtitle?: string;
   deletedAt: string;

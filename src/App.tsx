@@ -116,7 +116,7 @@ import PublicPortfolioView from './components/PublicPortfolioView';
 import AuthPage from './components/AuthPage';
 import { heavyStorage } from './lib/heavyStorage';
 import { handleOAuthCallback } from './lib/googleDrive';
-import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from './lib/supabase';
+import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage, deleteFileFromSupabaseStorage } from './lib/supabase';
 import { 
   playNotificationSound, 
   sendMorningEmailNotification, 
