@@ -89,16 +89,9 @@ export default function DocumentVaultTab({
   // Ref to track if an upload is actively occurring
   const isUploadingRef = useRef(false);
 
-  // Helper to get a fallback fileUrl if not uploaded
+  // Helper to get uploaded fileUrl (never generate fake/AI PDFs)
   const getFileUrl = (doc: VaultDocument) => {
-    if (doc.fileUrl) return doc.fileUrl;
-    return generateCertificationPdf({
-      title: doc.name.replace('.pdf', '').replace(/_/g, ' '),
-      issuer: doc.category === 'resume' ? 'Ramachandra Murthy Mamidipalli' : 'KL University / Authorized Issuer',
-      dateIssued: doc.uploadDate,
-      credentialId: 'VLT-AUTH-' + doc.id.toUpperCase(),
-      type: doc.category === 'transcript' ? 'grades' : 'study'
-    });
+    return doc.fileUrl || '';
   };
 
   const handleConnectOAuth = () => {

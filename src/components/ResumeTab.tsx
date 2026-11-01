@@ -210,6 +210,7 @@ export default function ResumeTab({
   };
 
   // Process single or multiple files (accepting files up to 1GB each, unlimited files)
+  // Per requirement: If user uploads PDFs, it saves IMMEDIATELY without waiting!
   const processFiles = (fileList: FileList | File[]) => {
     setUploadError(null);
     const filesArray = Array.from(fileList);
@@ -225,39 +226,64 @@ export default function ResumeTab({
     const validFiles = filesArray.filter(f => f.size <= MAX_FILE_SIZE);
     if (validFiles.length === 0) return;
 
+    const newItems: ResumeItem[] = [];
+    let completedCount = 0;
+
     validFiles.forEach(file => {
       const formattedSize = formatFileSize(file.size);
-      const fileId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const cleanTitle = (validFiles.length === 1 && recordName.trim())
+        ? recordName.trim()
+        : file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
 
       const reader = new FileReader();
       reader.onload = (event) => {
         const dataUrl = event.target?.result as string;
 
-        setSelectedFiles(prev => {
-          if (prev.some(f => f.name === file.name && f.rawSize === file.size)) return prev;
-          return [
-            ...prev,
-            {
-              id: fileId,
-              name: file.name,
-              size: formattedSize,
-              rawSize: file.size,
-              dataUrl,
-              fileObj: file,
-              type: documentType
-            }
-          ];
-        });
-
-        // Set single file preview as well for backward compatibility
-        setSelectedFile({
-          name: file.name,
+        const newResumeItem: ResumeItem = {
+          id: generateUUID(),
+          name: cleanTitle || 'Resume Document',
+          type: documentType || 'Resume',
+          visibility: visibility || 'private',
+          fileName: file.name,
           size: formattedSize,
-          dataUrl
-        });
+          uploadDate: new Date().toISOString().split('T')[0],
+          category: documentType || 'Resume',
+          fileDataUrl: dataUrl,
+          fileUrl: dataUrl
+        };
 
-        // Auto record naming for first file if user hasn't typed one
-        setRecordName(curr => curr || file.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " "));
+        newItems.push(newResumeItem);
+        completedCount++;
+
+        // Once all selected files have loaded, save IMMEDIATELY!
+        if (completedCount === validFiles.length) {
+          if (editingResume) {
+            const updated = {
+              ...editingResume,
+              name: cleanTitle || editingResume.name,
+              fileName: file.name,
+              size: formattedSize,
+              fileDataUrl: dataUrl,
+              fileUrl: dataUrl,
+              type: documentType,
+              visibility: visibility
+            };
+            saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? updated : r));
+          } else {
+            if (onAddResumes) {
+              onAddResumes(newItems);
+            } else {
+              saveResumesToStorage([...newItems, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
+            }
+          }
+
+          // Close modal and reset fields immediately
+          setRecordName('');
+          setSelectedFiles([]);
+          setSelectedFile(null);
+          setEditingResume(null);
+          setShowUploadModal(false);
+        }
       };
       reader.readAsDataURL(file);
     });
@@ -279,105 +305,70 @@ export default function ResumeTab({
     });
   };
 
-  // Submit secure uploads (handles single & multiple files, up to 1GB each, unlimited files)
+  // Submit secure uploads (fallback manual save if user changes record name before file)
   const handleSaveResume = (e: React.FormEvent) => {
     e.preventDefault();
     setUploadError(null);
 
-    if (sourceType === 'file') {
-      if (editingResume) {
-        // Updating existing resume entry
-        const activeFile = selectedFiles[0] || selectedFile;
-        const finalFileName = activeFile?.name || editingResume.fileName || "Resume.pdf";
-        const finalSize = activeFile?.size || editingResume.size || "Document";
-        const finalDataUrl = activeFile?.dataUrl || editingResume.fileDataUrl;
+    if (editingResume) {
+      const activeFile = selectedFiles[0] || selectedFile;
+      const finalFileName = activeFile?.name || editingResume.fileName || "Resume.pdf";
+      const finalSize = activeFile?.size || editingResume.size || "Document";
+      const finalDataUrl = activeFile?.dataUrl || editingResume.fileDataUrl;
 
-        const updatedResume: ResumeItem = {
-          ...editingResume,
-          name: recordName.trim() || editingResume.name,
-          type: documentType,
-          visibility: visibility,
-          fileName: finalFileName,
-          size: finalSize,
-          category: documentType,
-          fileDataUrl: finalDataUrl,
-          fileUrl: finalDataUrl
-        };
-
-        saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? updatedResume : r));
-      } else {
-        // Creating new resume entry or multiple resume entries
-        const filesToSave = selectedFiles.length > 0 
-          ? selectedFiles 
-          : (selectedFile ? [{
-              id: generateUUID(),
-              name: selectedFile.name,
-              size: selectedFile.size,
-              rawSize: 0,
-              dataUrl: selectedFile.dataUrl,
-              type: documentType
-            }] : []);
-
-        if (filesToSave.length === 0) {
-          setUploadError('Please select at least one document or PDF file to upload.');
-          return;
-        }
-
-        const newItems: ResumeItem[] = filesToSave.map((sf, index) => {
-          const cleanTitle = (filesToSave.length === 1 && recordName.trim())
-            ? recordName.trim()
-            : sf.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
-
-          return {
-            id: generateUUID(),
-            name: cleanTitle || `Resume Document ${index + 1}`,
-            type: sf.type || documentType,
-            visibility: visibility,
-            fileName: sf.name,
-            size: sf.size,
-            uploadDate: new Date().toISOString().split('T')[0],
-            category: sf.type || documentType,
-            fileDataUrl: sf.dataUrl,
-            fileUrl: sf.dataUrl
-          };
-        });
-
-        if (onAddResumes) {
-          onAddResumes(newItems);
-        } else {
-          saveResumesToStorage([...newItems, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
-        }
-      }
-    } else {
-      // Link source type
-      if (!docLinkUrl.trim()) {
-        setUploadError('Please enter a valid document link URL.');
-        return;
-      }
-      const finalFileName = docLinkUrl ? docLinkUrl.replace(/(^\w+:|^)\/\//, '').substring(0, 30) : "External Link";
-      const cleanUrl = docLinkUrl.trim().startsWith('http') ? docLinkUrl.trim() : `https://${docLinkUrl.trim()}`;
-
-      const newResume: ResumeItem = {
-        id: editingResume ? editingResume.id : generateUUID(),
-        name: recordName.trim() || finalFileName,
+      const updatedResume: ResumeItem = {
+        ...editingResume,
+        name: recordName.trim() || editingResume.name,
         type: documentType,
         visibility: visibility,
         fileName: finalFileName,
-        size: "Cloud Link",
-        uploadDate: new Date().toISOString().split('T')[0],
+        size: finalSize,
         category: documentType,
-        linkUrl: cleanUrl,
-        fileUrl: cleanUrl
+        fileDataUrl: finalDataUrl,
+        fileUrl: finalDataUrl
       };
 
-      if (editingResume) {
-        saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? newResume : r));
+      saveResumesToStorage(resumes.map(r => r.id === editingResume.id ? updatedResume : r));
+    } else {
+      const filesToSave = selectedFiles.length > 0 
+        ? selectedFiles 
+        : (selectedFile ? [{
+            id: generateUUID(),
+            name: selectedFile.name,
+            size: selectedFile.size,
+            rawSize: 0,
+            dataUrl: selectedFile.dataUrl,
+            type: documentType
+          }] : []);
+
+      if (filesToSave.length === 0) {
+        setUploadError('Please select at least one PDF file to upload.');
+        return;
+      }
+
+      const newItems: ResumeItem[] = filesToSave.map((sf, index) => {
+        const cleanTitle = (filesToSave.length === 1 && recordName.trim())
+          ? recordName.trim()
+          : sf.name.replace(/\.[^/.]+$/, "").replace(/[_-]/g, " ");
+
+        return {
+          id: generateUUID(),
+          name: cleanTitle || `Resume Document ${index + 1}`,
+          type: sf.type || documentType,
+          visibility: visibility,
+          fileName: sf.name,
+          size: sf.size,
+          uploadDate: new Date().toISOString().split('T')[0],
+          category: sf.type || documentType,
+          fileDataUrl: sf.dataUrl,
+          fileUrl: sf.dataUrl
+        };
+      });
+
+      if (onAddResumes) {
+        onAddResumes(newItems);
       } else {
-        if (onAddResumes) {
-          onAddResumes([newResume]);
-        } else {
-          saveResumesToStorage([newResume, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
-        }
+        saveResumesToStorage([...newItems, ...resumes.filter(r => r.fileName !== 'Simulated_Document.pdf')]);
       }
     }
 
@@ -596,23 +587,7 @@ export default function ResumeTab({
                   </div>
                 </div>
               );
-            })() || (viewingResume.linkUrl && !viewingResume.linkUrl.includes('example.com') ? (
-              <div className="p-8 rounded-2xl border text-center my-6 bg-slate-950/80 border-slate-800">
-                <Link2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-                <p className="text-sm font-bold mb-1 text-white">Linked Vault Document URL</p>
-                <p className="text-xs text-gray-550 mb-6 max-w-md mx-auto truncate select-all font-mono">{viewingResume.linkUrl}</p>
-                <a
-                  href={viewingResume.linkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-[#10b981] hover:bg-emerald-600 font-bold text-slate-950 px-6 py-3 rounded-xl text-xs transition duration-200 cursor-pointer select-none shadow-lg shadow-emerald-500/10"
-                  style={{ backgroundColor: '#10b981', color: '#020617' }}
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-slate-950" />
-                  <span>Open External Link URL</span>
-                </a>
-              </div>
-            ) : (
+            })() || (
               <div className="text-center py-12 px-4 space-y-4">
                 <div className="p-3 bg-amber-500/10 rounded-full text-amber-400 border border-amber-500/15 w-fit mx-auto">
                   <FileText className="w-8 h-8" />
@@ -635,7 +610,7 @@ export default function ResumeTab({
                   <span>Upload Original PDF</span>
                 </button>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
@@ -775,146 +750,110 @@ export default function ResumeTab({
               </div>
             )}
 
-            {/* Source Method Option Box and Toggle Section */}
-            {sourceType === 'file' ? (
-              <div className="space-y-3">
-                <div className="flex justify-between items-center pr-1">
-                  <span className="text-[11px] text-gray-400 font-mono">
-                    {selectedFiles.length > 0 
-                      ? `${selectedFiles.length} ${selectedFiles.length === 1 ? 'file' : 'files'} selected` 
-                      : 'Accepts files < 1GB • Unlimited files'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSourceType('link');
-                      setSelectedFile(null);
-                      setSelectedFiles([]);
-                      setUploadError(null);
-                    }}
-                    className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 transition duration-155 cursor-pointer select-none"
-                  >
-                    🔗 Handle via External Link URL instead
-                  </button>
-                </div>
-
-                <div 
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 transition-all flex flex-col items-center justify-center gap-3 bg-[#08090d] cursor-pointer relative ${
-                    isDragging 
-                      ? 'border-emerald-500 bg-[#080d0d]' 
-                      : 'border-slate-800/85 hover:border-slate-700/80 hover:bg-[#0c0e12]'
-                  }`}
-                  title="Click or drag to select document files (multiple allowed, up to 1GB each)"
-                >
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileSelect} 
-                    accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
-                    multiple
-                    className="hidden" 
-                  />
-
-                  <CloudUpload className="w-10 h-10 text-emerald-400/80 stroke-[1.5]" />
-                  <div className="text-center">
-                    <p className="text-xs sm:text-sm font-bold text-gray-200 select-none">
-                      {selectedFiles.length > 0 ? '+ Click to Add More Files' : 'Select or Drag & Drop Documents'}
-                    </p>
-                    <p className="text-[11px] text-emerald-400 font-semibold font-mono select-none mt-1">
-                      Accepts files &lt; 1GB each • Add unlimited files • Multiple file upload
-                    </p>
-                    <p className="text-[10px] text-gray-500 select-none mt-0.5">
-                      Supports PDF, DOC, DOCX, PNG, JPG, and TXT
-                    </p>
-                  </div>
-                </div>
-
-                {/* Selected Files Queue List (Multiple Documents Display) */}
-                {selectedFiles.length > 0 && (
-                  <div className="space-y-2 mt-3 pt-2 border-t border-slate-900">
-                    <div className="flex justify-between items-center px-1 text-xs">
-                      <span className="font-bold text-white flex items-center gap-1.5">
-                        <Files className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>Ready to Upload ({selectedFiles.length})</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedFiles([]);
-                          setSelectedFile(null);
-                        }}
-                        className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold cursor-pointer select-none"
-                      >
-                        Clear All
-                      </button>
-                    </div>
-
-                    <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-                      {selectedFiles.map((f, idx) => (
-                        <div 
-                          key={f.id}
-                          className="flex items-center justify-between p-2.5 bg-slate-950/70 border border-slate-850 rounded-xl gap-2 hover:border-slate-800 transition"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center justify-center shrink-0">
-                              {idx + 1}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-semibold text-white truncate" title={f.name}>
-                                {f.name}
-                              </p>
-                              <p className="text-[10px] text-gray-400 font-mono">
-                                {f.size}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(ev) => {
-                              ev.stopPropagation();
-                              handleRemoveSelectedFile(f.id);
-                            }}
-                            className="p-1 rounded-lg text-gray-500 hover:text-rose-400 hover:bg-rose-950/30 transition cursor-pointer"
-                            title="Remove file from upload queue"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {/* Document File Dropzone & Selection Area (Strictly files only, no link option in CVs) */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center pr-1">
+                <span className="text-[11px] text-gray-400 font-mono">
+                  {selectedFiles.length > 0 
+                    ? `${selectedFiles.length} ${selectedFiles.length === 1 ? 'file' : 'files'} selected` 
+                    : 'Accepts PDF & documents < 1GB • Unlimited files'}
+                </span>
+                <span className="text-[11px] text-emerald-400 font-mono font-bold">
+                  ⚡ Saves Immediately on Upload
+                </span>
               </div>
-            ) : (
-              /* Link URL Input Field */
-              <div className="space-y-2 animate-fade-in">
-                <div className="flex justify-between items-center">
-                  <label className="text-xs font-bold text-gray-400 tracking-wider uppercase block select-none">Link URL</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSourceType('file');
-                      setDocLinkUrl('');
-                    }}
-                    className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 transition duration-155 cursor-pointer select-none"
-                  >
-                    📁 Upload Local File instead
-                  </button>
-                </div>
+
+              <div 
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 transition-all flex flex-col items-center justify-center gap-3 bg-[#08090d] cursor-pointer relative ${
+                  isDragging 
+                    ? 'border-emerald-500 bg-[#080d0d]' 
+                    : 'border-slate-800/85 hover:border-slate-700/80 hover:bg-[#0c0e12]'
+                }`}
+                title="Click or drag to select document files (saves immediately)"
+              >
                 <input 
-                  type="url"
-                  required
-                  value={docLinkUrl}
-                  onChange={e => setDocLinkUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-[#08090d] border border-slate-800/80 rounded-xl px-4 py-3.5 text-white text-sm focus:border-emerald-500 outline-none placeholder-gray-650 select-text"
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileSelect} 
+                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
+                  multiple
+                  className="hidden" 
                 />
+
+                <CloudUpload className="w-10 h-10 text-emerald-400/80 stroke-[1.5]" />
+                <div className="text-center">
+                  <p className="text-xs sm:text-sm font-bold text-gray-200 select-none">
+                    Select or Drag & Drop PDF Resume / CV
+                  </p>
+                  <p className="text-[11px] text-emerald-400 font-semibold font-mono select-none mt-1">
+                    Uploads & saves immediately into vault • No AI generation
+                  </p>
+                  <p className="text-[10px] text-gray-500 select-none mt-0.5">
+                    Supports PDF, DOC, DOCX, PNG, JPG (up to 1GB)
+                  </p>
+                </div>
               </div>
-            )}
+
+              {/* Selected Files Queue List (Multiple Documents Display) */}
+              {selectedFiles.length > 0 && (
+                <div className="space-y-2 mt-3 pt-2 border-t border-slate-900">
+                  <div className="flex justify-between items-center px-1 text-xs">
+                    <span className="font-bold text-white flex items-center gap-1.5">
+                      <Files className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Ready to Upload ({selectedFiles.length})</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedFiles([]);
+                        setSelectedFile(null);
+                      }}
+                      className="text-[11px] text-rose-400 hover:text-rose-300 font-semibold cursor-pointer select-none"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                    {selectedFiles.map((f, idx) => (
+                      <div 
+                        key={f.id}
+                        className="flex items-center justify-between p-2.5 bg-slate-950/70 border border-slate-850 rounded-xl gap-2 hover:border-slate-800 transition"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <span className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold flex items-center justify-center shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-white truncate" title={f.name}>
+                              {f.name}
+                            </p>
+                            <p className="text-[10px] text-gray-400 font-mono">
+                              {f.size}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            handleRemoveSelectedFile(f.id);
+                          }}
+                          className="p-1 rounded-lg text-gray-500 hover:text-rose-400 hover:bg-rose-950/30 transition cursor-pointer"
+                          title="Remove file from upload queue"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Custom styled save submit trigger */}
             <button
@@ -1126,13 +1065,6 @@ export default function ResumeTab({
                     <span className="bg-amber-500/10 border border-amber-500/20 text-amber-500 text-[10px] px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 select-none">
                       <Lock className="w-3 h-3 text-amber-500" />
                       <span>Private</span>
-                    </span>
-                  )}
-
-                  {res.linkUrl && (
-                    <span className="bg-blue-500/15 border border-blue-500/20 text-blue-400 text-[10px] px-2.5 py-1 rounded-full font-semibold flex items-center gap-1 select-none">
-                      <Link2 className="w-3 h-3 text-blue-400" />
-                      <span>URL</span>
                     </span>
                   )}
                 </div>

@@ -15,7 +15,11 @@ import {
   Archive,
   FolderOpen,
   Volume2,
-  Bell
+  Bell,
+  Laptop,
+  LogOut,
+  Smartphone,
+  Shield
 } from 'lucide-react';
 import { DeletedItem } from '../types';
 import { 
@@ -31,13 +35,17 @@ interface SettingsTabProps {
   onRestoreOldData: (item: DeletedItem) => void;
   onPermanentlyDeleteOldData: (id: string) => void;
   onRestoreDefaults?: () => void;
+  onLogoutOtherDevices?: () => void;
+  presentDeviceLabel?: string;
 }
 
 export default function SettingsTab({
   onWipeData,
   oldData,
   onRestoreOldData,
-  onPermanentlyDeleteOldData
+  onPermanentlyDeleteOldData,
+  onLogoutOtherDevices,
+  presentDeviceLabel
 }: SettingsTabProps) {
   const [confirmWipe, setConfirmWipe] = useState(false);
   const [notifications, setNotifications] = useState(true);
@@ -141,7 +149,7 @@ export default function SettingsTab({
               </button>
             </div>
 
-            <div className="flex items-center justify-between gap-4 border-t border-slate-850/60 pt-4">
+            <div className="flex items-center justify-between gap-4 border-t border-slate-850 pt-4">
               <div>
                 <h4 className="text-white font-semibold text-xs">Toast Status Notifications</h4>
                 <p className="text-[10px] text-gray-550 mt-0.5">Trigger brief alerts in margins upon modifying core intelligence items.</p>
@@ -210,9 +218,64 @@ export default function SettingsTab({
 
       </div>
 
+      {/* Device & Active Session Management */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-sm tracking-tight flex items-center gap-2">
+                <span>Active Device & Session Security</span>
+                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                  Single Login Active
+                </span>
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Concurrent logins are prevented. Logging in on a new device signs out other devices.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 bg-slate-800 rounded-lg text-emerald-400 shrink-0">
+              <Laptop className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-semibold text-xs truncate">
+                  {presentDeviceLabel || 'Current Device'}
+                </span>
+                <span className="text-[9px] font-mono uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-bold">
+                  Present Device (Active)
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                This browser is currently authorized and active.
+              </p>
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={onLogoutOtherDevices}
+              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer active:scale-95 shadow-sm"
+              title="Terminate all other active sessions and keep only this device logged in"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout other devices except this device (present device)</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Morning Notification Sound Preferences (User's Choice) */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-850">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl">
               <Volume2 className="w-5 h-5" />

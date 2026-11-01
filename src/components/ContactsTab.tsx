@@ -1,5 +1,19 @@
-import React, { useState } from 'react';
-import { Plus, Users, Mail, Phone, MessageSquare, Trash2, ShieldAlert, Star, Calendar, Edit2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { 
+  Plus, 
+  Users, 
+  Mail, 
+  Phone, 
+  MessageSquare, 
+  Trash2, 
+  Calendar, 
+  Edit2, 
+  Search,
+  Building,
+  Briefcase,
+  ChevronDown,
+  ChevronUp
+} from 'lucide-react';
 import { Contact } from '../types';
 
 interface ContactsTabProps {
@@ -19,6 +33,7 @@ export default function ContactsTab({
 }: ContactsTabProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // State for contact inputs
   const [name, setName] = useState('');
@@ -29,8 +44,21 @@ export default function ContactsTab({
 
   // Interactive interaction logging state
   const [activeLogContactId, setActiveLogContactId] = useState<string | null>(null);
+  const [expandedLogsContactId, setExpandedLogsContactId] = useState<string | null>(null);
   const [logType, setLogType] = useState<'email' | 'call' | 'meeting' | 'note'>('note');
   const [logSummary, setLogSummary] = useState('');
+
+  const filteredContacts = useMemo(() => {
+    if (!searchQuery.trim()) return contacts;
+    const q = searchQuery.toLowerCase().trim();
+    return contacts.filter(c => 
+      (c.name || '').toLowerCase().includes(q) ||
+      (c.role || '').toLowerCase().includes(q) ||
+      (c.company || '').toLowerCase().includes(q) ||
+      (c.email || '').toLowerCase().includes(q) ||
+      (c.phone || '').toLowerCase().includes(q)
+    );
+  }, [contacts, searchQuery]);
 
   const handleSubmitContact = (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,115 +236,186 @@ export default function ContactsTab({
         </form>
       )}
 
-      {/* CRM Contact Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {contacts.map(ct => (
-          <div key={ct.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 group relative hover:border-emerald-400/10 transition">
-            {/* Profile Line with integrated Edit & Delete action buttons */}
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b border-slate-850/80 pb-4">
-              <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                <div className="w-11 h-11 rounded-xl bg-slate-950 border border-slate-850 flex items-center justify-center font-bold text-emerald-400 text-sm shrink-0">
-                  {ct.name.split(' ').map(n=>n[0]).join('')}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-white font-bold text-sm tracking-tight">{ct.name}</h3>
-                  </div>
-                  <p className="text-gray-400 text-xs mt-0.5">{ct.role || 'Career Network Contact'} • <strong className="text-gray-350 font-semibold">{ct.company}</strong></p>
-                </div>
-              </div>
+      {/* Search Bar & Total Counter */}
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-[#0a0b10] p-3 rounded-2xl border border-slate-850">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search contacts list by name, company, role, email, or phone..."
+            className="w-full bg-slate-950/80 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white placeholder-gray-600 focus:border-emerald-500 outline-none"
+          />
+        </div>
+        <div className="flex items-center gap-2 px-2 text-xs font-mono text-gray-400 shrink-0">
+          <Users className="w-4 h-4 text-emerald-400" />
+          <span>Total Contacts: <strong className="text-white font-bold">{filteredContacts.length}</strong></span>
+        </div>
+      </div>
 
-              {/* CLEARLY VISIBLE ACTION BUTTONS: EDIT & DELETE WITH PROPER SPACE */}
-              <div className="flex items-center gap-3 shrink-0">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setEditingContact(ct);
-                    setName(ct.name);
-                    setRole(ct.role);
-                    setCompany(ct.company || '');
-                    setEmail(ct.email || '');
-                    setPhone(ct.phone || '');
-                    setShowForm(true);
-                    document.getElementById('contacts-pane')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 hover:text-sky-300 border border-sky-500/40 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
-                  title="Edit contact details"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>Edit</span>
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => onDeleteContact(ct.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/40 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
-                  title="Delete contact"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Details and coordinates */}
-            <div className="text-xs">
-              <div className="space-y-1.5 text-gray-450 font-mono">
-                {ct.email && (
-                  <div className="flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-emerald-400/80" />
-                    <span className="truncate">{ct.email}</span>
+      {/* CRM Contact List View (Rendered as a sleek List per requirement) */}
+      <div className="space-y-3" id="contacts-list-container">
+        {filteredContacts.length === 0 ? (
+          <div className="py-16 text-center border-2 border-dashed border-slate-900 rounded-2xl bg-[#0f1115]/30 p-6 space-y-3">
+            <Users className="w-10 h-10 text-slate-600 mx-auto" />
+            <p className="text-sm text-gray-300 font-bold">No contacts found</p>
+            <p className="text-xs text-gray-500 max-w-md mx-auto">
+              {searchQuery ? `No contacts matching "${searchQuery}".` : 'Add your first contact to populate your network list.'}
+            </p>
+          </div>
+        ) : (
+          filteredContacts.map(ct => (
+            <div 
+              key={ct.id} 
+              className="bg-[#0c0d12] border border-slate-850 hover:border-slate-750/90 rounded-2xl p-4 sm:p-5 transition-all shadow-sm space-y-3"
+            >
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                
+                {/* 1. Identity & Company */}
+                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                  <div className="w-11 h-11 rounded-xl bg-slate-950 border border-emerald-500/20 flex items-center justify-center font-bold text-emerald-400 text-sm shrink-0 shadow-inner">
+                    {ct.name.split(' ').map(n=>n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
-                )}
-                {ct.phone && (
-                  <div className="flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5 text-emerald-400/80" />
-                    <span>{ct.phone}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Communication log tracker */}
-            {ct.interactionLogs && ct.interactionLogs.length > 0 && (
-              <div className="bg-slate-950/20 rounded-xl p-3 border border-slate-850/40 space-y-2">
-                <span className="text-[9px] font-mono font-bold text-gray-550 uppercase flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-emerald-400" />
-                  LATEST SYNC COMM LOGS
-                </span>
-                {ct.interactionLogs.map(log => (
-                  <div key={log.id} className="text-[11px] text-gray-400 leading-normal pl-2 border-l border-emerald-500/50">
-                    <div className="flex items-center justify-between font-mono text-[9px] text-gray-550">
-                      <span className="capitalize font-bold text-gray-450">{log.type} session</span>
-                      <span>{log.timestamp.substring(0, 10)}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="text-white font-bold text-sm tracking-tight truncate">{ct.name}</h3>
+                      <span className="text-[10px] font-mono text-gray-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded-full">
+                        {ct.category || 'Contact'}
+                      </span>
                     </div>
-                    <p className="mt-0.5 italic text-gray-350">"{log.summary}"</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5 flex-wrap">
+                      <span className="font-semibold text-gray-300 flex items-center gap-1">
+                        <Briefcase className="w-3 h-3 text-emerald-400" />
+                        {ct.role || 'Professional'}
+                      </span>
+                      <span>•</span>
+                      <span className="text-gray-400 flex items-center gap-1">
+                        <Building className="w-3 h-3 text-sky-400" />
+                        {ct.company}
+                      </span>
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                {/* 2. Communication Coordinates (Email & Phone) */}
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 text-xs font-mono text-gray-300 lg:px-4">
+                  {ct.email && (
+                    <a 
+                      href={`mailto:${ct.email}`}
+                      className="inline-flex items-center gap-1.5 text-gray-300 hover:text-emerald-400 transition bg-slate-950/60 border border-slate-850 px-2.5 py-1.5 rounded-xl truncate max-w-[200px]"
+                      title="Send email"
+                    >
+                      <Mail className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="truncate">{ct.email}</span>
+                    </a>
+                  )}
+                  {ct.phone && (
+                    <a 
+                      href={`tel:${ct.phone}`}
+                      className="inline-flex items-center gap-1.5 text-gray-300 hover:text-emerald-400 transition bg-slate-950/60 border border-slate-850 px-2.5 py-1.5 rounded-xl shrink-0"
+                      title="Call contact"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                      <span>{ct.phone}</span>
+                    </a>
+                  )}
+                  <span className="text-[10px] text-gray-500 font-mono shrink-0">
+                    Sync: {ct.lastInteracted || 'Recent'}
+                  </span>
+                </div>
+
+                {/* 3. Action Buttons Row (Edit, Delete, Log Communication) */}
+                <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                  <button 
+                    type="button"
+                    onClick={() => setActiveLogContactId(activeLogContactId === ct.id ? null : ct.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer border shadow-sm active:scale-95 ${
+                      activeLogContactId === ct.id
+                        ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                        : 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    }`}
+                    title="Log communication session"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>Log</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setEditingContact(ct);
+                      setName(ct.name);
+                      setRole(ct.role);
+                      setCompany(ct.company || '');
+                      setEmail(ct.email || '');
+                      setPhone(ct.phone || '');
+                      setShowForm(true);
+                      document.getElementById('contacts-pane')?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 rounded-xl text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                    title="Edit contact details"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => onDeleteContact(ct.id)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl text-xs font-semibold transition cursor-pointer shadow-sm active:scale-95"
+                    title="Delete contact"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+
               </div>
-            )}
 
-            {/* Add Interactive interaction log link and prompt */}
-            <div className="pt-2 flex justify-between items-center text-xs">
-              <span className="text-[10px] font-mono text-gray-550">
-                Last Sync: {ct.lastInteracted || 'Unspecified'}
-              </span>
+              {/* Interaction Log History Toggle (if logs exist) */}
+              {ct.interactionLogs && ct.interactionLogs.length > 0 && (
+                <div className="pt-2 border-t border-slate-900">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLogsContactId(expandedLogsContactId === ct.id ? null : ct.id)}
+                    className="text-[11px] font-mono text-gray-400 hover:text-emerald-400 flex items-center gap-1.5 cursor-pointer transition select-none"
+                  >
+                    <Calendar className="w-3 h-3 text-emerald-400" />
+                    <span>{ct.interactionLogs.length} Communication {ct.interactionLogs.length === 1 ? 'Record' : 'Records'}</span>
+                    {expandedLogsContactId === ct.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
 
-              {activeLogContactId !== ct.id ? (
-                <button 
-                  onClick={() => setActiveLogContactId(ct.id)}
-                  className="text-[11px] font-mono text-emerald-400 hover:text-emerald-305 hover:underline cursor-pointer flex items-center gap-1"
+                  {expandedLogsContactId === ct.id && (
+                    <div className="mt-2 space-y-1.5 bg-slate-950/60 p-3 rounded-xl border border-slate-900">
+                      {ct.interactionLogs.map(log => (
+                        <div key={log.id} className="text-xs text-gray-300 pl-2.5 border-l-2 border-emerald-500/60 py-1">
+                          <div className="flex items-center justify-between text-[10px] font-mono text-gray-500">
+                            <span className="capitalize font-bold text-emerald-400">{log.type}</span>
+                            <span>{log.timestamp.substring(0, 10)}</span>
+                          </div>
+                          <p className="mt-0.5 text-gray-300 italic text-[11px]">"{log.summary}"</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Inline Log Interaction Form */}
+              {activeLogContactId === ct.id && (
+                <form 
+                  onSubmit={e => handleLogInteraction(e, ct.id)} 
+                  className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5 animate-fade-in"
                 >
-                  <MessageSquare className="w-3 h-3" />
-                  <span>Log Interactive Communication</span>
-                </button>
-              ) : (
-                <form onSubmit={e => handleLogInteraction(e, ct.id)} className="w-full max-w-sm flex flex-col gap-2 mt-2 bg-slate-950 p-3 rounded-xl border border-slate-850/80">
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-mono font-bold text-gray-500 uppercase">ADD TO TIMELINE</span>
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
+                      Log New Interaction with {ct.name}
+                    </span>
                     <select
                       value={logType}
                       onChange={e=>setLogType(e.target.value as any)}
-                      className="bg-slate-900 border border-slate-800 text-[10px] text-gray-300 rounded p-0.5 outline-none font-mono"
+                      className="bg-slate-900 border border-slate-800 text-xs text-gray-300 rounded-lg px-2 py-1 outline-none font-mono cursor-pointer"
                     >
                       <option value="call">Phone Call</option>
                       <option value="email">Email</option>
@@ -325,33 +424,34 @@ export default function ContactsTab({
                     </select>
                   </div>
                   <input 
-                    type="text" required
-                    placeholder="Short description of what was synchronized..."
+                    type="text" 
+                    required
+                    placeholder="Briefly describe what was discussed or synchronized..."
                     value={logSummary}
                     onChange={e=>setLogSummary(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-white"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:border-emerald-500 outline-none"
                   />
-                  <div className="flex justify-end gap-1 text-[10px] font-bold">
+                  <div className="flex justify-end gap-2 text-xs font-bold pt-1">
                     <button 
                       type="button" 
                       onClick={() => setActiveLogContactId(null)}
-                      className="border border-slate-800 text-gray-400 px-2 py-0.5 rounded cursor-pointer"
+                      className="border border-slate-800 text-gray-400 px-3 py-1.5 rounded-xl hover:bg-slate-900 transition cursor-pointer"
                     >
                       Cancel
                     </button>
                     <button 
                       type="submit" 
-                      className="bg-emerald-500 text-slate-950 px-2.5 py-0.5 rounded cursor-pointer"
+                      className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-4 py-1.5 rounded-xl transition cursor-pointer font-bold"
                     >
                       Save Communication
                     </button>
                   </div>
                 </form>
               )}
-            </div>
 
-          </div>
-        ))}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

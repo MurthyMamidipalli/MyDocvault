@@ -174,6 +174,126 @@ export default function NotepadTab({
   const [newSubtaskDueDate, setNewSubtaskDueDate] = useState('');
   const [newSubtaskEveryDay, setNewSubtaskEveryDay] = useState(false);
 
+  // High performance debounced autosave to eliminate typing lag
+  const saveDebounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingUpdatesRef = useRef<Record<string, any>>({});
+  const notesRef = useRef<NotepadNote[]>(notes);
+  notesRef.current = notes;
+  const activeNoteIdRef = useRef<string | null>(activeNoteId);
+  activeNoteIdRef.current = activeNoteId;
+
+  // Image Context Menu State (Copy Image, Open in New Tab, Open in New Window)
+  const [imageContextMenu, setImageContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    imgSrc: string;
+  }>({ visible: false, x: 0, y: 0, imgSrc: '' });
+
+  // Flush any pending typed updates immediately
+  const flushPendingUpdates = () => {
+    if (saveDebounceTimeoutRef.current) {
+      clearTimeout(saveDebounceTimeoutRef.current);
+      saveDebounceTimeoutRef.current = null;
+    }
+    const currentPending = { ...pendingUpdatesRef.current };
+    const currentId = activeNoteIdRef.current;
+    if (Object.keys(currentPending).length > 0 && currentId) {
+      pendingUpdatesRef.current = {};
+      const updated = notesRef.current.map(n => {
+        if (n.id === currentId) {
+          return {
+            ...n,
+            ...currentPending,
+            updatedAt: new Date().toISOString()
+          };
+        }
+        return n;
+      });
+      onUpdateNotes(updated);
+    }
+  };
+
+  // Schedule a debounced update (600ms debounce ensures 0ms typing lag!)
+  const scheduleDebouncedUpdate = (field: keyof NotepadNote, value: any, delay = 600) => {
+    const currentId = activeNoteIdRef.current;
+    if (!currentId) return;
+    pendingUpdatesRef.current[field] = value;
+
+    if (saveDebounceTimeoutRef.current) {
+      clearTimeout(saveDebounceTimeoutRef.current);
+    }
+
+    saveDebounceTimeoutRef.current = setTimeout(() => {
+      flushPendingUpdates();
+    }, delay);
+  };
+
+  // Flush on note switch or unmount
+  useEffect(() => {
+    return () => {
+      flushPendingUpdates();
+    };
+  }, [activeNoteId]);
+
+  // Close image context menu on window click
+  useEffect(() => {
+    const handleCloseMenu = () => {
+      setImageContextMenu(prev => prev.visible ? { ...prev, visible: false } : prev);
+    };
+    window.addEventListener('click', handleCloseMenu);
+    return () => window.removeEventListener('click', handleCloseMenu);
+  }, []);
+
+  // Copy Image to clipboard
+  const handleCopyImageAction = async (imgSrc: string) => {
+    try {
+      if (imgSrc.startsWith('data:image/')) {
+        const res = await fetch(imgSrc);
+        const blob = await res.blob();
+        await navigator.clipboard.write([
+          new ClipboardItem({ [blob.type]: blob })
+        ]);
+        triggerToast('Image copied to clipboard!');
+      } else {
+        await navigator.clipboard.writeText(imgSrc);
+        triggerToast('Image link copied to clipboard!');
+      }
+    } catch (_) {
+      try {
+        await navigator.clipboard.writeText(imgSrc);
+        triggerToast('Image link copied to clipboard!');
+      } catch (_) {
+        triggerToast('Unable to copy image directly.');
+      }
+    }
+    setImageContextMenu(prev => ({ ...prev, visible: false }));
+  };
+
+  // Open Image in New Tab
+  const handleOpenImageNewTabAction = (imgSrc: string) => {
+    if (imgSrc.startsWith('data:')) {
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write(`<!DOCTYPE html><html><head><title>Notepad Image Preview</title><style>body{margin:0;background:#090a0f;display:flex;align-items:center;justify-content:center;height:100vh;}img{max-width:95vw;max-height:95vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.8);}</style></head><body><img src="${imgSrc}" alt="Preview" /></body></html>`);
+        win.document.close();
+      }
+    } else {
+      window.open(imgSrc, '_blank');
+    }
+    setImageContextMenu(prev => ({ ...prev, visible: false }));
+  };
+
+  // Open Image in New Window
+  const handleOpenImageNewWindowAction = (imgSrc: string) => {
+    const win = window.open('', '_blank', 'width=900,height=700,resizable=yes');
+    if (win) {
+      win.document.write(`<!DOCTYPE html><html><head><title>Notepad Image Window</title><style>body{margin:0;background:#090a0f;display:flex;align-items:center;justify-content:center;height:100vh;}img{max-width:95vw;max-height:95vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.8);}</style></head><body><img src="${imgSrc}" alt="Preview" /></body></html>`);
+      win.document.close();
+    }
+    setImageContextMenu(prev => ({ ...prev, visible: false }));
+  };
+
   // Auto-activate first note if activeNoteId is not valid and notes are loaded
   useEffect(() => {
     if (notes && notes.length > 0) {
@@ -1446,8 +1566,10 @@ export default function NotepadTab({
                     <input
                       ref={titleInputRef}
                       type="text"
-                      value={activeNote.title}
-                      onChange={(e) => handleUpdateActiveNote('title', e.target.value)}
+                      defaultValue={activeNote.title}
+                      key={activeNote.id}
+                      onChange={(e) => scheduleDebouncedUpdate('title', e.target.value, 400)}
+                      onBlur={() => flushPendingUpdates()}
                       placeholder={activeNote.type === 'task' ? "Enter Work Task Title..." : "Enter Document Title..."}
                       className={`w-full bg-transparent text-xl md:text-2xl font-extrabold text-white placeholder-gray-600 focus:outline-none transition ${
                         activeNote.completed ? 'line-through text-gray-500' : ''
@@ -1715,16 +1837,74 @@ export default function NotepadTab({
                   </div>
                 )}
 
-                {/* 4. Rich ContentEditable Main Editor */}
-                <div className="flex-1 flex flex-col pt-1 min-h-[360px]">
+                {/* 4. Rich ContentEditable Main Editor with 0ms Lag Debounce & Image Paste Support */}
+                <div className="flex-1 flex flex-col pt-1 min-h-[360px] relative">
                   <div
                     ref={editorRef}
                     contentEditable
                     suppressContentEditableWarning
                     onInput={(e) => {
                       const html = (e.currentTarget as HTMLDivElement).innerHTML;
-                      handleUpdateActiveNote('content', html);
+                      scheduleDebouncedUpdate('content', html, 500);
                       saveSelection();
+                    }}
+                    onBlur={() => {
+                      flushPendingUpdates();
+                    }}
+                    onPaste={(e) => {
+                      const items = e.clipboardData?.items;
+                      if (items) {
+                        for (let i = 0; i < items.length; i++) {
+                          if (items[i].type.startsWith('image/')) {
+                            e.preventDefault();
+                            const file = items[i].getAsFile();
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (event) => {
+                                const dataUrl = event.target?.result as string;
+                                restoreSelection();
+                                const img = document.createElement('img');
+                                img.src = dataUrl;
+                                img.alt = 'Pasted image';
+                                img.className = 'notepad-pasted-image max-w-full max-h-[500px] rounded-xl my-3 shadow-lg border border-slate-800 cursor-pointer object-contain block';
+                                img.style.maxWidth = '100%';
+                                img.style.borderRadius = '0.75rem';
+
+                                const sel = window.getSelection();
+                                if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+                                  const range = sel.getRangeAt(0);
+                                  range.deleteContents();
+                                  range.insertNode(img);
+                                  range.collapse(false);
+                                } else if (editorRef.current) {
+                                  editorRef.current.appendChild(img);
+                                }
+                                saveSelection();
+                                if (editorRef.current) {
+                                  scheduleDebouncedUpdate('content', editorRef.current.innerHTML, 300);
+                                }
+                                triggerToast('Image pasted into document! Right-click image for options.');
+                              };
+                              reader.readAsDataURL(file);
+                              return;
+                            }
+                          }
+                        }
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      const target = e.target as HTMLElement;
+                      if (target && target.tagName === 'IMG') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const img = target as HTMLImageElement;
+                        setImageContextMenu({
+                          visible: true,
+                          x: Math.min(e.clientX, window.innerWidth - 220),
+                          y: Math.min(e.clientY, window.innerHeight - 180),
+                          imgSrc: img.src
+                        });
+                      }
                     }}
                     onKeyUp={saveSelection}
                     onMouseUp={saveSelection}
@@ -1735,6 +1915,44 @@ export default function NotepadTab({
                       minHeight: '340px'
                     }}
                   />
+
+                  {/* Image Right-Click Context Menu Popup */}
+                  {imageContextMenu.visible && (
+                    <div 
+                      className="fixed z-[9999] bg-[#0f1117] border border-slate-750/90 rounded-2xl shadow-2xl p-1.5 w-52 animate-fade-in backdrop-blur-xl text-left"
+                      style={{ top: `${imageContextMenu.y}px`, left: `${imageContextMenu.x}px` }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="px-3 py-1.5 border-b border-slate-850/80 mb-1 flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Image Options</span>
+                        <span className="text-[9px] text-emerald-400 font-mono">Ready</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyImageAction(imageContextMenu.imgSrc)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-850 rounded-xl transition cursor-pointer select-none text-left"
+                      >
+                        <Copy className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Copy Image</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenImageNewTabAction(imageContextMenu.imgSrc)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-850 rounded-xl transition cursor-pointer select-none text-left"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                        <span>Open in New Tab</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenImageNewWindowAction(imageContextMenu.imgSrc)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-850 rounded-xl transition cursor-pointer select-none text-left"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Open in New Window</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* 5. Active Note Stats panel */}

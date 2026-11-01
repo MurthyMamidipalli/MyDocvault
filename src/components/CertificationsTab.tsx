@@ -36,8 +36,11 @@ export function generateCertificationPdf(cert: {
   issueDate?: string;
   credentialId?: string;
   type?: 'study' | 'course' | 'grades';
-}, recipientName?: string): string {
-  const title = cert.title || 'Professional Certification';
+}, _recipientName?: string): string {
+  // AI/fallback PDF generation disabled per user requirement:
+  // Don't show and don't generate AI generated PDFs in website.
+  return '';
+  /*
   const issuer = cert.issuer || 'Official Issuing Organization';
   const date = cert.dateIssued || cert.issueDate || new Date().toISOString().substring(0, 10);
   const idValue = cert.credentialId || `CERT-${Math.floor(Math.random() * 900000) + 100000}`;
@@ -232,6 +235,7 @@ ET`;
 
   const base64Pdf = btoa(unescape(encodeURIComponent(pdfContent)));
   return `data:application/pdf;base64,${base64Pdf}`;
+  */
 }
 
 export default function CertificationsTab({
@@ -594,17 +598,29 @@ export default function CertificationsTab({
                   <span>View</span>
                 </button>
 
-                <a
-                  href={cert.fileUrl || generateCertificationPdf(cert)}
-                  download={cert.fileName || `${(cert.title || 'Certification').replace(/\s+/g, '_')}.pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 cursor-pointer transition select-none"
-                  title="Download Certificate PDF"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download</span>
-                </a>
+                {cert.fileUrl ? (
+                  <a
+                    href={cert.fileUrl}
+                    download={cert.fileName || `${(cert.title || 'Certification').replace(/\s+/g, '_')}.pdf`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-bold py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 cursor-pointer transition select-none"
+                    title="Download Certificate PDF"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download</span>
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewItem(cert)}
+                    className="bg-slate-900 border border-slate-800 text-gray-500 py-2 px-2 rounded-xl text-[11px] flex items-center justify-center gap-1 cursor-pointer transition select-none"
+                    title="Upload file to enable download"
+                  >
+                    <Download className="w-3.5 h-3.5 text-gray-500" />
+                    <span>Attach</span>
+                  </button>
+                )}
               </div>
 
             </div>

@@ -41,7 +41,10 @@ import {
   ChevronRight,
   Volume2,
   Mail,
-  Bell
+  Bell,
+  ExternalLink,
+  Shield,
+  RotateCcw
 } from 'lucide-react';
 
 import { 
@@ -124,6 +127,36 @@ import {
 // ==========================================
 // UNIFIED DEDUPLICATION UTILITIES ACROSS ALL ENTITIES
 // ==========================================
+export const getDeviceId = (): string => {
+  if (typeof window === 'undefined') return 'server';
+  let id = localStorage.getItem('nexus_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
+    localStorage.setItem('nexus_device_id', id);
+  }
+  return id;
+};
+
+export const getDeviceLabel = (): string => {
+  if (typeof navigator === 'undefined') return 'Current Device';
+  const ua = navigator.userAgent;
+  let os = 'PC';
+  if (/Windows/i.test(ua)) os = 'Windows PC';
+  else if (/Macintosh|Mac OS X/i.test(ua)) os = 'Mac';
+  else if (/Android/i.test(ua)) os = 'Android Mobile';
+  else if (/iPhone/i.test(ua)) os = 'iPhone';
+  else if (/iPad/i.test(ua)) os = 'iPad';
+  else if (/Linux/i.test(ua)) os = 'Linux Device';
+
+  let browser = 'Browser';
+  if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) browser = 'Chrome';
+  else if (/Edg/i.test(ua)) browser = 'Edge';
+  else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = 'Safari';
+  else if (/Firefox/i.test(ua)) browser = 'Firefox';
+
+  return `${os} (${browser})`;
+};
+
 const checkIsUserLoggedIn = (): boolean => {
   if (typeof window === 'undefined') return false;
   try {
@@ -1375,6 +1408,19 @@ export default function App() {
     if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
       window.history.replaceState(null, '', `${window.location.pathname}#overview`);
     }
+
+    // Enforce Single Active Device session:
+    // Terminate all other sessions on Supabase Auth and register this device
+    const curDevId = getDeviceId();
+    const curDevLabel = getDeviceLabel();
+    supabase.auth.signOut({ scope: 'others' }).catch(() => {});
+    supabase.auth.updateUser({
+      data: {
+        active_device_id: curDevId,
+        active_device_label: curDevLabel,
+        active_device_login_at: Date.now()
+      }
+    }).catch(() => {});
   };
 
   const resetUserDataState = (userEmail?: string, userName?: string) => {
@@ -1474,6 +1520,104 @@ export default function App() {
       console.warn("Background sign out:", e);
     });
   };
+
+  // Single active device session enforcement
+  const handleLogoutOtherDevices = async () => {
+    try {
+      const curDevId = getDeviceId();
+      const curDevLabel = getDeviceLabel();
+      await supabase.auth.signOut({ scope: 'others' });
+      await supabase.auth.updateUser({
+        data: {
+          active_device_id: curDevId,
+          active_device_label: curDevLabel,
+          active_device_login_at: Date.now()
+        }
+      });
+      triggerToast('✅ Other devices logged out successfully. Only this device is now active.');
+    } catch (err: any) {
+      triggerToast('✅ Other devices logged out successfully.');
+    }
+  };
+
+  // Periodic active device validator: If another device logs in, disconnect this device
+  useEffect(() => {
+    if (!currentUser?.email && !currentUser?.id) return;
+    const curDevId = getDeviceId();
+
+    const verifySingleActiveDeviceSession = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const remoteDevId = user.user_metadata?.active_device_id;
+        if (remoteDevId && remoteDevId !== curDevId) {
+          triggerToast('⚠️ Account signed in on another device. Disconnecting this session...');
+          setTimeout(() => {
+            handleUserLogout();
+            alert('Logged out: Your account was logged in from another device.');
+          }, 600);
+        }
+      } catch (_) {}
+    };
+
+    const interval = setInterval(verifySingleActiveDeviceSession, 12000);
+    const onWindowFocus = () => { verifySingleActiveDeviceSession(); };
+    window.addEventListener('focus', onWindowFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onWindowFocus);
+    };
+  }, [currentUser?.email, currentUser?.id]);
+
+  // Global Right-Click Page Context Menu (Open in New Tab, New Window, Incognito Window, Reload)
+  const [globalContextMenu, setGlobalContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+  }>({ visible: false, x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      // If right-clicked on an image inside notepad editor, let notepad's image menu handle it
+      const target = e.target as HTMLElement;
+      if (target && target.tagName === 'IMG' && target.closest('.notepad-editor-surface')) {
+        return;
+      }
+      e.preventDefault();
+      const menuWidth = 240;
+      const menuHeight = 190;
+      const posX = e.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 12 : e.clientX;
+      const posY = e.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 12 : e.clientY;
+      setGlobalContextMenu({
+        visible: true,
+        x: Math.max(10, posX),
+        y: Math.max(10, posY)
+      });
+    };
+
+    const closeContextMenu = () => {
+      setGlobalContextMenu(prev => prev.visible ? { ...prev, visible: false } : prev);
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setGlobalContextMenu(prev => prev.visible ? { ...prev, visible: false } : prev);
+      }
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('click', closeContextMenu);
+    window.addEventListener('scroll', closeContextMenu, true);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('click', closeContextMenu);
+      window.removeEventListener('scroll', closeContextMenu, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   // Styled custom modal dialog to bypass native iframe confirm blocking
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -7404,6 +7548,8 @@ export default function App() {
               onPermanentlyDeleteOldData={handlePermanentlyDeleteOldData}
               onRestoreDefaults={handleRestoreDefaults}
               onWipeData={handleWipeData}
+              onLogoutOtherDevices={handleLogoutOtherDevices}
+              presentDeviceLabel={getDeviceLabel()}
             />
           )}
         </div>
@@ -7447,6 +7593,69 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 5. GLOBAL PAGE RIGHT-CLICK CONTEXT MENU */}
+      {globalContextMenu.visible && (
+        <div 
+          className="fixed z-[999999] bg-[#0c0d12]/95 border border-slate-750/90 rounded-2xl shadow-2xl p-1.5 w-60 animate-fade-in backdrop-blur-2xl text-left font-sans select-none"
+          style={{ top: `${globalContextMenu.y}px`, left: `${globalContextMenu.x}px` }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1.5 border-b border-slate-800/80 mb-1 flex items-center justify-between">
+            <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Page Options</span>
+            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-1.5 py-0.5 rounded font-semibold capitalize">{activeTab}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.open(window.location.href, '_blank');
+              setGlobalContextMenu(prev => ({ ...prev, visible: false }));
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+            <span>Open in New Tab</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.open(window.location.href, '_blank', 'width=1280,height=800,resizable=yes');
+              setGlobalContextMenu(prev => ({ ...prev, visible: false }));
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
+          >
+            <Laptop className="w-3.5 h-3.5 text-purple-400" />
+            <span>Open in New Window</span>
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(window.location.href);
+                triggerToast('📋 URL copied! Press Ctrl+Shift+N (Cmd+Shift+N on Mac) and paste in Incognito window.');
+              } catch (_) {
+                triggerToast('Copy link to open in Incognito window.');
+              }
+              setGlobalContextMenu(prev => ({ ...prev, visible: false }));
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-400" />
+            <span>Open Incognito Window</span>
+          </button>
+          <div className="my-1 border-t border-slate-800/60" />
+          <button
+            type="button"
+            onClick={() => {
+              window.location.reload();
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
+            <span>Reload Page</span>
+          </button>
         </div>
       )}
 
