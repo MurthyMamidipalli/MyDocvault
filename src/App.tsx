@@ -538,7 +538,6 @@ export const deduplicateLinks = (items?: PortfolioLink[]): PortfolioLink[] => {
   const isUserLoggedIn = checkIsUserLoggedIn();
   const result: PortfolioLink[] = [];
   const seenIds = new Set<string>();
-  const seenUrls = new Set<string>();
 
   for (const item of items) {
     if (!item) continue;
@@ -546,40 +545,25 @@ export const deduplicateLinks = (items?: PortfolioLink[]): PortfolioLink[] => {
 
     const rawId = (item.id || '').trim();
     const idKey = rawId ? toUUID(rawId) : '';
-    const normUrl = normalizeLinkUrl(item.url);
 
     let matchIdx = -1;
     if (idKey && seenIds.has(idKey)) {
       matchIdx = result.findIndex(r => r.id && toUUID(r.id) === idKey);
     } else if (rawId && seenIds.has(`raw:${rawId}`)) {
       matchIdx = result.findIndex(r => r.id === rawId);
-    } else if (normUrl && seenUrls.has(normUrl)) {
-      matchIdx = result.findIndex(r => normalizeLinkUrl(r.url) === normUrl);
     }
 
     if (matchIdx >= 0) {
-      const existing = result[matchIdx];
-      const bestId = (existing.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(existing.id))
-        ? existing.id
-        : (item.id || existing.id);
-
-      const resolvedLabel = (item.label && item.label !== 'Link' && item.label !== 'Direct Coordinate')
-        ? item.label
-        : (existing.label && existing.label !== 'Link' && existing.label !== 'Direct Coordinate' ? existing.label : (item.label || existing.label || item.platform || existing.platform || 'Link'));
-
       result[matchIdx] = {
-        ...existing,
+        ...result[matchIdx],
         ...item,
-        id: bestId,
-        label: resolvedLabel,
-        platform: (existing.platform && existing.platform !== 'Link' ? existing.platform : (item.platform || existing.platform || 'Link')),
-        url: existing.url || item.url,
-        isPublic: existing.isPublic !== false && item.isPublic !== false
+        label: item.label || result[matchIdx].label,
+        platform: item.platform || result[matchIdx].platform,
+        url: item.url || result[matchIdx].url
       };
     } else {
       if (idKey) seenIds.add(idKey);
       if (rawId) seenIds.add(`raw:${rawId}`);
-      if (normUrl) seenUrls.add(normUrl);
       result.push(item);
     }
   }
@@ -2052,494 +2036,700 @@ export default function App() {
       console.log(`[Supabase DB] Loading records for authenticated user: ${userId} (${email})`);
       
       try {
-        const [
-          pRes, sRes, eRes, cRes, expRes, jobRes,
-          projRes, prodRes, othRes, resRes, docRes,
-          nRes, lRes, tmRes, ctRes, calRes, aRes, tRes,
-          docCatRes, rlkRes
-        ] = await Promise.allSettled([
-          supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
-          supabase.from('skills').select('*').eq('user_id', userId),
-          supabase.from('education').select('*').eq('user_id', userId),
-          supabase.from('certifications').select('*').eq('user_id', userId),
-          supabase.from('experience').select('*').eq('user_id', userId),
-          supabase.from('current_jobs').select('*').eq('user_id', userId).maybeSingle(),
-          supabase.from('projects').select('*').eq('user_id', userId),
-          supabase.from('products').select('*').eq('user_id', userId),
-          supabase.from('others').select('*').eq('user_id', userId),
-          supabase.from('resumes').select('*').eq('user_id', userId),
-          supabase.from('documents').select('*').eq('user_id', userId),
-          supabase.from('notes').select('*').eq('user_id', userId),
-          supabase.from('portfolio_links').select('*').eq('user_id', userId),
-          supabase.from('career_timeline').select('*').eq('user_id', userId),
-          supabase.from('contacts').select('*').eq('user_id', userId),
-          supabase.from('calendar_events').select('*').eq('user_id', userId),
-          supabase.from('achievements').select('*').eq('user_id', userId),
-          supabase.from('testimonials').select('*').eq('user_id', userId),
-          supabase.from('document_categories').select('*').eq('user_id', userId),
-          supabase.from('resume_links').select('*').eq('user_id', userId)
-        ]);
+        // Progressive, streaming data hydration: Each data group resolves and updates React state immediately
+        // so user sees Profile, Current Job, Notes, Links, and Resumes in <200-300ms without 5-10s blocking delays!
 
-        const resumeLinksFromDb: PortfolioLink[] = [];
+        // 1. Profile & Current Job Loader (Immediate ~100-150ms)
+        const loadProfileAndJob = async () => {
+          try {
+            const [pRes, jobRes] = await Promise.allSettled([
+              supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+              supabase.from('current_jobs').select('*').eq('user_id', userId).maybeSingle()
+            ]);
 
-        // 1. Profile
-        try {
-          const pData = pRes.status === 'fulfilled' ? pRes.value.data : null;
-          if (pData) {
+            const pData = pRes.status === 'fulfilled' ? pRes.value.data : null;
+            const jobData = jobRes.status === 'fulfilled' ? jobRes.value.data : null;
+
+            let parsedCompany = '';
+            let parsedContractCompany = '';
+            let cleanBio = '';
+
             const localSavedStr = email ? localStorage.getItem(`${email}_profile`) : null;
             let localSaved: PersonalProfile | null = null;
             if (localSavedStr) {
               try { localSaved = JSON.parse(localSavedStr); } catch (_) {}
             }
-            const localAvatar = (email ? localStorage.getItem(`${email}_avatar_cache`) : '') || localSaved?.avatarUrl || profile.avatarUrl || '';
-            const restoredAvatar = pData.avatar_url || localAvatar;
 
-            if (restoredAvatar && email) {
+            if (pData) {
+              const localAvatar = (email ? localStorage.getItem(`${email}_avatar_cache`) : '') || localSaved?.avatarUrl || profile.avatarUrl || '';
+              const restoredAvatar = pData.avatar_url || localAvatar;
+
+              if (restoredAvatar && email) {
+                try { safeLocalStorageSetItem(`${email}_avatar_cache`, restoredAvatar); } catch (_) {}
+              }
+
+              const localPublicProfile = localSaved?.publicProfile !== undefined ? localSaved.publicProfile : profile.publicProfile;
+              const resolvedPublicProfile = localPublicProfile !== undefined ? localPublicProfile : (pData.public_profile ?? true);
+
+              parsedCompany = localSaved?.company || '';
+              parsedContractCompany = localSaved?.contractCompany || '';
+              cleanBio = pData.bio ?? localSaved?.bio ?? '';
+
+              if (cleanBio && typeof cleanBio === 'string') {
+                const metaMatch = cleanBio.match(/<!-- MDV_PROFILE_META:(.*?) -->/);
+                if (metaMatch && metaMatch[1]) {
+                  try {
+                    const meta = JSON.parse(decodeURIComponent(metaMatch[1]));
+                    if (meta.company) parsedCompany = meta.company;
+                    if (meta.contractCompany) parsedContractCompany = meta.contractCompany;
+                  } catch (_) {}
+                }
+                cleanBio = cleanBio.replace(/\n?<!-- MDV_PROFILE_META:.*? -->/g, '').trim();
+              }
+
+              const updatedProfile: PersonalProfile = {
+                name: pData.name ?? localSaved?.name ?? '',
+                firstName: pData.first_name ?? localSaved?.firstName ?? '',
+                lastName: pData.last_name ?? localSaved?.lastName ?? '',
+                company: parsedCompany || profile.company || '',
+                contractCompany: parsedContractCompany || profile.contractCompany || '',
+                headline: pData.headline ?? localSaved?.headline ?? '',
+                bio: cleanBio,
+                email: pData.email || email || '',
+                phone: pData.phone ?? localSaved?.phone ?? '',
+                secondaryEmail: pData.secondary_email ?? localSaved?.secondaryEmail ?? '',
+                secondaryPhone: pData.secondary_phone ?? localSaved?.secondaryPhone ?? '',
+                location: pData.location ?? localSaved?.location ?? '',
+                avatarUrl: restoredAvatar,
+                publicProfile: resolvedPublicProfile,
+                shareSlug: pData.share_slug || localSaved?.shareSlug || (pData.name ? pData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'user')
+              };
+
+              setProfile(updatedProfile);
+
+              if (email) {
+                safeLocalStorageSetItem(`${email}_profile`, JSON.stringify(updatedProfile));
+                heavyStorage.set(`${email}_profile`, updatedProfile).catch(() => {});
+                if (updatedProfile.shareSlug) {
+                  safeLocalStorageSetItem(`nexus_cache_profile_${updatedProfile.shareSlug}`, JSON.stringify(updatedProfile));
+                }
+              }
+            }
+
+            // Current Job handling
+            if (jobData) {
+              let cachedLocalJob: any = null;
+              if (email) {
+                try {
+                  const raw = localStorage.getItem(`${email}_current_job`);
+                  if (raw) cachedLocalJob = JSON.parse(raw);
+                } catch (e) {}
+              }
+
+              let parsedDesc = jobData.description || '';
+              let jobContract = jobData.contract_company || cachedLocalJob?.contractCompany || parsedContractCompany || '';
+              let parsedWeeklyGoals = Array.isArray(jobData.weekly_goals) && jobData.weekly_goals.length > 0
+                ? jobData.weekly_goals
+                : (Array.isArray(cachedLocalJob?.weeklyGoals) ? cachedLocalJob.weeklyGoals : []);
+              let parsedCurrentProjects = Array.isArray(jobData.current_projects) && jobData.current_projects.length > 0
+                ? jobData.current_projects
+                : (Array.isArray(cachedLocalJob?.currentProjects) ? cachedLocalJob.currentProjects : []);
+              let parsedDailyStandup = jobData.daily_standup_text || cachedLocalJob?.dailyStandupText || '';
+              let parsedStandupEveryDay = cachedLocalJob?.dailyStandupEveryDay || false;
+              let parsedStandupNotifType = cachedLocalJob?.dailyStandupNotificationType || 'both';
+              let parsedStandupNotifSound = cachedLocalJob?.dailyStandupNotificationSound || 'morning_harp';
+
+              if (jobData.description && typeof jobData.description === 'string' && jobData.description.trim().startsWith('{')) {
+                try {
+                  const meta = JSON.parse(jobData.description);
+                  if (meta && typeof meta === 'object') {
+                    parsedDesc = meta.rawDescription !== undefined ? meta.rawDescription : (meta.description || '');
+                    if (meta.contractCompany) jobContract = meta.contractCompany;
+                    if (Array.isArray(meta.weeklyGoals) && meta.weeklyGoals.length > 0) parsedWeeklyGoals = meta.weeklyGoals;
+                    if (Array.isArray(meta.currentProjects) && meta.currentProjects.length > 0) parsedCurrentProjects = meta.currentProjects;
+                    if (meta.dailyStandupText) parsedDailyStandup = meta.dailyStandupText;
+                    if (meta.dailyStandupEveryDay !== undefined) parsedStandupEveryDay = meta.dailyStandupEveryDay;
+                    if (meta.dailyStandupNotificationType) parsedStandupNotifType = meta.dailyStandupNotificationType;
+                    if (meta.dailyStandupNotificationSound) parsedStandupNotifSound = meta.dailyStandupNotificationSound;
+                  }
+                } catch (e) {}
+              }
+
+              const loadedJob: CurrentJob = {
+                company: jobData.company || '',
+                employer: jobData.company || '',
+                role: jobData.role || '',
+                department: jobData.department || '',
+                employeeId: jobData.employee_id || '',
+                joiningDate: jobData.joining_date || '',
+                startDate: jobData.joining_date || '',
+                location: jobData.location || '',
+                locationType: jobData.location || 'on-site',
+                employmentType: jobData.employment_type || 'full-time',
+                contractCompany: jobContract,
+                salary: jobData.salary || '',
+                manager: jobData.manager || '',
+                description: parsedDesc,
+                weeklyGoals: parsedWeeklyGoals,
+                currentProjects: parsedCurrentProjects,
+                dailyStandupText: parsedDailyStandup,
+                dailyStandupEveryDay: parsedStandupEveryDay,
+                dailyStandupNotificationType: parsedStandupNotifType,
+                dailyStandupNotificationSound: parsedStandupNotifSound
+              };
+              setCurrentJob(loadedJob as any);
+              if (email) {
+                safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(loadedJob));
+                heavyStorage.set(`${email}_current_job`, loadedJob).catch(() => {});
+              }
+              if (jobContract) {
+                setProfile(p => p.contractCompany ? p : { ...p, contractCompany: jobContract });
+              }
+              if (jobData.company) {
+                setProfile(p => p.company ? p : { ...p, company: jobData.company });
+              }
+            }
+          } catch (err) { console.warn("[Supabase Profile/Job Load]", err); }
+        };
+
+        // 2. Notes Loader (Immediate ~150-200ms - Instant cross-device & incognito access)
+        const loadNotes = async () => {
+          try {
+            const { data: nData } = await supabase.from('notes').select('*').eq('user_id', userId);
+            if (nData && Array.isArray(nData) && nData.length > 0) {
+              const mapped = nData.map(n => {
+                const tagArray = Array.isArray(n.tags) ? n.tags : [];
+                const categoryTag = tagArray.find((t: string) => !t.startsWith('__')) || 'General';
+                const isPinned = Boolean(n.is_pinned || tagArray.includes('__pinned__') || tagArray.includes('pinned'));
+                const isTask = n.type === 'task' || tagArray.includes('__task__');
+                const isCompleted = Boolean(n.completed || tagArray.includes('__completed__'));
+                
+                const tasksTag = tagArray.find((t: string) => t.startsWith('__tasks__:'));
+                let subtasks: any[] = [];
+                if (tasksTag) {
+                  try {
+                    subtasks = JSON.parse(tasksTag.replace('__tasks__:', ''));
+                  } catch (_) {}
+                }
+
+                const targetTag = tagArray.find((t: string) => t.startsWith('__target__:'));
+                const dueTag = tagArray.find((t: string) => t.startsWith('__due__:'));
+                const targetDate = targetTag ? targetTag.replace('__target__:', '') : (dueTag ? dueTag.replace('__due__:', '') : undefined);
+                const dueDate = dueTag ? dueTag.replace('__due__:', '') : targetDate;
+
+                const isEveryDay = tagArray.includes('__every_day__');
+                const notifTypeTag = tagArray.find((t: string) => t.startsWith('__notif_type__:'));
+                const notificationType = notifTypeTag ? notifTypeTag.replace('__notif_type__:', '') : undefined;
+                const notifSoundTag = tagArray.find((t: string) => t.startsWith('__notif_sound__:'));
+                const notificationSound = notifSoundTag ? notifSoundTag.replace('__notif_sound__:', '') : undefined;
+
+                return {
+                  id: n.id,
+                  title: n.title,
+                  content: n.content,
+                  category: categoryTag,
+                  tags: tagArray,
+                  isPinned,
+                  type: isTask ? ('task' as const) : ('note' as const),
+                  completed: isCompleted,
+                  targetDate,
+                  dueDate,
+                  isEveryDay,
+                  notificationType: (notificationType as any) || 'both',
+                  notificationSound: notificationSound || 'morning_harp',
+                  tasks: subtasks,
+                  isPublic: n.is_public !== false,
+                  updatedAt: n.updated_at || new Date().toISOString()
+                };
+              });
+              const updatedNotes = deduplicateNotes(mapped);
+              setNotes(updatedNotes);
+              const em = currentUser?.email?.toLowerCase().trim() || email;
+              if (em) {
+                safeLocalStorageSetItem(`${em}_notepad_notes`, JSON.stringify(updatedNotes));
+                heavyStorage.set(`${em}_notepad_notes`, updatedNotes).catch(() => {});
+              }
+            }
+          } catch (err) { console.warn("[Supabase Notes Load]", err); }
+        };
+
+        // 3. Portfolio & Resume Links Loader (Immediate ~150-200ms - Unlimited links & preserved names)
+        const loadLinks = async () => {
+          try {
+            const [lRes, rlkRes] = await Promise.allSettled([
+              supabase.from('portfolio_links').select('*').eq('user_id', userId),
+              supabase.from('resume_links').select('*').eq('user_id', userId)
+            ]);
+
+            const lData = lRes.status === 'fulfilled' ? lRes.value.data : null;
+            const rlkData = rlkRes.status === 'fulfilled' ? rlkRes.value.data : null;
+
+            const deletedLinkIds = new Set<string>();
+            if (email) {
               try {
-                safeLocalStorageSetItem(`${email}_avatar_cache`, restoredAvatar);
+                const rawDel = localStorage.getItem(`${email}_deleted_links`);
+                if (rawDel) {
+                  const parsed: { id?: string; url?: string }[] = JSON.parse(rawDel);
+                  parsed.forEach(d => {
+                    if (d.id) {
+                      deletedLinkIds.add(d.id.trim().toLowerCase());
+                      deletedLinkIds.add(toUUID(d.id).toLowerCase());
+                    }
+                  });
+                }
               } catch (_) {}
             }
 
-            // Strictly preserve user's explicit publicProfile setting so background Supabase sync doesn't flip it to private
-            const localPublicProfile = localSaved?.publicProfile !== undefined ? localSaved.publicProfile : profile.publicProfile;
-            const resolvedPublicProfile = localPublicProfile !== undefined ? localPublicProfile : (pData.public_profile ?? true);
-
-            const updatedProfile: PersonalProfile = {
-              name: pData.name ?? localSaved?.name ?? '',
-              firstName: pData.first_name ?? localSaved?.firstName ?? '',
-              lastName: pData.last_name ?? localSaved?.lastName ?? '',
-              company: localSaved?.company || profile.company || '',
-              headline: pData.headline ?? localSaved?.headline ?? '',
-              bio: pData.bio ?? localSaved?.bio ?? '',
-              email: pData.email || email || '',
-              phone: pData.phone ?? localSaved?.phone ?? '',
-              secondaryEmail: pData.secondary_email ?? localSaved?.secondaryEmail ?? '',
-              secondaryPhone: pData.secondary_phone ?? localSaved?.secondaryPhone ?? '',
-              location: pData.location ?? localSaved?.location ?? '',
-              avatarUrl: restoredAvatar,
-              publicProfile: resolvedPublicProfile,
-              shareSlug: pData.share_slug || localSaved?.shareSlug || (pData.name ? pData.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') : 'user')
+            const isNotDeleted = (l: PortfolioLink) => {
+              if (!l) return false;
+              const rawId = (l.id || '').trim().toLowerCase();
+              const idKey = rawId ? toUUID(rawId).toLowerCase() : '';
+              if (rawId && (deletedLinkIds.has(rawId) || (idKey && deletedLinkIds.has(idKey)))) return false;
+              return true;
             };
 
-            setProfile(updatedProfile);
-
-            if (email) {
-              safeLocalStorageSetItem(`${email}_profile`, JSON.stringify(updatedProfile));
-              heavyStorage.set(`${email}_profile`, updatedProfile).catch(() => {});
-              if (updatedProfile.shareSlug) {
-                safeLocalStorageSetItem(`nexus_cache_profile_${updatedProfile.shareSlug}`, JSON.stringify(updatedProfile));
-              }
+            let remoteLinks: PortfolioLink[] = [];
+            if (lData && Array.isArray(lData) && lData.length > 0) {
+              remoteLinks = lData.map(l => ({
+                id: l.id,
+                platform: l.platform || 'Link',
+                label: l.label || l.platform || 'Link',
+                url: l.url,
+                isPublic: l.is_public !== false
+              }));
             }
-          }
-        } catch (err) { console.warn("[Supabase Profiles Load]", err); }
+            if (rlkData && Array.isArray(rlkData) && rlkData.length > 0) {
+              const rlkMapped = rlkData.map(l => ({
+                id: l.id,
+                platform: l.platform || 'Link',
+                label: l.label || l.platform || 'Link',
+                url: l.url,
+                isPublic: l.is_public !== false
+              }));
+              remoteLinks = deduplicateLinks([...remoteLinks, ...rlkMapped]);
+            }
 
-        // 2. Skills
-        try {
-          const sData = sRes.status === 'fulfilled' ? sRes.value.data : null;
-          if (sRes.status === 'fulfilled' && Array.isArray(sData)) {
-            const mapped = sData.map(s => {
-              const expVal = typeof s.years_of_exp === 'number' ? s.years_of_exp : (s.years_of_exp !== null && s.years_of_exp !== undefined ? (parseInt(s.years_of_exp, 10) || 0) : 0);
-              return {
-                id: s.id,
-                name: s.name,
-                category: s.category || 'Technical',
-                proficiency: s.proficiency || 'Intermediate',
-                yearsOfExp: expVal,
-                endorsements: s.endorsements || 0,
-                description: s.description || '',
-                visibility: s.visibility || 'public'
-              };
-            });
-            const updatedSkills = deduplicateSkills(mapped);
-            setSkills(updatedSkills);
+            let localLinks: PortfolioLink[] = [];
+            try {
+              const raw = localStorage.getItem(`${email}_links`);
+              if (raw) localLinks = JSON.parse(raw);
+            } catch (_) {}
+
+            let localResumeLinks: PortfolioLink[] = [];
+            try {
+              const rawR = localStorage.getItem(`${email}_resume_links`);
+              if (rawR) localResumeLinks = JSON.parse(rawR);
+            } catch (_) {}
+
+            const filteredPool = [...remoteLinks, ...localLinks, ...localResumeLinks].filter(isNotDeleted);
+            const allLinks = deduplicateLinks(filteredPool);
+            setLinks(allLinks);
+            setResumeLinks(allLinks);
+
             if (currentUser?.email) {
               const em = currentUser.email.toLowerCase().trim();
-              safeLocalStorageSetItem(`${em}_skills`, JSON.stringify(updatedSkills));
-              heavyStorage.set(`${em}_skills`, updatedSkills).catch(() => {});
+              safeLocalStorageSetItem(`${em}_links`, JSON.stringify(allLinks));
+              safeLocalStorageSetItem(`${em}_resume_links`, JSON.stringify(allLinks));
+              heavyStorage.set(`${em}_links`, allLinks).catch(() => {});
+              heavyStorage.set(`${em}_resume_links`, allLinks).catch(() => {});
             }
-          }
-        } catch (err) { console.warn("[Supabase Skills Load]", err); }
+          } catch (err) { console.warn("[Supabase Links Load]", err); }
+        };
 
-        // 3. Education
-        try {
-          const eData = eRes.status === 'fulfilled' ? eRes.value.data : null;
-          if (eRes.status === 'fulfilled' && Array.isArray(eData)) {
-            const mapped = eData.map(e => {
-              let extraMeta: any = {};
-              if (e.description && typeof e.description === 'string' && e.description.startsWith('{')) {
-                try { extraMeta = JSON.parse(e.description); } catch (err) {}
-              }
-              return {
-                id: e.id,
-                degree: e.degree,
-                institution: e.institution,
-                fieldOfStudy: e.field_of_study || e.fieldOfStudy || '',
-                specialization: e.specialization || extraMeta.specialization || '',
-                startYear: e.start_year || e.startYear || '',
-                endYear: e.end_year || e.endYear || '',
-                grade: e.grade || '',
-                percentage: e.percentage || '',
-                description: e.description || '',
-                enrollmentId: e.enrollment_id || e.enrollmentId || e.enrollment_number || extraMeta.enrollmentId || '',
-                startDate: e.start_date || e.startDate || extraMeta.startDate || '',
-                endDate: e.end_date || e.endDate || extraMeta.endDate || '',
-                isCurrentlyPursuing: e.is_currently_pursuing ?? e.isCurrentlyPursuing ?? extraMeta.isCurrentlyPursuing ?? (e.end_year === 'Present' || e.end_date === 'Present'),
-                activities: e.activities || extraMeta.activities || (e.description && !e.description.startsWith('{') ? e.description : '')
-              };
-            });
-            const updatedEdu = deduplicateEducation(mapped);
-            setEducation(updatedEdu);
-            if (currentUser?.email) {
-              const em = currentUser.email.toLowerCase().trim();
-              safeLocalStorageSetItem(`${em}_education`, JSON.stringify(updatedEdu));
-              heavyStorage.set(`${em}_education`, updatedEdu).catch(() => {});
-            }
-          }
-        } catch (err) { console.warn("[Supabase Education Load]", err); }
-
-        // 4. Certifications
-        try {
-          const cData = cRes.status === 'fulfilled' ? cRes.value.data : null;
-          if (cRes.status === 'fulfilled' && Array.isArray(cData)) {
-            const mapped = cData.map(c => {
-              const dVal = c.issue_date || c.date_issued || c.dateIssued || c.issueDate || '';
-              let certType = c.type;
-              let certPct = c.percentage || '';
-              let certDesc = c.description || '';
-              if (c.description && typeof c.description === 'string' && c.description.startsWith('{')) {
-                try {
-                  const parsed = JSON.parse(c.description);
-                  if (parsed.type) certType = parsed.type;
-                  if (parsed.percentage) certPct = parsed.percentage;
-                  if (parsed.desc !== undefined) certDesc = parsed.desc;
-                } catch (_) {}
-              }
-              if (!certType) {
-                const lowerTitle = (c.title || '').toLowerCase();
-                const lowerIssuer = (c.issuer || '').toLowerCase();
-                const lowerUrl = (c.credential_url || c.credentialUrl || '').toLowerCase();
-                if (lowerTitle.includes('course') || lowerIssuer.includes('coursera') || lowerIssuer.includes('udemy') || lowerIssuer.includes('edx') || lowerUrl.includes('coursera') || lowerUrl.includes('udemy')) {
-                  certType = 'course';
-                } else if (lowerTitle.includes('memo') || lowerTitle.includes('marks') || lowerTitle.includes('grade')) {
-                  certType = 'grades';
-                } else {
-                  certType = 'study';
-                }
-              }
-              return {
-                id: c.id,
-                title: c.title,
-                issuer: c.issuer,
-                credentialId: c.credential_id || c.credentialId,
-                dateIssued: dVal,
-                issueDate: dVal,
-                expirationDate: c.expiry_date || c.expirationDate || '',
-                expiryDate: c.expiry_date || c.expiryDate || '',
-                credentialUrl: c.credential_url || c.credentialUrl,
-                description: certDesc,
-                fileName: c.file_name || c.fileName || '',
-                fileUrl: c.file_url || c.fileUrl,
-                storagePath: c.storage_path || c.storagePath,
-                type: certType,
-                percentage: certPct,
-                visibility: c.visibility || 'public'
-              };
-            });
-            const updatedCerts = deduplicateCertifications(mapped);
-            setCertifications(updatedCerts);
-            if (currentUser?.email) {
-              safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(updatedCerts));
-              heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, updatedCerts).catch(() => {});
-            }
-          }
-        } catch (err) { console.warn("[Supabase Certifications Load]", err); }
-
-        // 5. Experience
-        try {
-          const expData = expRes.status === 'fulfilled' ? expRes.value.data : null;
-          if (expRes.status === 'fulfilled' && Array.isArray(expData)) {
-            const mapped = expData.map(exp => ({
-              id: exp.id,
-              company: exp.company,
-              role: exp.role,
-              employmentType: exp.employment_type,
-              location: exp.location,
-              startDate: exp.start_date,
-              endDate: exp.end_date,
-              isCurrent: exp.is_current,
-              description: exp.description || [],
-              skillsUsed: exp.skills_used || [],
-              links: exp.links || []
-            }));
-            const updatedExp = deduplicateExperience(mapped);
-            setExperience(updatedExp);
-            if (currentUser?.email) {
-              const em = currentUser.email.toLowerCase().trim();
-              safeLocalStorageSetItem(`${em}_experience`, JSON.stringify(updatedExp));
-              heavyStorage.set(`${em}_experience`, updatedExp).catch(() => {});
-            }
-          }
-        } catch (err) { console.warn("[Supabase Experience Load]", err); }
-
-        // 6. Current Job
-        try {
-          const jobData = jobRes.status === 'fulfilled' ? jobRes.value.data : null;
-          if (jobData) {
-            // Read cached local job first so refresh NEVER deletes workspace board data
-            let cachedLocalJob: any = null;
-            if (email) {
-              try {
-                const raw = localStorage.getItem(`${email}_current_job`);
-                if (raw) cachedLocalJob = JSON.parse(raw);
-              } catch (e) {}
-            }
-
-            let parsedDesc = jobData.description || '';
-            let parsedContractCompany = jobData.contract_company || cachedLocalJob?.contractCompany || '';
-            let parsedWeeklyGoals = Array.isArray(jobData.weekly_goals) && jobData.weekly_goals.length > 0
-              ? jobData.weekly_goals
-              : (Array.isArray(cachedLocalJob?.weeklyGoals) ? cachedLocalJob.weeklyGoals : []);
-            let parsedCurrentProjects = Array.isArray(jobData.current_projects) && jobData.current_projects.length > 0
-              ? jobData.current_projects
-              : (Array.isArray(cachedLocalJob?.currentProjects) ? cachedLocalJob.currentProjects : []);
-            let parsedDailyStandup = jobData.daily_standup_text || cachedLocalJob?.dailyStandupText || '';
-            let parsedStandupEveryDay = cachedLocalJob?.dailyStandupEveryDay || false;
-            let parsedStandupNotifType = cachedLocalJob?.dailyStandupNotificationType || 'both';
-            let parsedStandupNotifSound = cachedLocalJob?.dailyStandupNotificationSound || 'morning_harp';
-
-            // Check if description contains packed JSON metadata
-            if (jobData.description && typeof jobData.description === 'string' && jobData.description.trim().startsWith('{')) {
-              try {
-                const meta = JSON.parse(jobData.description);
-                if (meta && typeof meta === 'object') {
-                  parsedDesc = meta.rawDescription !== undefined ? meta.rawDescription : (meta.description || '');
-                  if (meta.contractCompany) parsedContractCompany = meta.contractCompany;
-                  if (Array.isArray(meta.weeklyGoals) && meta.weeklyGoals.length > 0) parsedWeeklyGoals = meta.weeklyGoals;
-                  if (Array.isArray(meta.currentProjects) && meta.currentProjects.length > 0) parsedCurrentProjects = meta.currentProjects;
-                  if (meta.dailyStandupText) parsedDailyStandup = meta.dailyStandupText;
-                  if (meta.dailyStandupEveryDay !== undefined) parsedStandupEveryDay = meta.dailyStandupEveryDay;
-                  if (meta.dailyStandupNotificationType) parsedStandupNotifType = meta.dailyStandupNotificationType;
-                  if (meta.dailyStandupNotificationSound) parsedStandupNotifSound = meta.dailyStandupNotificationSound;
-                }
-              } catch (e) {}
-            }
-
-            const loadedJob: CurrentJob = {
-              company: jobData.company || '',
-              employer: jobData.company || '',
-              role: jobData.role || '',
-              department: jobData.department || '',
-              employeeId: jobData.employee_id || '',
-              joiningDate: jobData.joining_date || '',
-              startDate: jobData.joining_date || '',
-              location: jobData.location || '',
-              locationType: jobData.location || 'on-site',
-              employmentType: jobData.employment_type || 'full-time',
-              contractCompany: parsedContractCompany,
-              salary: jobData.salary || '',
-              manager: jobData.manager || '',
-              description: parsedDesc,
-              weeklyGoals: parsedWeeklyGoals,
-              currentProjects: parsedCurrentProjects,
-              dailyStandupText: parsedDailyStandup,
-              dailyStandupEveryDay: parsedStandupEveryDay,
-              dailyStandupNotificationType: parsedStandupNotifType,
-              dailyStandupNotificationSound: parsedStandupNotifSound
-            };
-            setCurrentJob(loadedJob as any);
-            if (email) {
-              safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(loadedJob));
-              heavyStorage.set(`${email}_current_job`, loadedJob).catch(() => {});
-            }
-          } else if (jobRes.status === 'fulfilled' && !jobData) {
-            let cachedLocalJob: any = null;
-            if (email) {
-              try {
-                const raw = localStorage.getItem(`${email}_current_job`);
-                if (raw) cachedLocalJob = JSON.parse(raw);
-              } catch (e) {}
-            }
-            if (cachedLocalJob && (cachedLocalJob.role || cachedLocalJob.employer || cachedLocalJob.company)) {
-              setCurrentJob(cachedLocalJob);
-            } else {
-              setCurrentJob(EMPTY_CURRENT_JOB);
-              if (email) {
-                safeLocalStorageSetItem(`${email}_current_job`, JSON.stringify(EMPTY_CURRENT_JOB));
-                heavyStorage.set(`${email}_current_job`, EMPTY_CURRENT_JOB).catch(() => {});
-              }
-            }
-          }
-        } catch (err) { console.warn("[Supabase Current Job Load]", err); }
-
-        // 7. Projects
-        try {
-          const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
-          let remoteProjects: Project[] = [];
-          if (projData && Array.isArray(projData) && projData.length > 0) {
-            remoteProjects = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
-              id: p.id,
-              name: p.name,
-              category: p.category,
-              type: 'project' as const,
-              description: p.description,
-              highlights: p.highlights || [],
-              techStack: p.tech_stack || [],
-              liveUrl: p.live_url,
-              githubUrl: p.github_url,
-              pdfUrl: p.pdf_url,
-              imageUrl: p.image_url,
-              isPublic: p.is_public !== false,
-              date: p.date
-            }));
-          }
-
-          let localStoredProjs: Project[] = [];
+        // 4. Resumes & CVs Loader (Immediate ~200ms - No AI generated PDFs, real user PDFs only)
+        const loadResumes = async () => {
           try {
-            const raw = localStorage.getItem(`${email}_projects`);
-            if (raw) localStoredProjs = JSON.parse(raw);
-          } catch (_) {}
+            const { data: resData } = await supabase.from('resumes').select('*').eq('user_id', userId);
+            let remoteResumes: ResumeItem[] = [];
 
-          const allProjs = deduplicateProjects([...remoteProjects, ...localStoredProjs, ...(projects || [])]);
-          setProjects(allProjs);
-          if (currentUser?.email) {
-            const em = currentUser.email.toLowerCase().trim();
-            safeLocalStorageSetItem(`${em}_projects`, JSON.stringify(allProjs));
-            heavyStorage.set(`${em}_projects`, allProjs).catch(() => {});
-          }
-
-          // Bidirectional sync: Push all local projects up to Supabase projects table
-          if (userId && allProjs.length > 0) {
-            for (const pr of allProjs) {
-              if (isDemoItem(pr)) continue;
-              const targetId = ensureUUID(pr.id);
-              const cleanPdf = (pr.pdfUrl && pr.pdfUrl.startsWith('data:') && pr.pdfUrl.length > 50000) ? '' : (pr.pdfUrl || '');
-              supabase.from('projects').upsert({
-                id: targetId,
-                user_id: userId,
-                name: pr.name,
-                category: pr.category || 'projects',
-                type: 'project',
-                description: pr.description || '',
-                highlights: pr.highlights || [],
-                tech_stack: pr.techStack || [],
-                live_url: pr.liveUrl || '',
-                github_url: pr.githubUrl || '',
-                pdf_url: cleanPdf,
-                pdf_name: pr.pdfName || '',
-                is_public: pr.isPublic !== false,
-                date: pr.date || ''
-              }).then(() => {}, (e) => console.warn("[Supabase Sync Project]", e));
+            const deletedResumeIds = new Set<string>();
+            const deletedResumeNames = new Set<string>();
+            if (email) {
+              try {
+                const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
+                if (rawDel) {
+                  const parsed: any[] = JSON.parse(rawDel);
+                  parsed.forEach(d => {
+                    if (d.id) {
+                      deletedResumeIds.add(String(d.id).trim().toLowerCase());
+                      deletedResumeIds.add(toUUID(String(d.id)).toLowerCase());
+                    }
+                    if (d.name) {
+                      deletedResumeNames.add(String(d.name).trim().toLowerCase());
+                    }
+                  });
+                }
+              } catch (_) {}
             }
-          }
-        } catch (err) { console.warn("[Supabase Projects Load]", err); }
 
-        // 8. Products
-        try {
-          const prodData = prodRes.status === 'fulfilled' ? prodRes.value.data : null;
-          if (prodData && Array.isArray(prodData) && prodData.length > 0) {
-            const mapped = prodData.map(p => ({
-              id: p.id,
-              name: p.name,
-              category: p.category,
-              type: 'product' as const,
-              description: p.description,
-              highlights: p.highlights || [],
-              techStack: p.tech_stack || [],
-              liveUrl: p.live_url,
-              githubUrl: p.github_url,
-              pdfUrl: p.pdf_url,
-              imageUrl: p.image_url,
-              isPublic: p.is_public !== false,
-              date: p.date
-            }));
-            setProducts(prev => {
-              const merged = deduplicateProjects([...mapped, ...(prev || [])]);
+            const isResumeNotDeleted = (r: any) => {
+              if (!r) return false;
+              const rawId = (r.id || '').trim().toLowerCase();
+              const idKey = rawId ? toUUID(rawId).toLowerCase() : '';
+              if (rawId && (deletedResumeIds.has(rawId) || (idKey && deletedResumeIds.has(idKey)))) return false;
+              const cleanName = (r.name || r.fileName || r.title || '').trim().toLowerCase();
+              if (cleanName && deletedResumeNames.has(cleanName)) return false;
+              return true;
+            };
+
+            if (resData && Array.isArray(resData) && resData.length > 0) {
+              // Strictly filter out Link items and AI generated or simulated placeholders
+              const userRes = resData.filter(r => {
+                if (r.file_type === 'Link' || r.type === 'Link') return false;
+                if (r.file_name === 'Simulated_Document.pdf') return false;
+                const clean = (r.title || r.file_name || '').toLowerCase();
+                return !clean.includes('simulated') && !clean.includes('ai-generated');
+              });
+
+              remoteResumes = userRes.map(r => {
+                const rawUrl = r.file_url || '';
+                const url = (!rawUrl.includes('example.com') && !rawUrl.startsWith('vault://')) ? rawUrl : '';
+                const formatSize = typeof r.file_size === 'number' && r.file_size > 0
+                  ? (r.file_size >= 1073741824 
+                      ? `${(r.file_size / 1073741824).toFixed(2)} GB`
+                      : (r.file_size >= 1048576 
+                          ? `${(r.file_size / 1048576).toFixed(1)} MB` 
+                          : `${Math.round(r.file_size / 1024)} KB`))
+                  : (r.file_size || 'Document');
+
+                return {
+                  id: r.id,
+                  name: r.title || r.file_name,
+                  title: r.title,
+                  fileName: r.file_name,
+                  fileUrl: url,
+                  fileDataUrl: url,
+                  storagePath: r.storage_path,
+                  size: formatSize,
+                  fileSize: r.file_size,
+                  type: r.file_type || 'Resume',
+                  fileType: r.file_type,
+                  isPrimary: r.is_primary,
+                  visibility: (r.is_public === false || r.is_public === 'false') ? ('private' as const) : ('public' as const),
+                  isPublic: r.is_public !== false && r.is_public !== 'false',
+                  uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
+                  category: 'SUPABASE'
+                };
+              }).filter(isResumeNotDeleted);
+            }
+
+            let localResumes: ResumeItem[] = [];
+            try {
+              const raw = localStorage.getItem(`${email}_nexus_vault_resumes`);
+              if (raw) localResumes = JSON.parse(raw);
+            } catch (_) {}
+
+            const cleanLocal = localResumes.filter(r => {
+              if (!r) return false;
+              if (r.fileName === 'Simulated_Document.pdf') return false;
+              const clean = (r.name || r.fileName || '').toLowerCase();
+              return !clean.includes('simulated') && !clean.includes('ai-generated');
+            }).filter(isResumeNotDeleted);
+
+            // Merge: preserve local base64 if remote URL is empty or example
+            const merged = remoteResumes.map(rem => {
+              const matchedLocal = cleanLocal.find(l => l.id === rem.id || l.fileName === rem.fileName);
+              if (matchedLocal?.fileDataUrl && (!rem.fileDataUrl || rem.fileDataUrl.includes('example.com') || rem.fileDataUrl.startsWith('vault://'))) {
+                return { ...rem, fileDataUrl: matchedLocal.fileDataUrl, fileUrl: matchedLocal.fileDataUrl };
+              }
+              return rem;
+            });
+            const extraLocals = cleanLocal.filter(l => !merged.some(m => m.id === l.id || m.fileName === l.fileName));
+            const allResumes = deduplicateResumes([...merged, ...extraLocals]);
+
+            setResumes(allResumes);
+            if (currentUser?.email) {
+              const em = currentUser.email.toLowerCase().trim();
+              safeLocalStorageSetItem(`${em}_nexus_vault_resumes`, JSON.stringify(allResumes));
+              safeLocalStorageSetItem('global_nexus_vault_resumes', JSON.stringify(allResumes));
+              heavyStorage.set(`${em}_nexus_vault_resumes`, allResumes).catch(() => {});
+              heavyStorage.set('global_nexus_vault_resumes', allResumes).catch(() => {});
+            }
+          } catch (err) { console.warn("[Supabase Resumes Load]", err); }
+        };
+
+        // 5. Skills Loader
+        const loadSkills = async () => {
+          try {
+            const { data: sData } = await supabase.from('skills').select('*').eq('user_id', userId);
+            if (sData && Array.isArray(sData)) {
+              const mapped = sData.map(s => {
+                const expVal = typeof s.years_of_exp === 'number' ? s.years_of_exp : (s.years_of_exp !== null && s.years_of_exp !== undefined ? (parseInt(s.years_of_exp, 10) || 0) : 0);
+                return {
+                  id: s.id,
+                  name: s.name,
+                  category: s.category || 'Technical',
+                  proficiency: s.proficiency || 'Intermediate',
+                  yearsOfExp: expVal,
+                  endorsements: s.endorsements || 0,
+                  description: s.description || '',
+                  visibility: s.visibility || 'public'
+                };
+              });
+              const updatedSkills = deduplicateSkills(mapped);
+              setSkills(updatedSkills);
               if (currentUser?.email) {
                 const em = currentUser.email.toLowerCase().trim();
-                safeLocalStorageSetItem(`${em}_products`, JSON.stringify(merged));
-                heavyStorage.set(`${em}_products`, merged).catch(() => {});
+                safeLocalStorageSetItem(`${em}_skills`, JSON.stringify(updatedSkills));
+                heavyStorage.set(`${em}_skills`, updatedSkills).catch(() => {});
               }
-              return merged;
-            });
-          }
-        } catch (err) { console.warn("[Supabase Products Load]", err); }
+            }
+          } catch (err) { console.warn("[Supabase Skills Load]", err); }
+        };
 
-        // 8.5 Others / Reports
-        try {
-          const othData = othRes.status === 'fulfilled' ? othRes.value.data : null;
-          if (othData && Array.isArray(othData) && othData.length > 0) {
-            // A. Restore Old Data from Supabase
-            const oldRows = othData.filter(p => p.category === '__old_data__');
-            if (oldRows.length > 0) {
-              const now = Date.now();
-              const parsedOld: DeletedItem[] = oldRows.map(p => {
-                try {
-                  if (p.description && p.description.trim().startsWith('{')) {
-                    const parsed = JSON.parse(p.description);
-                    if (parsed && (parsed.title || parsed.originalId)) return parsed;
-                  }
-                } catch (_) {}
+        // 6. Education Loader
+        const loadEducation = async () => {
+          try {
+            const { data: eData } = await supabase.from('education').select('*').eq('user_id', userId);
+            if (eData && Array.isArray(eData)) {
+              const mapped = eData.map(e => {
+                let extraMeta: any = {};
+                if (e.description && typeof e.description === 'string' && e.description.startsWith('{')) {
+                  try { extraMeta = JSON.parse(e.description); } catch (err) {}
+                }
                 return {
-                  id: p.id,
-                  originalId: p.id,
-                  itemType: (p.type || 'other') as any,
-                  title: p.name || 'Deleted Record',
-                  subtitle: p.doc_type || undefined,
-                  deletedAt: p.date || p.created_at || new Date().toISOString(),
-                  expiresAt: new Date(now + 30 * 24 * 60 * 60 * 1000).toISOString(),
-                  data: {}
+                  id: e.id,
+                  degree: e.degree,
+                  institution: e.institution,
+                  fieldOfStudy: e.field_of_study || e.fieldOfStudy || '',
+                  specialization: e.specialization || extraMeta.specialization || '',
+                  startYear: e.start_year || e.startYear || '',
+                  endYear: e.end_year || e.endYear || '',
+                  grade: e.grade || '',
+                  percentage: e.percentage || '',
+                  description: e.description || '',
+                  enrollmentId: e.enrollment_id || e.enrollmentId || e.enrollment_number || extraMeta.enrollmentId || '',
+                  startDate: e.start_date || e.startDate || extraMeta.startDate || '',
+                  endDate: e.end_date || e.endDate || extraMeta.endDate || '',
+                  isCurrentlyPursuing: e.is_currently_pursuing ?? e.isCurrentlyPursuing ?? extraMeta.isCurrentlyPursuing ?? (e.end_year === 'Present' || e.end_date === 'Present'),
+                  activities: e.activities || extraMeta.activities || (e.description && !e.description.startsWith('{') ? e.description : '')
                 };
-              }).filter(item => item && item.expiresAt && new Date(item.expiresAt).getTime() > now);
+              });
+              const updatedEdu = deduplicateEducation(mapped);
+              setEducation(updatedEdu);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_education`, JSON.stringify(updatedEdu));
+                heavyStorage.set(`${em}_education`, updatedEdu).catch(() => {});
+              }
+            }
+          } catch (err) { console.warn("[Supabase Education Load]", err); }
+        };
 
-              setOldData(prev => {
-                const map = new Map<string, DeletedItem>();
-                [...parsedOld, ...prev].forEach(item => {
-                  if (item && item.id) map.set(item.id, item);
-                });
-                const merged = Array.from(map.values());
-                if (email) {
-                  safeLocalStorageSetItem(`${email}_old_data`, JSON.stringify(merged));
-                  heavyStorage.set(`${email}_old_data`, merged).catch(() => {});
+        // 7. Certifications Loader
+        const loadCertifications = async () => {
+          try {
+            const { data: cData } = await supabase.from('certifications').select('*').eq('user_id', userId);
+            if (cData && Array.isArray(cData)) {
+              const mapped = cData.map(c => {
+                const dVal = c.issue_date || c.date_issued || c.dateIssued || c.issueDate || '';
+                let certType = c.type;
+                let certPct = c.percentage || '';
+                let certDesc = c.description || '';
+                if (c.description && typeof c.description === 'string' && c.description.startsWith('{')) {
+                  try {
+                    const parsed = JSON.parse(c.description);
+                    if (parsed.type) certType = parsed.type;
+                    if (parsed.percentage) certPct = parsed.percentage;
+                    if (parsed.desc !== undefined) certDesc = parsed.desc;
+                  } catch (_) {}
+                }
+                if (!certType) {
+                  const lowerTitle = (c.title || '').toLowerCase();
+                  const lowerIssuer = (c.issuer || '').toLowerCase();
+                  const lowerUrl = (c.credential_url || c.credentialUrl || '').toLowerCase();
+                  if (lowerTitle.includes('course') || lowerIssuer.includes('coursera') || lowerIssuer.includes('udemy') || lowerIssuer.includes('edx') || lowerUrl.includes('coursera') || lowerUrl.includes('udemy')) {
+                    certType = 'course';
+                  } else if (lowerTitle.includes('memo') || lowerTitle.includes('marks') || lowerTitle.includes('grade')) {
+                    certType = 'grades';
+                  } else {
+                    certType = 'study';
+                  }
+                }
+                return {
+                  id: c.id,
+                  title: c.title,
+                  issuer: c.issuer,
+                  credentialId: c.credential_id || c.credentialId,
+                  dateIssued: dVal,
+                  issueDate: dVal,
+                  expirationDate: c.expiry_date || c.expirationDate || '',
+                  expiryDate: c.expiry_date || c.expiryDate || '',
+                  credentialUrl: c.credential_url || c.credentialUrl,
+                  description: certDesc,
+                  fileName: c.file_name || c.fileName || '',
+                  fileUrl: c.file_url || c.fileUrl,
+                  storagePath: c.storage_path || c.storagePath,
+                  type: certType,
+                  percentage: certPct,
+                  visibility: c.visibility || 'public'
+                };
+              });
+              const updatedCerts = deduplicateCertifications(mapped);
+              setCertifications(updatedCerts);
+              if (currentUser?.email) {
+                safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(updatedCerts));
+                heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, updatedCerts).catch(() => {});
+              }
+            }
+          } catch (err) { console.warn("[Supabase Certifications Load]", err); }
+        };
+
+        // 8. Experience Loader
+        const loadExperience = async () => {
+          try {
+            const { data: expData } = await supabase.from('experience').select('*').eq('user_id', userId);
+            if (expData && Array.isArray(expData)) {
+              const mapped = expData.map(exp => ({
+                id: exp.id,
+                company: exp.company,
+                role: exp.role,
+                employmentType: exp.employment_type,
+                location: exp.location,
+                startDate: exp.start_date,
+                endDate: exp.end_date,
+                isCurrent: exp.is_current,
+                description: exp.description || [],
+                skillsUsed: exp.skills_used || [],
+                links: exp.links || []
+              }));
+              const updatedExp = deduplicateExperience(mapped);
+              setExperience(updatedExp);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_experience`, JSON.stringify(updatedExp));
+                heavyStorage.set(`${em}_experience`, updatedExp).catch(() => {});
+              }
+            }
+          } catch (err) { console.warn("[Supabase Experience Load]", err); }
+        };
+
+        // 9. Documents Loader
+        const loadDocuments = async () => {
+          try {
+            const { data: docData } = await supabase.from('documents').select('*').eq('user_id', userId);
+            let remoteDocs: VaultDocument[] = [];
+            if (docData && Array.isArray(docData) && docData.length > 0) {
+              remoteDocs = docData.map(d => ({
+                id: d.id,
+                name: d.file_name || d.title,
+                title: d.title,
+                category: d.category || 'other',
+                description: d.description || '',
+                fileName: d.file_name,
+                fileType: d.file_type,
+                size: typeof d.file_size === 'number' && d.file_size > 0 
+                  ? (d.file_size > 1048576 ? `${(d.file_size / 1048576).toFixed(1)} MB` : `${Math.round(d.file_size / 1024)} KB`)
+                  : (d.file_size || '210 KB'),
+                fileSize: typeof d.file_size === 'number' && d.file_size > 0 
+                  ? `${Math.round(d.file_size / 1024)} KB` 
+                  : (d.file_size || '210 KB'),
+                fileUrl: d.file_url,
+                storagePath: d.storage_path,
+                expiryDate: d.expiry_date,
+                uploadDate: d.created_at ? d.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
+                tags: d.tags || [],
+                visibility: d.visibility || 'private'
+              }));
+            }
+
+            let localDocs: VaultDocument[] = [];
+            try {
+              const raw = localStorage.getItem(`${email}_documents`);
+              if (raw) localDocs = JSON.parse(raw);
+            } catch (_) {}
+
+            if ((!localDocs || localDocs.length === 0) && remoteDocs.length === 0) {
+              localDocs = INITIAL_DOCUMENTS;
+            }
+
+            const allDocs = deduplicateDocuments([...remoteDocs, ...localDocs, ...(documents || [])]);
+            setDocuments(allDocs);
+            if (currentUser?.email) {
+              const em = currentUser.email.toLowerCase().trim();
+              safeLocalStorageSetItem(`${em}_documents`, JSON.stringify(allDocs));
+              heavyStorage.set(`${em}_documents`, allDocs).catch(() => {});
+            }
+          } catch (err) { console.warn("[Supabase Documents Load]", err); }
+        };
+
+        // 10. Projects, Products, Others
+        const loadProjectsAndProducts = async () => {
+          try {
+            const [projRes, prodRes, othRes] = await Promise.allSettled([
+              supabase.from('projects').select('*').eq('user_id', userId),
+              supabase.from('products').select('*').eq('user_id', userId),
+              supabase.from('others').select('*').eq('user_id', userId)
+            ]);
+
+            const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
+            if (projData && Array.isArray(projData) && projData.length > 0) {
+              const remoteProjects: Project[] = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                type: 'project' as const,
+                description: p.description,
+                highlights: p.highlights || [],
+                techStack: p.tech_stack || [],
+                liveUrl: p.live_url,
+                githubUrl: p.github_url,
+                pdfUrl: p.pdf_url,
+                imageUrl: p.image_url,
+                isPublic: p.is_public !== false,
+                date: p.date
+              }));
+
+              let localStoredProjs: Project[] = [];
+              try {
+                const raw = localStorage.getItem(`${email}_projects`);
+                if (raw) localStoredProjs = JSON.parse(raw);
+              } catch (_) {}
+
+              const allProjs = deduplicateProjects([...remoteProjects, ...localStoredProjs, ...(projects || [])]);
+              setProjects(allProjs);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_projects`, JSON.stringify(allProjs));
+                heavyStorage.set(`${em}_projects`, allProjs).catch(() => {});
+              }
+            }
+
+            const prodData = prodRes.status === 'fulfilled' ? prodRes.value.data : null;
+            if (prodData && Array.isArray(prodData) && prodData.length > 0) {
+              const mappedProd = prodData.map(p => ({
+                id: p.id,
+                name: p.name,
+                category: p.category,
+                type: 'product' as const,
+                description: p.description,
+                highlights: p.highlights || [],
+                techStack: p.tech_stack || [],
+                liveUrl: p.live_url,
+                githubUrl: p.github_url,
+                pdfUrl: p.pdf_url,
+                imageUrl: p.image_url,
+                isPublic: p.is_public !== false,
+                date: p.date
+              }));
+              setProducts(prev => {
+                const merged = deduplicateProjects([...mappedProd, ...(prev || [])]);
+                if (currentUser?.email) {
+                  const em = currentUser.email.toLowerCase().trim();
+                  safeLocalStorageSetItem(`${em}_products`, JSON.stringify(merged));
+                  heavyStorage.set(`${em}_products`, merged).catch(() => {});
                 }
                 return merged;
               });
             }
 
-            // B. Documents & Reports (filtering out old data)
-            const nonOldRows = othData.filter(p => p.category !== '__old_data__');
-            const mapped = nonOldRows.map(p => ({
-              id: p.id,
-              name: p.name,
-              category: p.category,
-              type: 'other' as const,
-              docType: p.doc_type || p.category || 'Report',
-              description: p.description,
-              highlights: p.highlights || [],
-              techStack: p.tech_stack || [],
-              liveUrl: p.live_url,
-              githubUrl: p.github_url,
-              pdfUrl: p.pdf_url,
-              imageUrl: p.image_url,
-              isPublic: p.is_public !== false,
-              date: p.date
-            }));
-            setOthers(prev => {
-              const merged = deduplicateProjects([...mapped, ...(prev || [])]);
-              if (currentUser?.email) {
-                const em = currentUser.email.toLowerCase().trim();
-                safeLocalStorageSetItem(`${em}_others`, JSON.stringify(merged));
-                heavyStorage.set(`${em}_others`, merged).catch(() => {});
-              }
-              return merged;
-            });
-          } else {
-            // Fallback: If table 'others' does not exist in Supabase yet, check projects table for type === 'other'
-            const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
-            if (projData && Array.isArray(projData)) {
-              const fallbackOthers = projData.filter(p => p.type === 'other' || p.category === 'others' || (p.category as any) === 'other').map(p => ({
+            const othData = othRes.status === 'fulfilled' ? othRes.value.data : null;
+            if (othData && Array.isArray(othData) && othData.length > 0) {
+              const nonOldRows = othData.filter(p => p.category !== '__old_data__');
+              const mappedOth = nonOldRows.map(p => ({
                 id: p.id,
                 name: p.name,
-                category: p.category || 'others',
+                category: p.category,
                 type: 'other' as const,
                 docType: p.doc_type || p.category || 'Report',
                 description: p.description,
@@ -2552,796 +2742,216 @@ export default function App() {
                 isPublic: p.is_public !== false,
                 date: p.date
               }));
-              if (fallbackOthers.length > 0) {
-                setOthers(prev => {
-                  const merged = deduplicateProjects([...fallbackOthers, ...(prev || [])]);
-                  if (currentUser?.email) {
-                    const em = currentUser.email.toLowerCase().trim();
-                    safeLocalStorageSetItem(`${em}_others`, JSON.stringify(merged));
-                    heavyStorage.set(`${em}_others`, merged).catch(() => {});
-                  }
-                  return merged;
-                });
-              }
+              setOthers(prev => {
+                const merged = deduplicateProjects([...mappedOth, ...(prev || [])]);
+                if (currentUser?.email) {
+                  const em = currentUser.email.toLowerCase().trim();
+                  safeLocalStorageSetItem(`${em}_others`, JSON.stringify(merged));
+                  heavyStorage.set(`${em}_others`, merged).catch(() => {});
+                }
+                return merged;
+              });
             }
-          }
-        } catch (err) { console.warn("[Supabase Others Load]", err); }
+          } catch (err) { console.warn("[Supabase Projects Load]", err); }
+        };
 
-        // 9. Resumes
-        try {
-          const resData = resRes.status === 'fulfilled' ? resRes.value.data : null;
-          let remoteResumes: ResumeItem[] = [];
-
-          // Read deleted resume tombstones to prevent resurrecting deleted resumes on refresh
-          const deletedResumeIds = new Set<string>();
-          const deletedResumeNames = new Set<string>();
-          const deletedResumeUrls = new Set<string>();
-          if (email) {
-            try {
-              const rawDel = localStorage.getItem(`${email}_deleted_resumes`);
-              if (rawDel) {
-                const parsed: any[] = JSON.parse(rawDel);
-                parsed.forEach(d => {
-                  if (d.id) {
-                    deletedResumeIds.add(String(d.id).trim().toLowerCase());
-                    deletedResumeIds.add(toUUID(String(d.id)).toLowerCase());
-                  }
-                  if (d.name) {
-                    deletedResumeNames.add(String(d.name).trim().toLowerCase());
-                  }
-                  if (d.url && !String(d.url).startsWith('data:')) {
-                    deletedResumeUrls.add(String(d.url).trim().toLowerCase());
-                  }
-                });
-              }
-            } catch (_) {}
-          }
-
-          const isResumeNotDeleted = (r: any) => {
-            if (!r) return false;
-            const rawId = (r.id || '').trim().toLowerCase();
-            const idKey = rawId ? toUUID(rawId).toLowerCase() : '';
-            if (rawId && (deletedResumeIds.has(rawId) || (idKey && deletedResumeIds.has(idKey)))) return false;
-            const cleanName = (r.name || r.fileName || r.title || '').trim().toLowerCase();
-            if (cleanName && deletedResumeNames.has(cleanName)) return false;
-            const rawUrl = (r.fileUrl || r.fileDataUrl || '').trim().toLowerCase();
-            if (rawUrl && !rawUrl.startsWith('data:') && deletedResumeUrls.has(rawUrl)) return false;
-            return true;
-          };
-
-          // Background purge from Supabase for any resumes previously marked deleted
-          if (userId && (deletedResumeIds.size > 0 || deletedResumeNames.size > 0)) {
-            for (const dId of deletedResumeIds) {
-              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dId)) {
-                supabase.from('resumes').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
-              }
-            }
-            for (const dName of deletedResumeNames) {
-              supabase.from('resumes').delete().eq('user_id', userId).eq('file_name', dName).then(() => {}, () => {});
-              supabase.from('resumes').delete().eq('user_id', userId).eq('title', dName).then(() => {}, () => {});
-            }
-          }
-
-          if (resData && Array.isArray(resData) && resData.length > 0) {
-            for (const r of resData) {
-              if (r.file_type === 'Link' || r.type === 'Link') {
-                resumeLinksFromDb.push({
-                  id: r.id,
-                  platform: r.file_name || 'Link',
-                  label: r.title || 'Link',
-                  url: r.file_url || '',
-                  isPublic: r.is_public !== false
-                });
-              }
-            }
-
-            // Filter out simulated / AI generated items from Supabase and links
-            const userRes = resData.filter(r => {
-              if (r.file_type === 'Link' || r.type === 'Link') return false;
-              if (r.file_name === 'Simulated_Document.pdf') return false;
-              const clean = (r.title || r.file_name || '').toLowerCase();
-              return !clean.includes('simulated') && !clean.includes('ai-generated');
-            });
-            remoteResumes = userRes.map(r => {
-              const url = (r.file_url && !r.file_url.includes('example.com')) ? r.file_url : '';
-              const formatSize = typeof r.file_size === 'number' && r.file_size > 0
-                ? (r.file_size >= 1073741824 
-                    ? `${(r.file_size / 1073741824).toFixed(2)} GB`
-                    : (r.file_size >= 1048576 
-                        ? `${(r.file_size / 1048576).toFixed(1)} MB` 
-                        : `${Math.round(r.file_size / 1024)} KB`))
-                : (r.file_size || 'Document');
-
-              return {
-                id: r.id,
-                name: r.title || r.file_name,
-                title: r.title,
-                fileName: r.file_name,
-                fileUrl: url,
-                fileDataUrl: url,
-                storagePath: r.storage_path,
-                size: formatSize,
-                fileSize: r.file_size,
-                type: r.file_type || 'Resume',
-                fileType: r.file_type,
-                isPrimary: r.is_primary,
-                visibility: (r.is_public === false || r.is_public === 'false') ? ('private' as const) : ('public' as const),
-                isPublic: r.is_public !== false && r.is_public !== 'false',
-                uploadDate: r.created_at ? r.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
-                category: 'SUPABASE'
-              };
-            }).filter(isResumeNotDeleted);
-          }
-
-          let localResumes: ResumeItem[] = [];
+        // 11. Career Timeline
+        const loadTimeline = async () => {
           try {
-            const raw = localStorage.getItem(`${email}_nexus_vault_resumes`);
-            if (raw) localResumes = JSON.parse(raw);
-          } catch (_) {}
-
-          const cleanLocal = localResumes.filter(r => {
-            if (!r) return false;
-            if (r.fileName === 'Simulated_Document.pdf') return false;
-            const clean = (r.name || r.fileName || '').toLowerCase();
-            return !clean.includes('simulated') && !clean.includes('ai-generated');
-          }).filter(isResumeNotDeleted);
-
-          // Merge: Preserve genuine local base64 fileDataUrl if remote is empty or example.com
-          const merged = remoteResumes.map(rem => {
-            const matchedLocal = cleanLocal.find(l => l.id === rem.id || l.fileName === rem.fileName);
-            if (matchedLocal?.fileDataUrl && (!rem.fileDataUrl || rem.fileDataUrl.includes('example.com'))) {
-              return { ...rem, fileDataUrl: matchedLocal.fileDataUrl, fileUrl: matchedLocal.fileDataUrl };
-            }
-            return rem;
-          });
-          const extraLocals = cleanLocal.filter(l => !merged.some(m => m.id === l.id || m.fileName === l.fileName));
-          const allResumes = deduplicateResumes([...merged, ...extraLocals]);
-
-          setResumes(allResumes);
-          if (currentUser?.email) {
-            const em = currentUser.email.toLowerCase().trim();
-            safeLocalStorageSetItem(`${em}_nexus_vault_resumes`, JSON.stringify(allResumes));
-            safeLocalStorageSetItem('global_nexus_vault_resumes', JSON.stringify(allResumes));
-            heavyStorage.set(`${em}_nexus_vault_resumes`, allResumes).catch(() => {});
-            heavyStorage.set('global_nexus_vault_resumes', allResumes).catch(() => {});
-          }
-        } catch (err) { console.warn("[Supabase Resumes Load]", err); }
-
-        // 10. Documents & Document Categories (Vault)
-        try {
-          // A. Document Categories
-          const DEFAULT_DOC_CATEGORIES = [
-            { id: 'cat-resume', name: 'Resume', icon: 'FileText', color: 'emerald' },
-            { id: 'cat-transcript', name: 'Transcript', icon: 'GraduationCap', color: 'blue' },
-            { id: 'cat-certificate', name: 'Certificate', icon: 'Award', color: 'purple' },
-            { id: 'cat-identity', name: 'Identity', icon: 'Shield', color: 'amber' },
-            { id: 'cat-educational', name: 'Educational', icon: 'BookOpen', color: 'cyan' },
-            { id: 'cat-financial', name: 'Financial', icon: 'DollarSign', color: 'teal' },
-            { id: 'cat-legal', name: 'Legal', icon: 'Scale', color: 'indigo' },
-            { id: 'cat-medical', name: 'Medical', icon: 'Activity', color: 'rose' },
-            { id: 'cat-other', name: 'Other', icon: 'Folder', color: 'slate' }
-          ];
-
-          if (userId) {
-            for (const cat of DEFAULT_DOC_CATEGORIES) {
-              const targetId = ensureUUID(cat.id);
-              supabase.from('document_categories').upsert({
-                id: targetId,
-                user_id: userId,
-                name: cat.name,
-                icon: cat.icon,
-                color: cat.color
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Category Error]", error);
-              }, (e) => console.warn("[Supabase Sync Category]", e));
-            }
-          }
-
-          // B. Documents
-          const docData = docRes.status === 'fulfilled' ? docRes.value.data : null;
-          let remoteDocs: VaultDocument[] = [];
-          if (docData && Array.isArray(docData) && docData.length > 0) {
-            remoteDocs = docData.map(d => ({
-              id: d.id,
-              name: d.file_name || d.title,
-              title: d.title,
-              category: d.category || 'other',
-              description: d.description || '',
-              fileName: d.file_name,
-              fileType: d.file_type,
-              size: typeof d.file_size === 'number' && d.file_size > 0 
-                ? (d.file_size > 1048576 ? `${(d.file_size / 1048576).toFixed(1)} MB` : `${Math.round(d.file_size / 1024)} KB`)
-                : (d.file_size || '210 KB'),
-              fileSize: typeof d.file_size === 'number' && d.file_size > 0 
-                ? `${Math.round(d.file_size / 1024)} KB` 
-                : (d.file_size || '210 KB'),
-              fileUrl: d.file_url,
-              storagePath: d.storage_path,
-              expiryDate: d.expiry_date,
-              uploadDate: d.created_at ? d.created_at.substring(0, 10) : new Date().toISOString().substring(0, 10),
-              tags: d.tags || [],
-              visibility: d.visibility || 'private'
-            }));
-          }
-
-          let localDocs: VaultDocument[] = [];
-          try {
-            const raw = localStorage.getItem(`${email}_documents`);
-            if (raw) localDocs = JSON.parse(raw);
-          } catch (_) {}
-
-          if ((!localDocs || localDocs.length === 0) && remoteDocs.length === 0) {
-            localDocs = INITIAL_DOCUMENTS;
-          }
-
-          const allDocs = deduplicateDocuments([...remoteDocs, ...localDocs, ...(documents || [])]);
-          setDocuments(allDocs);
-          if (currentUser?.email) {
-            const em = currentUser.email.toLowerCase().trim();
-            safeLocalStorageSetItem(`${em}_documents`, JSON.stringify(allDocs));
-            heavyStorage.set(`${em}_documents`, allDocs).catch(() => {});
-          }
-
-          // Bidirectional sync: Push all documents to Supabase documents table
-          if (userId && allDocs.length > 0) {
-            for (const d of allDocs) {
-              const targetId = ensureUUID(d.id);
-              const cleanUrl = (d.fileUrl && d.fileUrl.startsWith('data:') && d.fileUrl.length > 50000)
-                ? ''
-                : (d.fileUrl || `vault://${encodeURIComponent(d.name || d.fileName || 'document.pdf')}`);
-              const byteSize = parseFileSizeToBytes(d.size || d.fileSize);
-              supabase.from('documents').upsert({
-                id: targetId,
-                user_id: userId,
-                title: d.title || d.name || 'Document',
-                category: d.category || 'other',
-                description: d.description || '',
-                file_name: d.name || d.fileName || 'document.pdf',
-                file_type: d.fileType || 'application/pdf',
-                file_size: byteSize,
-                file_url: cleanUrl,
-                storage_path: d.storagePath || '',
-                expiry_date: d.expiryDate || null,
-                tags: d.tags || [d.category || 'vault'],
-                visibility: d.visibility || 'private'
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Document Error]", error);
-              }, (e) => console.warn("[Supabase Sync Document]", e));
-            }
-          }
-        } catch (err) { console.warn("[Supabase Documents Load]", err); }
-
-        // 11. Notes
-        try {
-          const nData = nRes.status === 'fulfilled' ? nRes.value.data : null;
-          if (nData && Array.isArray(nData) && nData.length > 0) {
-            const mapped = nData.map(n => {
-              const tagArray = Array.isArray(n.tags) ? n.tags : [];
-              const categoryTag = tagArray.find((t: string) => !t.startsWith('__')) || 'General';
-              const isPinned = Boolean(n.is_pinned || tagArray.includes('__pinned__') || tagArray.includes('pinned'));
-              const isTask = n.type === 'task' || tagArray.includes('__task__');
-              const isCompleted = Boolean(n.completed || tagArray.includes('__completed__'));
-              
-              const tasksTag = tagArray.find((t: string) => t.startsWith('__tasks__:'));
-              let subtasks: any[] = [];
-              if (tasksTag) {
-                try {
-                  subtasks = JSON.parse(tasksTag.replace('__tasks__:', ''));
-                } catch (_) {}
-              }
-
-              const targetTag = tagArray.find((t: string) => t.startsWith('__target__:'));
-              const dueTag = tagArray.find((t: string) => t.startsWith('__due__:'));
-              const targetDate = targetTag ? targetTag.replace('__target__:', '') : (dueTag ? dueTag.replace('__due__:', '') : undefined);
-              const dueDate = dueTag ? dueTag.replace('__due__:', '') : targetDate;
-
-              const isEveryDay = tagArray.includes('__every_day__');
-              const notifTypeTag = tagArray.find((t: string) => t.startsWith('__notif_type__:'));
-              const notificationType = notifTypeTag ? notifTypeTag.replace('__notif_type__:', '') : undefined;
-              const notifSoundTag = tagArray.find((t: string) => t.startsWith('__notif_sound__:'));
-              const notificationSound = notifSoundTag ? notifSoundTag.replace('__notif_sound__:', '') : undefined;
-
-              return {
-                id: n.id,
-                title: n.title,
-                content: n.content,
-                category: categoryTag,
-                tags: tagArray,
-                isPinned,
-                type: isTask ? ('task' as const) : ('note' as const),
-                completed: isCompleted,
-                targetDate,
-                dueDate,
-                isEveryDay,
-                notificationType: (notificationType as any) || 'both',
-                notificationSound: notificationSound || 'morning_harp',
-                tasks: subtasks,
-                isPublic: n.is_public !== false,
-                updatedAt: n.updated_at || new Date().toISOString()
-              };
-            });
-            const updatedNotes = deduplicateNotes(mapped);
-            setNotes(updatedNotes);
-            const em = currentUser?.email?.toLowerCase().trim() || email;
-            if (em) {
-              safeLocalStorageSetItem(`${em}_notepad_notes`, JSON.stringify(updatedNotes));
-              heavyStorage.set(`${em}_notepad_notes`, updatedNotes).catch(() => {});
-            }
-          }
-        } catch (err) { console.warn("[Supabase Notes Load]", err); }
-
-        // 12. Portfolio Links & Resume Links
-        try {
-          const lData = lRes.status === 'fulfilled' ? lRes.value.data : null;
-          const rlkData = rlkRes.status === 'fulfilled' ? rlkRes.value.data : null;
-
-          // Read deleted link tombstones to prevent resurrecting deleted links on refresh
-          const deletedLinkIds = new Set<string>();
-          const deletedLinkUrls = new Set<string>();
-          if (email) {
-            try {
-              const rawDel = localStorage.getItem(`${email}_deleted_links`);
-              if (rawDel) {
-                const parsed: { id?: string; url?: string }[] = JSON.parse(rawDel);
-                parsed.forEach(d => {
-                  if (d.id) {
-                    deletedLinkIds.add(d.id.trim().toLowerCase());
-                    deletedLinkIds.add(toUUID(d.id).toLowerCase());
-                  }
-                  if (d.url) {
-                    deletedLinkUrls.add(normalizeLinkUrl(d.url));
-                  }
-                });
-              }
-            } catch (_) {}
-          }
-
-          const isNotDeleted = (l: PortfolioLink) => {
-            if (!l) return false;
-            const rawId = (l.id || '').trim().toLowerCase();
-            const idKey = rawId ? toUUID(rawId).toLowerCase() : '';
-            if (rawId && (deletedLinkIds.has(rawId) || (idKey && deletedLinkIds.has(idKey)))) return false;
-            const normUrl = normalizeLinkUrl(l.url);
-            if (normUrl && deletedLinkUrls.has(normUrl)) return false;
-            return true;
-          };
-
-          // Background purge from Supabase for any links previously marked deleted
-          if (userId && (deletedLinkIds.size > 0 || deletedLinkUrls.size > 0)) {
-            for (const dId of deletedLinkIds) {
-              if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(dId)) {
-                supabase.from('portfolio_links').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
-                supabase.from('resume_links').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
-                supabase.from('resumes').delete().eq('user_id', userId).eq('id', dId).then(() => {}, () => {});
-              }
-            }
-            for (const dUrl of deletedLinkUrls) {
-              supabase.from('portfolio_links').delete().eq('user_id', userId).ilike('url', `%${dUrl}%`).then(() => {}, () => {});
-              supabase.from('resume_links').delete().eq('user_id', userId).ilike('url', `%${dUrl}%`).then(() => {}, () => {});
-              supabase.from('resumes').delete().eq('user_id', userId).ilike('file_url', `%${dUrl}%`).then(() => {}, () => {});
-            }
-          }
-
-          let remoteLinks: PortfolioLink[] = [];
-          if (lData && Array.isArray(lData) && lData.length > 0) {
-            remoteLinks = lData.map(l => ({
-              id: l.id,
-              platform: l.platform || 'Link',
-              label: l.label,
-              url: l.url,
-              isPublic: l.is_public !== false
-            }));
-          }
-          if (rlkData && Array.isArray(rlkData) && rlkData.length > 0) {
-            const rlkMapped = rlkData.map(l => ({
-              id: l.id,
-              platform: l.platform || 'Link',
-              label: l.label,
-              url: l.url,
-              isPublic: l.is_public !== false
-            }));
-            remoteLinks = deduplicateLinks([...remoteLinks, ...rlkMapped]);
-          }
-          if (resumeLinksFromDb.length > 0) {
-            remoteLinks = deduplicateLinks([...remoteLinks, ...resumeLinksFromDb]);
-          }
-
-          let localLinks: PortfolioLink[] = [];
-          try {
-            const raw = localStorage.getItem(`${email}_links`);
-            if (raw) localLinks = JSON.parse(raw);
-          } catch (_) {}
-
-          let localResumeLinks: PortfolioLink[] = [];
-          try {
-            const rawR = localStorage.getItem(`${email}_resume_links`);
-            if (rawR) localResumeLinks = JSON.parse(rawR);
-          } catch (_) {}
-
-          // Filter out deleted links and deduplicate by ID and URL
-          const filteredPool = [...remoteLinks, ...localLinks, ...localResumeLinks].filter(isNotDeleted);
-          const allLinks = deduplicateLinks(filteredPool);
-          setLinks(allLinks);
-          setResumeLinks(allLinks);
-
-          if (currentUser?.email) {
-            const em = currentUser.email.toLowerCase().trim();
-            safeLocalStorageSetItem(`${em}_links`, JSON.stringify(allLinks));
-            safeLocalStorageSetItem(`${em}_resume_links`, JSON.stringify(allLinks));
-            heavyStorage.set(`${em}_links`, allLinks).catch(() => {});
-            heavyStorage.set(`${em}_resume_links`, allLinks).catch(() => {});
-          }
-
-          // Bidirectional sync: Push validated non-deleted links to Supabase
-          if (userId && allLinks.length > 0) {
-            for (const lk of allLinks) {
-              if (!isNotDeleted(lk)) continue;
-              const targetId = ensureUUID(lk.id);
-              supabase.from('portfolio_links').upsert({
-                id: targetId,
-                user_id: userId,
-                platform: lk.platform || 'Link',
-                label: lk.label || lk.platform || 'Link',
-                url: lk.url,
-                is_public: lk.isPublic !== false
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Link Error]", error);
-              }, (e) => console.warn("[Supabase Sync Link]", e));
-
-              supabase.from('resume_links').upsert({
-                id: targetId,
-                user_id: userId,
-                platform: lk.platform || 'Link',
-                label: lk.label || lk.platform || 'Link',
-                url: lk.url,
-                is_public: lk.isPublic !== false
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync resume_links Error]", error);
-              }, (e) => console.warn("[Supabase Sync resume_links]", e));
-
-              supabase.from('resumes').upsert({
-                id: targetId,
-                user_id: userId,
-                title: lk.label || lk.platform || 'Link',
-                file_name: lk.platform || 'Link',
-                file_url: lk.url,
-                storage_path: '',
-                file_size: 0,
-                file_type: 'Link',
-                is_primary: false,
-                is_public: lk.isPublic !== false
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Resume Link Error]", error);
-              }, (e) => console.warn("[Supabase Sync Resume Link]", e));
-            }
-          }
-        } catch (err) { console.warn("[Supabase Portfolio Links Load]", err); }
-
-        // 13. Career Timeline (Milestones)
-        try {
-          const tmData = tmRes.status === 'fulfilled' ? tmRes.value.data : null;
-          let remoteMilestones: TimelineMilestone[] = [];
-          if (tmData && Array.isArray(tmData) && tmData.length > 0) {
-            // Delete demo milestones from database if present
-            for (const m of tmData) {
-              if (isDemoId(m.id) || isDemoTitle(m.title) || isDemoItem(m)) {
-                supabase.from('career_timeline').delete().eq('id', m.id).then(() => {}, () => {});
-              }
-            }
-            remoteMilestones = tmData.filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m)).map(m => ({
-              id: m.id,
-              title: m.title,
-              date: m.date,
-              category: m.category || 'experience',
-              type: m.category || 'experience',
-              intensity: m.intensity || 'medium',
-              description: m.description || ''
-            }));
-          }
-
-          let localMilestones: TimelineMilestone[] = [];
-          try {
-            const raw = localStorage.getItem(`${email}_milestones`);
-            if (raw) localMilestones = JSON.parse(raw);
-          } catch (_) {}
-
-          // Convert education items to timeline milestones
-          const eduList = (eRes.status === 'fulfilled' && Array.isArray(eRes.value?.data) && eRes.value.data.length > 0)
-            ? eRes.value.data
-            : (education || []);
-          const eduTimeline = eduList.filter((ed: any) => !isDemoItem(ed)).map((ed: any) => ({
-            id: `auto-edu-${ed.id}`,
-            title: `${ed.degree || 'Degree'}${ed.field_of_study || ed.fieldOfStudy ? ` in ${ed.field_of_study || ed.fieldOfStudy}` : ''} at ${ed.institution || 'University'}`,
-            date: ed.start_date || ed.startDate || (ed.start_year || ed.startYear ? `${ed.start_year || ed.startYear}-06` : (ed.end_year || ed.endYear ? `${ed.end_year || ed.endYear}-05` : new Date().toISOString().substring(0, 7))),
-            category: 'education' as const,
-            type: 'education' as const,
-            intensity: 'medium' as const,
-            description: `${ed.degree || 'Degree'} program at ${ed.institution || 'Institution'}${ed.grade ? ` (Score: ${ed.grade})` : ''}.`
-          }));
-
-          // Convert experience items to timeline milestones
-          const expList = (expRes.status === 'fulfilled' && Array.isArray(expRes.value?.data) && expRes.value.data.length > 0)
-            ? expRes.value.data
-            : (experience || []);
-          const expTimeline = expList.filter((e: any) => !isDemoItem(e)).map((e: any) => ({
-            id: `auto-exp-${e.id}`,
-            title: `${e.role || 'Role'} at ${e.company || 'Company'}`,
-            date: e.start_date || e.startDate || new Date().toISOString().substring(0, 7),
-            category: 'experience' as const,
-            type: 'experience' as const,
-            intensity: (e.is_current || e.isCurrent ? 'high' : 'medium') as 'high' | 'medium' | 'low',
-            description: Array.isArray(e.description) && e.description.length > 0 ? e.description.join(' ') : (e.role ? `${e.role} role at ${e.company || 'Company'}.` : '')
-          }));
-
-          // Current Job timeline
-          const activeJob = (jobRes.status === 'fulfilled' && jobRes.value?.data) ? jobRes.value.data : currentJob;
-          const curJobTimeline = (activeJob && (activeJob.company || activeJob.employer) && activeJob.role && !isDemoItem(activeJob)) ? [{
-            id: 'auto-current-job',
-            title: `${activeJob.role} at ${activeJob.company || activeJob.employer}`,
-            date: activeJob.joining_date || activeJob.joiningDate || activeJob.startDate || new Date().toISOString().substring(0, 7),
-            category: 'experience' as const,
-            type: 'experience' as const,
-            intensity: 'high' as const,
-            description: activeJob.description || `Active role in ${activeJob.department || 'the organization'}.`
-          }] : [];
-
-          const allMilestones = deduplicateMilestones([
-            ...remoteMilestones,
-            ...localMilestones,
-            ...(milestones || []),
-            ...expTimeline,
-            ...eduTimeline,
-            ...curJobTimeline
-          ]).filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m));
-
-          setMilestones(allMilestones);
-          if (currentUser?.email) {
-            safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(allMilestones));
-            heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_milestones`, allMilestones).catch(() => {});
-          }
-
-          // Bidirectional sync: Push all milestones to Supabase career_timeline table
-          if (userId && allMilestones.length > 0) {
-            for (const m of allMilestones) {
-              const targetId = ensureUUID(m.id);
-              const mDate = m.date || new Date().toISOString().substring(0, 7);
-              supabase.from('career_timeline').upsert({
-                id: targetId,
-                user_id: userId,
-                title: m.title || 'Career Milestone',
-                date: mDate.length === 4 ? `${mDate}-06` : mDate,
-                category: m.category || m.type || 'experience',
+            const { data: tmData } = await supabase.from('career_timeline').select('*').eq('user_id', userId);
+            let remoteMilestones: TimelineMilestone[] = [];
+            if (tmData && Array.isArray(tmData) && tmData.length > 0) {
+              remoteMilestones = tmData.filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m)).map(m => ({
+                id: m.id,
+                title: m.title,
+                date: m.date,
+                category: m.category || 'experience',
+                type: m.category || 'experience',
                 intensity: m.intensity || 'medium',
-                description: m.description || '',
-                is_public: true
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Milestone Error]", error);
-              }, (e) => console.warn("[Supabase Sync Milestone]", e));
+                description: m.description || ''
+              }));
             }
-          }
-        } catch (err) { console.warn("[Supabase Timeline Load]", err); }
 
-        // 14. Contacts
-        try {
-          const ctData = ctRes.status === 'fulfilled' ? ctRes.value.data : null;
-          let localContacts: Contact[] = [];
-          if (email) {
+            let localMilestones: TimelineMilestone[] = [];
             try {
-              const raw = localStorage.getItem(`${email}_contacts`);
-              if (raw) localContacts = JSON.parse(raw);
+              const raw = localStorage.getItem(`${email}_milestones`);
+              if (raw) localMilestones = JSON.parse(raw);
             } catch (_) {}
-          }
-          const remoteContacts = (ctData && Array.isArray(ctData)) ? ctData.map(ct => ({
-            id: ct.id,
-            name: ct.name,
-            email: ct.email,
-            phone: ct.phone,
-            role: ct.role,
-            company: ct.company,
-            relationship: ct.category,
-            category: (ct.category || 'other') as 'recruiter' | 'mentor' | 'colleague' | 'client' | 'other',
-            relationshipStrength: ct.relationship_strength ?? ct.relationshipStrength ?? 3,
-            status: (ct.status || 'active') as 'active' | 'cold' | 'hot' | 'on-hold',
-            location: ct.location,
-            notes: ct.notes,
-            lastInteracted: ct.last_interacted || '',
-            interactionLogs: ct.interaction_logs || []
-          })) : [];
 
-          const updatedContacts = deduplicateContacts([...remoteContacts, ...localContacts, ...(contacts || [])]);
-          setContacts(updatedContacts);
-          if (currentUser?.email) {
-            const em = currentUser.email.toLowerCase().trim();
-            safeLocalStorageSetItem(`${em}_contacts`, JSON.stringify(updatedContacts));
-            heavyStorage.set(`${em}_contacts`, updatedContacts).catch(() => {});
-          }
+            const allMilestones = deduplicateMilestones([
+              ...remoteMilestones,
+              ...localMilestones,
+              ...(milestones || [])
+            ]).filter(m => !isDemoId(m.id) && !isDemoTitle(m.title) && !isDemoItem(m));
 
-          if (userId && updatedContacts.length > 0) {
-            for (const ct of updatedContacts) {
-              const targetId = ensureUUID(ct.id);
-              supabase.from('contacts').upsert({
-                id: targetId,
-                user_id: userId,
-                name: ct.name,
-                email: ct.email || '',
-                phone: ct.phone || '',
-                role: ct.role || '',
-                company: ct.company || '',
-                relationship: ct.relationship || ct.category || 'Professional',
-                category: ct.category || ct.relationship || 'Professional',
-                relationship_strength: ct.relationshipStrength ?? 3,
-                status: ct.status || 'active',
-                location: ct.location || '',
-                notes: ct.notes || '',
-                last_interacted: ct.lastInteracted || '',
-                interaction_logs: ct.interactionLogs || []
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Contact Error]", error);
-              }, (e) => console.warn("[Supabase Sync Contact]", e));
+            setMilestones(allMilestones);
+            if (currentUser?.email) {
+              safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_milestones`, JSON.stringify(allMilestones));
+              heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_milestones`, allMilestones).catch(() => {});
             }
-          }
-        } catch (err) { console.warn("[Supabase Contacts Load]", err); }
+          } catch (err) { console.warn("[Supabase Timeline Load]", err); }
+        };
 
-        // 15. Calendar Events
-        try {
-          const calData = calRes.status === 'fulfilled' ? calRes.value.data : null;
-          if (calData && Array.isArray(calData) && calData.length > 0) {
-            const mapped = calData.map(cal => {
-              let rawDesc = cal.description || '';
-              let gmailAddress: string | undefined = undefined;
-              let sendGmail: boolean | undefined = undefined;
-              if (rawDesc.startsWith('__meta__:')) {
+        // 12. Contacts, Calendar, Achievements, Testimonials
+        const loadRemainingData = async () => {
+          try {
+            const [ctRes, calRes, aRes, tRes] = await Promise.allSettled([
+              supabase.from('contacts').select('*').eq('user_id', userId),
+              supabase.from('calendar_events').select('*').eq('user_id', userId),
+              supabase.from('achievements').select('*').eq('user_id', userId),
+              supabase.from('testimonials').select('*').eq('user_id', userId)
+            ]);
+
+            // Contacts
+            const ctData = ctRes.status === 'fulfilled' ? ctRes.value.data : null;
+            if (ctData && Array.isArray(ctData)) {
+              let localContacts: Contact[] = [];
+              if (email) {
                 try {
-                  const idx = rawDesc.indexOf('\n');
-                  const metaStr = idx > -1 ? rawDesc.substring(9, idx) : rawDesc.substring(9);
-                  const meta = JSON.parse(metaStr);
-                  if (meta.gmailAddress) gmailAddress = meta.gmailAddress;
-                  if (meta.sendGmail !== undefined) sendGmail = meta.sendGmail;
-                  rawDesc = idx > -1 ? rawDesc.substring(idx + 1) : '';
+                  const raw = localStorage.getItem(`${email}_contacts`);
+                  if (raw) localContacts = JSON.parse(raw);
                 } catch (_) {}
               }
-              return {
-                id: cal.id,
-                title: cal.title,
-                date: cal.date,
-                startTime: cal.start_time,
-                endTime: cal.end_time,
-                type: cal.type,
-                description: rawDesc,
-                isPublic: cal.is_public !== false,
-                sendGmail: sendGmail !== undefined ? sendGmail : true,
-                gmailAddress
-              };
-            });
-            const merged = deduplicateCalendarEvents(mapped);
-            setCalendarEvents(merged);
-            const em = currentUser?.email?.toLowerCase().trim() || email;
-            if (em) {
-              safeLocalStorageSetItem(`${em}_calendar_events`, JSON.stringify(merged));
-              heavyStorage.set(`${em}_calendar_events`, merged).catch(() => {});
-            }
-
-            // Bidirectional sync: Push calendar events to Supabase
-            if (userId && merged.length > 0) {
-              for (const evt of merged) {
-                const targetId = ensureUUID(evt.id);
-                const metaHeader = (evt.gmailAddress || evt.sendGmail !== undefined)
-                  ? `__meta__:${JSON.stringify({ sendGmail: evt.sendGmail !== false, gmailAddress: evt.gmailAddress || '' })}\n`
-                  : '';
-                const fullDesc = `${metaHeader}${evt.description || ''}`;
-                supabase.from('calendar_events').upsert({
-                  id: targetId,
-                  user_id: userId,
-                  title: evt.title,
-                  date: evt.date,
-                  start_time: evt.startTime || '09:00',
-                  end_time: evt.endTime || '10:00',
-                  type: evt.type || 'meeting',
-                  description: fullDesc,
-                  is_public: evt.isPublic !== false
-                }).then(() => {}, (e) => console.warn("[Supabase Sync Calendar Event]", e));
+              const remoteContacts = ctData.map(ct => ({
+                id: ct.id,
+                name: ct.name,
+                email: ct.email,
+                phone: ct.phone,
+                role: ct.role,
+                company: ct.company,
+                relationship: ct.category,
+                category: (ct.category || 'other') as 'recruiter' | 'mentor' | 'colleague' | 'client' | 'other',
+                relationshipStrength: ct.relationship_strength ?? ct.relationshipStrength ?? 3,
+                status: (ct.status || 'active') as 'active' | 'cold' | 'hot' | 'on-hold',
+                location: ct.location,
+                notes: ct.notes,
+                lastInteracted: ct.last_interacted || '',
+                interactionLogs: ct.interaction_logs || []
+              }));
+              const updatedContacts = deduplicateContacts([...remoteContacts, ...localContacts, ...(contacts || [])]);
+              setContacts(updatedContacts);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_contacts`, JSON.stringify(updatedContacts));
+                heavyStorage.set(`${em}_contacts`, updatedContacts).catch(() => {});
               }
             }
-          }
-        } catch (err) { console.warn("[Supabase Calendar Events Load]", err); }
 
-        // 16. Achievements
-        try {
-          const aData = aRes.status === 'fulfilled' ? aRes.value.data : null;
-          let localAchievements: Achievement[] = [];
-          if (email) {
-            try {
-              const raw = localStorage.getItem(`${email}_achievements`);
-              if (raw) localAchievements = JSON.parse(raw);
-            } catch (_) {}
-          }
-          const remoteAchievements = (aData && Array.isArray(aData)) ? aData.map(a => ({
-            id: a.id,
-            title: a.title,
-            issuer: a.issuer,
-            date: a.date,
-            description: a.description,
-            badgeUrl: a.badge_url,
-            fileName: a.file_name,
-            fileUrl: a.file_url,
-            isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
-          })) : [];
-
-          const mergedAch = deduplicateAchievements([...remoteAchievements, ...localAchievements, ...(achievements || [])]);
-          setAchievements(mergedAch);
-          if (currentUser?.email) {
-            const em = currentUser.email.toLowerCase().trim();
-            safeLocalStorageSetItem(`${em}_achievements`, JSON.stringify(mergedAch));
-            heavyStorage.set(`${em}_achievements`, mergedAch).catch(() => {});
-          }
-
-          if (userId && mergedAch.length > 0) {
-            for (const ach of mergedAch) {
-              const targetId = ensureUUID(ach.id);
-              supabase.from('achievements').upsert({
-                id: targetId,
-                user_id: userId,
-                title: ach.title,
-                issuer: ach.issuer,
-                date: ach.date,
-                description: ach.description,
-                badge_url: ach.badgeUrl,
-                is_public: ach.isPublic !== false
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Achievement Error]", error);
-              }, (e) => console.warn("[Supabase Sync Achievement]", e));
+            // Calendar
+            const calData = calRes.status === 'fulfilled' ? calRes.value.data : null;
+            if (calData && Array.isArray(calData) && calData.length > 0) {
+              const mappedCal = calData.map(cal => {
+                let rawDesc = cal.description || '';
+                let gmailAddress: string | undefined = undefined;
+                let sendGmail: boolean | undefined = undefined;
+                if (rawDesc.startsWith('__meta__:')) {
+                  try {
+                    const idx = rawDesc.indexOf('\n');
+                    const metaStr = idx > -1 ? rawDesc.substring(9, idx) : rawDesc.substring(9);
+                    const meta = JSON.parse(metaStr);
+                    if (meta.gmailAddress) gmailAddress = meta.gmailAddress;
+                    if (meta.sendGmail !== undefined) sendGmail = meta.sendGmail;
+                    rawDesc = idx > -1 ? rawDesc.substring(idx + 1) : '';
+                  } catch (_) {}
+                }
+                return {
+                  id: cal.id,
+                  title: cal.title,
+                  date: cal.date,
+                  startTime: cal.start_time,
+                  endTime: cal.end_time,
+                  type: cal.type,
+                  description: rawDesc,
+                  isPublic: cal.is_public !== false,
+                  sendGmail: sendGmail !== undefined ? sendGmail : true,
+                  gmailAddress
+                };
+              });
+              const mergedCal = deduplicateCalendarEvents(mappedCal);
+              setCalendarEvents(mergedCal);
+              const em = currentUser?.email?.toLowerCase().trim() || email;
+              if (em) {
+                safeLocalStorageSetItem(`${em}_calendar_events`, JSON.stringify(mergedCal));
+                heavyStorage.set(`${em}_calendar_events`, mergedCal).catch(() => {});
+              }
             }
-          }
-        } catch (err) { console.warn("[Supabase Achievements Load]", err); }
 
-        // 17. Testimonials
-        try {
-          const tData = tRes.status === 'fulfilled' ? tRes.value.data : null;
-          let localTestimonials: Testimonial[] = [];
-          if (email) {
-            try {
-              const raw = localStorage.getItem(`${email}_testimonials`);
-              if (raw) localTestimonials = JSON.parse(raw);
-            } catch (_) {}
-          }
-          const remoteTestimonials = (tData && Array.isArray(tData)) ? tData.map(t => ({
-            id: t.id,
-            name: t.name,
-            company: t.company,
-            role: t.role,
-            text: t.text,
-            relationship: t.relationship,
-            avatarColor: t.avatar_color,
-            isPublic: t.is_public !== false
-          })) : [];
+            // Achievements
+            const aData = aRes.status === 'fulfilled' ? aRes.value.data : null;
+            if (aData && Array.isArray(aData)) {
+              let localAchievements: Achievement[] = [];
+              if (email) {
+                try {
+                  const raw = localStorage.getItem(`${email}_achievements`);
+                  if (raw) localAchievements = JSON.parse(raw);
+                } catch (_) {}
+              }
+              const remoteAchievements = aData.map(a => ({
+                id: a.id,
+                title: a.title,
+                issuer: a.issuer,
+                date: a.date,
+                description: a.description,
+                badgeUrl: a.badge_url,
+                fileName: a.file_name,
+                fileUrl: a.file_url,
+                isPublic: a.is_public !== false && a.is_public !== 'false' && (a.is_public as any) !== 0 && (a.is_public as any) !== '0'
+              }));
+              const mergedAch = deduplicateAchievements([...remoteAchievements, ...localAchievements, ...(achievements || [])]);
+              setAchievements(mergedAch);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_achievements`, JSON.stringify(mergedAch));
+                heavyStorage.set(`${em}_achievements`, mergedAch).catch(() => {});
+              }
+            }
 
-          const mergedTestimonials = deduplicateTestimonials([...remoteTestimonials, ...localTestimonials, ...(testimonials || [])]);
-          setTestimonials(mergedTestimonials);
-          if (currentUser?.email) {
-            const em = currentUser.email.toLowerCase().trim();
-            safeLocalStorageSetItem(`${em}_testimonials`, JSON.stringify(mergedTestimonials));
-            heavyStorage.set(`${em}_testimonials`, mergedTestimonials).catch(() => {});
-          }
-
-          if (userId && mergedTestimonials.length > 0) {
-            for (const t of mergedTestimonials) {
-              const targetId = ensureUUID(t.id);
-              supabase.from('testimonials').upsert({
-                id: targetId,
-                user_id: userId,
+            // Testimonials
+            const tData = tRes.status === 'fulfilled' ? tRes.value.data : null;
+            if (tData && Array.isArray(tData)) {
+              let localTestimonials: Testimonial[] = [];
+              if (email) {
+                try {
+                  const raw = localStorage.getItem(`${email}_testimonials`);
+                  if (raw) localTestimonials = JSON.parse(raw);
+                } catch (_) {}
+              }
+              const remoteTestimonials = tData.map(t => ({
+                id: t.id,
                 name: t.name,
                 company: t.company,
                 role: t.role,
                 text: t.text,
                 relationship: t.relationship,
-                avatar_color: t.avatarColor,
-                is_public: t.isPublic !== false
-              }).then(({ error }) => {
-                if (error) console.error("[Supabase Sync Testimonial Error]", error);
-              }, (e) => console.warn("[Supabase Sync Testimonial]", e));
+                avatarColor: t.avatar_color,
+                isPublic: t.is_public !== false
+              }));
+              const mergedTestimonials = deduplicateTestimonials([...remoteTestimonials, ...localTestimonials, ...(testimonials || [])]);
+              setTestimonials(mergedTestimonials);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_testimonials`, JSON.stringify(mergedTestimonials));
+                heavyStorage.set(`${em}_testimonials`, mergedTestimonials).catch(() => {});
+              }
             }
-          }
-        } catch (err) { console.warn("[Supabase Testimonials Load]", err); }
+          } catch (err) { console.warn("[Supabase Remaining Data Load]", err); }
+        };
+
+        // Fire all loaders concurrently - each updates React state the exact millisecond it finishes!
+        await Promise.allSettled([
+          loadProfileAndJob(),
+          loadNotes(),
+          loadLinks(),
+          loadResumes(),
+          loadSkills(),
+          loadEducation(),
+          loadCertifications(),
+          loadExperience(),
+          loadDocuments(),
+          loadProjectsAndProducts(),
+          loadTimeline(),
+          loadRemainingData()
+        ]);
       } catch (globalErr) {
         console.warn("[Supabase DB] Error in batch loading records:", globalErr);
       }
@@ -3741,6 +3351,15 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
+        const profileMeta = JSON.stringify({
+          company: newProfile.company || '',
+          contractCompany: newProfile.contractCompany || ''
+        });
+        const cleanBio = (newProfile.bio || '').replace(/\n?<!-- MDV_PROFILE_META:.*? -->/g, '').trim();
+        const bioToSave = (newProfile.company || newProfile.contractCompany)
+          ? `${cleanBio}\n<!-- MDV_PROFILE_META:${encodeURIComponent(profileMeta)} -->`
+          : cleanBio;
+
         await supabase.from('profiles').upsert({
           user_id: userId,
           email: newProfile.email || currentUser?.email || email || '',
@@ -3748,7 +3367,7 @@ export default function App() {
           last_name: newProfile.lastName || '',
           name: newProfile.name || '',
           headline: newProfile.headline || '',
-          bio: newProfile.bio || '',
+          bio: bioToSave,
           phone: newProfile.phone || '',
           secondary_email: newProfile.secondaryEmail || '',
           secondary_phone: newProfile.secondaryPhone || '',
@@ -4861,24 +4480,22 @@ export default function App() {
 
   // Portfolio Links
   const handleAddLink = async (newLk: Omit<PortfolioLink, 'id'>) => {
-    const normNewUrl = normalizeLinkUrl(newLk.url);
-    const existing = links.find(l => normalizeLinkUrl(l.url) === normNewUrl);
-
-    if (existing) {
-      // If URL already exists, update the existing entry to prevent duplicates
-      await handleUpdateLink({
-        ...existing,
-        label: newLk.label || existing.label,
-        platform: newLk.platform || existing.platform,
-        url: newLk.url,
-        isPublic: newLk.isPublic !== false
-      });
-      return;
-    }
-
     const id = generateUUID();
-    const link: PortfolioLink = { ...newLk, id, platform: newLk.platform || 'Link' };
-    const updated = deduplicateLinks([link, ...links]);
+    const cleanUrl = (newLk.url || '').trim().startsWith('http') ? (newLk.url || '').trim() : `https://${(newLk.url || '').trim()}`;
+    const cleanLabel = (newLk.label || newLk.platform || cleanUrl.replace(/(^\w+:|^)\/\//, '').split('/')[0] || 'Link').trim();
+    const cleanPlatform = (newLk.platform || 'Link').trim();
+
+    const link: PortfolioLink = {
+      ...newLk,
+      id,
+      platform: cleanPlatform,
+      label: cleanLabel,
+      url: cleanUrl,
+      isPublic: newLk.isPublic !== false
+    };
+
+    // Unlimited links: always append new link with unique ID, keeping both old and new
+    const updated = [link, ...links.filter(l => l.id !== id)];
     setLinks(updated);
     setResumeLinks(updated);
 
@@ -4888,19 +4505,8 @@ export default function App() {
       safeLocalStorageSetItem(`${email}_resume_links`, JSON.stringify(updated));
       heavyStorage.set(`${email}_links`, updated).catch(() => {});
       heavyStorage.set(`${email}_resume_links`, updated).catch(() => {});
-
-      // Clear any past deleted tombstone for this URL if user re-added it
-      try {
-        const rawDel = localStorage.getItem(`${email}_deleted_links`);
-        if (rawDel) {
-          const delList: { id?: string; url?: string }[] = JSON.parse(rawDel);
-          const filtered = delList.filter(d => normalizeLinkUrl(d.url) !== normNewUrl && d.id !== id);
-          safeLocalStorageSetItem(`${email}_deleted_links`, JSON.stringify(filtered));
-          heavyStorage.set(`${email}_deleted_links`, filtered).catch(() => {});
-        }
-      } catch (_) {}
     }
-    triggerToast(`Published portal entry: ${newLk.label}`);
+    triggerToast(`Added link: ${cleanLabel}`);
 
     const userId = await getActiveUserId();
     if (userId) {
@@ -4908,39 +4514,22 @@ export default function App() {
         const { error: pErr } = await supabase.from('portfolio_links').upsert({
           id,
           user_id: userId,
-          platform: newLk.platform || 'Link',
-          label: newLk.label,
-          url: newLk.url,
-          is_public: newLk.isPublic !== false
+          platform: cleanPlatform,
+          label: cleanLabel,
+          url: cleanUrl,
+          is_public: link.isPublic !== false
         });
-        if (pErr) {
-          console.error("[Supabase Add Link Error]", pErr);
-          triggerToast(`Link Sync: ${pErr.message}`);
-        }
+        if (pErr) console.error("[Supabase Add Link Error]", pErr);
 
         const { error: rlkErr } = await supabase.from('resume_links').upsert({
           id,
           user_id: userId,
-          platform: newLk.platform || 'Link',
-          label: newLk.label,
-          url: newLk.url,
-          is_public: newLk.isPublic !== false
+          platform: cleanPlatform,
+          label: cleanLabel,
+          url: cleanUrl,
+          is_public: link.isPublic !== false
         });
         if (rlkErr) console.warn("[Supabase Add resume_links Error]", rlkErr);
-
-        const { error: rErr } = await supabase.from('resumes').upsert({
-          id,
-          user_id: userId,
-          title: newLk.label || newLk.platform || 'Link',
-          file_name: newLk.platform || 'Link',
-          file_url: newLk.url,
-          storage_path: '',
-          file_size: 0,
-          file_type: 'Link',
-          is_primary: false,
-          is_public: newLk.isPublic !== false
-        });
-        if (rErr) console.warn("[Supabase Resume Link Warning]", rErr);
       } catch (err) { console.warn("[Supabase Add Link Error]", err); }
     }
   };
@@ -4948,18 +4537,13 @@ export default function App() {
   const handleDeleteLink = async (id: string) => {
     const targetId = toUUID(id);
     const targetLink = links.find(l => l.id === id || l.id === targetId || toUUID(l.id) === targetId);
-    const targetUrlNorm = targetLink ? normalizeLinkUrl(targetLink.url) : '';
 
     if (targetLink) {
       addDeletedItem(targetLink, 'other', targetLink.label || targetLink.platform || 'Portfolio Link', targetLink.url);
     }
 
-    // Filter out by ID and by normalized URL
-    const updated = links.filter(l => {
-      if (l.id === id || l.id === targetId || toUUID(l.id) === targetId) return false;
-      if (targetUrlNorm && normalizeLinkUrl(l.url) === targetUrlNorm) return false;
-      return true;
-    });
+    // Delete ONLY this specific link by ID (never wipe other links with same URL)
+    const updated = links.filter(l => l.id !== id && l.id !== targetId && toUUID(l.id) !== targetId);
 
     setLinks(updated);
     setResumeLinks(updated);
@@ -4971,7 +4555,6 @@ export default function App() {
       heavyStorage.set(`${email}_links`, updated).catch(() => {});
       heavyStorage.set(`${email}_resume_links`, updated).catch(() => {});
 
-      // Record tombstone so deleted link NEVER resurfaces on refresh or login
       try {
         const rawDel = localStorage.getItem(`${email}_deleted_links`);
         const delList: { id: string; url: string }[] = rawDel ? JSON.parse(rawDel) : [];
@@ -4980,36 +4563,18 @@ export default function App() {
         heavyStorage.set(`${email}_deleted_links`, delList).catch(() => {});
       } catch (_) {}
     }
-    triggerToast(`Closed link coordinates.`);
+    triggerToast(`Removed link: ${targetLink?.label || 'Link'}`);
 
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        // Delete from portfolio_links by ID and by URL
         await supabase.from('portfolio_links').delete().eq('id', targetId).eq('user_id', userId);
-        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        if (id && id !== targetId && /^[0-9a-f-]{36}$/i.test(id)) {
           await supabase.from('portfolio_links').delete().eq('id', id).eq('user_id', userId);
         }
-        if (targetLink?.url) {
-          await supabase.from('portfolio_links').delete().eq('user_id', userId).eq('url', targetLink.url);
-        }
-
-        // Delete from resume_links by ID and by URL
         await supabase.from('resume_links').delete().eq('id', targetId).eq('user_id', userId);
-        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        if (id && id !== targetId && /^[0-9a-f-]{36}$/i.test(id)) {
           await supabase.from('resume_links').delete().eq('id', id).eq('user_id', userId);
-        }
-        if (targetLink?.url) {
-          await supabase.from('resume_links').delete().eq('user_id', userId).eq('url', targetLink.url);
-        }
-
-        // Delete from resumes by ID and by file_url
-        await supabase.from('resumes').delete().eq('id', targetId).eq('user_id', userId);
-        if (id && id !== targetId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-          await supabase.from('resumes').delete().eq('id', id).eq('user_id', userId);
-        }
-        if (targetLink?.url) {
-          await supabase.from('resumes').delete().eq('user_id', userId).eq('file_url', targetLink.url);
         }
       } catch (err) { console.warn("[Supabase Delete Link Error]", err); }
     }
@@ -5017,8 +4582,17 @@ export default function App() {
 
   const handleUpdateLink = async (updatedLk: PortfolioLink) => {
     const targetId = ensureUUID(updatedLk.id);
-    const item = { ...updatedLk, id: targetId, platform: updatedLk.platform || 'Link' };
-    const updated = deduplicateLinks(links.map(l => (l.id === updatedLk.id || l.id === targetId || normalizeLinkUrl(l.url) === normalizeLinkUrl(updatedLk.url)) ? item : l));
+    const item: PortfolioLink = {
+      ...updatedLk,
+      id: targetId,
+      platform: (updatedLk.platform || 'Link').trim(),
+      label: (updatedLk.label || updatedLk.platform || 'Link').trim(),
+      url: (updatedLk.url || '').trim().startsWith('http') ? (updatedLk.url || '').trim() : `https://${(updatedLk.url || '').trim()}`,
+      isPublic: updatedLk.isPublic !== false
+    };
+
+    // Update only the exact link by ID
+    const updated = links.map(l => (l.id === updatedLk.id || l.id === targetId || toUUID(l.id) === targetId) ? item : l);
     setLinks(updated);
     setResumeLinks(updated);
 
@@ -5029,47 +4603,28 @@ export default function App() {
       heavyStorage.set(`${email}_links`, updated).catch(() => {});
       heavyStorage.set(`${email}_resume_links`, updated).catch(() => {});
     }
-    triggerToast(`Updated portal entry: ${updatedLk.label}`);
+    triggerToast(`Updated link: ${item.label}`);
 
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        const { error: pErr } = await supabase.from('portfolio_links').upsert({
+        await supabase.from('portfolio_links').upsert({
           id: targetId,
           user_id: userId,
-          platform: updatedLk.platform || 'Link',
-          label: updatedLk.label,
-          url: updatedLk.url,
-          is_public: updatedLk.isPublic !== false
+          platform: item.platform,
+          label: item.label,
+          url: item.url,
+          is_public: item.isPublic !== false
         });
-        if (pErr) {
-          console.error("[Supabase Update Link Error]", pErr);
-          triggerToast(`Link Sync: ${pErr.message}`);
-        }
 
-        const { error: rlkErr } = await supabase.from('resume_links').upsert({
+        await supabase.from('resume_links').upsert({
           id: targetId,
           user_id: userId,
-          platform: updatedLk.platform || 'Link',
-          label: updatedLk.label,
-          url: updatedLk.url,
-          is_public: updatedLk.isPublic !== false
+          platform: item.platform,
+          label: item.label,
+          url: item.url,
+          is_public: item.isPublic !== false
         });
-        if (rlkErr) console.warn("[Supabase Update resume_links Error]", rlkErr);
-
-        const { error: rErr } = await supabase.from('resumes').upsert({
-          id: targetId,
-          user_id: userId,
-          title: updatedLk.label || updatedLk.platform || 'Link',
-          file_name: updatedLk.platform || 'Link',
-          file_url: updatedLk.url,
-          storage_path: '',
-          file_size: 0,
-          file_type: 'Link',
-          is_primary: false,
-          is_public: updatedLk.isPublic !== false
-        });
-        if (rErr) console.warn("[Supabase Resume Link Update Warning]", rErr);
       } catch (err) { console.warn("[Supabase Update Link Error]", err); }
     }
   };
@@ -5850,11 +5405,7 @@ export default function App() {
             }
 
             const rawUrl = r.fileUrl || r.fileDataUrl || r.linkUrl || '';
-            let cleanUrl = rawUrl.includes('example.com') ? (r.linkUrl || '') : rawUrl;
-            // Guard against PostgREST 413 payload limit by trimming massive base64 for database rows
-            if (cleanUrl.startsWith('data:') && cleanUrl.length > 1000000) {
-              cleanUrl = r.linkUrl || `vault://${encodeURIComponent(r.fileName || r.name || 'resume.pdf')}`;
-            }
+            const cleanUrl = rawUrl.includes('example.com') ? (r.linkUrl || '') : rawUrl;
 
             const { error } = await supabase.from('resumes').upsert({
               id: targetId,

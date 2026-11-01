@@ -506,10 +506,13 @@ export default function ResumeTab({
         {/* Dynamic Display Canvas */}
         <div className="w-full max-w-4xl mx-auto pb-8">
           <div className="bg-[#0f1115] border border-slate-900 rounded-3xl p-4 sm:p-8 md:p-10 space-y-6 shadow-2xl relative">
-            {viewingResume.fileDataUrl && !viewingResume.fileDataUrl.includes('example.com') ? (() => {
-              const isPdf = viewingResume.fileDataUrl.startsWith('data:application/pdf') || (viewingResume.fileName || '').toLowerCase().endsWith('.pdf');
-              const isImage = viewingResume.fileDataUrl.startsWith('data:image/') || (viewingResume.fileName || '').toLowerCase().match(/\.(png|jpg|jpeg|gif|webp)$/);
-              
+            {(() => {
+              const effectiveUrl = viewingResume.fileDataUrl || viewingResume.fileUrl || '';
+              if (!effectiveUrl || effectiveUrl.includes('example.com')) return null;
+
+              const isPdf = effectiveUrl.startsWith('data:application/pdf') || effectiveUrl.includes('.pdf') || (viewingResume.fileName || '').toLowerCase().endsWith('.pdf');
+              const isImage = effectiveUrl.startsWith('data:image/') || (viewingResume.fileName || '').toLowerCase().match(/\.(png|jpg|jpeg|gif|webp)$/);
+
               return (
                 <div className="space-y-6 text-left">
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-5 bg-slate-950/40 border border-slate-900/60 rounded-2xl gap-3">
@@ -521,7 +524,7 @@ export default function ResumeTab({
                     </div>
                     <div className="flex flex-wrap items-center gap-2.5">
                       <button 
-                        onClick={() => downloadFileUrl(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
+                        onClick={() => downloadFileUrl(effectiveUrl, viewingResume.fileName || viewingResume.name)}
                         className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-emerald-500/10 select-none"
                         style={{ backgroundColor: '#10b981', color: '#020617' }}
                       >
@@ -530,7 +533,7 @@ export default function ResumeTab({
                       </button>
                       {isPdf && (
                         <button 
-                          onClick={() => openPdfInNewTab(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
+                          onClick={() => openPdfInNewTab(effectiveUrl, viewingResume.fileName || viewingResume.name)}
                           className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white border border-slate-800 rounded-xl transition duration-200 text-xs flex items-center gap-1.5 cursor-pointer select-none"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -544,7 +547,7 @@ export default function ResumeTab({
                     {isImage ? (
                       <div className="max-w-full max-h-[70vh] overflow-auto flex items-center justify-center p-2">
                         <img 
-                          src={viewingResume.fileDataUrl} 
+                          src={effectiveUrl} 
                           alt={viewingResume.name} 
                           className="max-w-full max-h-[65vh] object-contain rounded-xl border border-slate-850 shadow-xl"
                           referrerPolicy="no-referrer"
@@ -553,14 +556,14 @@ export default function ResumeTab({
                     ) : isPdf ? (
                       <div className="w-full h-full p-1 sm:p-2 flex flex-col space-y-3" style={{ minHeight: '520px' }}>
                         <iframe 
-                          src={dataUrlToBlobUrl(viewingResume.fileDataUrl!)} 
+                          src={dataUrlToBlobUrl(effectiveUrl)} 
                           title={viewingResume.name} 
                           className="w-full h-[55vh] sm:h-[520px] md:h-[650px] rounded-xl border border-zinc-800 bg-[#18181b]" 
                         />
                         <div className="flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 px-1 gap-2">
                           <span>Interactive PDF Resume View</span>
                           <button 
-                            onClick={() => openPdfInNewTab(viewingResume.fileDataUrl!, viewingResume.fileName || viewingResume.name)}
+                            onClick={() => openPdfInNewTab(effectiveUrl, viewingResume.fileName || viewingResume.name)}
                             className="text-emerald-400 hover:underline font-bold flex items-center gap-1 cursor-pointer"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -580,7 +583,7 @@ export default function ResumeTab({
                           </p>
                         </div>
                         <a 
-                          href={viewingResume.fileDataUrl}
+                          href={effectiveUrl}
                           download={viewingResume.fileName || viewingResume.name}
                           className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-extrabold px-6 py-3 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-lg active:scale-[0.98]"
                           style={{ backgroundColor: '#10b981', color: '#020617' }}
@@ -593,7 +596,7 @@ export default function ResumeTab({
                   </div>
                 </div>
               );
-            })() : viewingResume.linkUrl && !viewingResume.linkUrl.includes('example.com') ? (
+            })() || (viewingResume.linkUrl && !viewingResume.linkUrl.includes('example.com') ? (
               <div className="p-8 rounded-2xl border text-center my-6 bg-slate-950/80 border-slate-800">
                 <Link2 className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
                 <p className="text-sm font-bold mb-1 text-white">Linked Vault Document URL</p>
@@ -632,7 +635,7 @@ export default function ResumeTab({
                   <span>Upload Original PDF</span>
                 </button>
               </div>
-            )}
+            ))}
           </div>
         </div>
       </div>
@@ -1023,6 +1026,7 @@ export default function ResumeTab({
               setRecordName('');
               setDocumentType('Resume');
               setVisibility('private');
+              setSelectedFiles([]);
               setSelectedFile(null);
               setDocLinkUrl('');
               setSourceType('file');

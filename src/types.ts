@@ -10,6 +10,7 @@ export interface PersonalProfile {
   firstName?: string;
   lastName?: string;
   company?: string;
+  contractCompany?: string;
   secondaryEmail?: string;
   secondaryPhone?: string;
   headline: string;

@@ -68,6 +68,7 @@ export default function ProfileTab({
       return {
         ...profile,
         company: profile.company || prev.company || '',
+        contractCompany: profile.contractCompany || prev.contractCompany || '',
         avatarUrl: effectiveAvatar,
         publicProfile: effectivePublic
       };
@@ -379,6 +380,15 @@ export default function ProfileTab({
                   </span>
                 </>
               )}
+              {formData.contractCompany && (
+                <>
+                  <span className="text-gray-600">•</span>
+                  <span className="text-amber-300 font-normal flex items-center gap-1">
+                    <Briefcase className="w-3.5 h-3.5 text-amber-400/80" />
+                    <span>Contract: {formData.contractCompany}</span>
+                  </span>
+                </>
+              )}
             </p>
           </div>
           
@@ -534,6 +544,44 @@ export default function ProfileTab({
                       onClick={() => handleChange('company', '')}
                       className="absolute right-3 text-gray-500 hover:text-rose-400 p-1"
                       title="Clear company"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Contract / Contracting Company Name */}
+              <div className="space-y-2 md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-gray-400 tracking-wider uppercase">
+                    Contract / Client Name
+                  </label>
+                  {formData.contractCompany && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('contractCompany', '')}
+                      className="text-[11px] text-gray-500 hover:text-rose-400 font-mono transition cursor-pointer flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Clear
+                    </button>
+                  )}
+                </div>
+                <div className="relative flex items-center">
+                  <Briefcase className="absolute left-4 w-4 h-4 text-amber-500/70 pointer-events-none" />
+                  <input 
+                    type="text" 
+                    value={formData.contractCompany || ''}
+                    placeholder="e.g. Apex Systems, Infosys, Client Contract"
+                    onChange={e => handleChange('contractCompany', e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 rounded-xl pl-11 pr-10 py-2.5 text-white text-sm outline-none transition-all shadow-inner"
+                  />
+                  {formData.contractCompany && (
+                    <button
+                      type="button"
+                      onClick={() => handleChange('contractCompany', '')}
+                      className="absolute right-3 text-gray-500 hover:text-rose-400 p-1"
+                      title="Clear contract name"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
