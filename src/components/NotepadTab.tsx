@@ -191,41 +191,107 @@ export default function NotepadTab({
     imgSrc: string;
   }>({ visible: false, x: 0, y: 0, imgSrc: '' });
 
+  // Immediate note content updater with resilient local storage and debounced cloud sync
+  const handleImmediateContentUpdate = (html: string) => {
+    const currentId = activeNoteIdRef.current;
+    if (!currentId) return;
+
+    pendingUpdatesRef.current.content = html;
+
+    // Immediately persist to local backup for 100% data safety
+    if (html && html.trim() && html !== '<p><br></p>') {
+      try {
+        localStorage.setItem(`note_backup_${currentId}`, html);
+      } catch (_) {}
+    }
+
+    // Immediately update in-memory notesRef
+    const updated = notesRef.current.map(n => {
+      if (n.id === currentId) {
+        return {
+          ...n,
+          content: html,
+          updatedAt: new Date().toISOString()
+        };
+      }
+      return n;
+    });
+    notesRef.current = updated;
+
+    // Debounce cloud sync (250ms) to ensure smooth 60fps typing while immediately persisting locally
+    if (saveDebounceTimeoutRef.current) {
+      clearTimeout(saveDebounceTimeoutRef.current);
+    }
+    saveDebounceTimeoutRef.current = setTimeout(() => {
+      onUpdateNotes(notesRef.current);
+    }, 250);
+  };
+
+  // Switch active note safely, ensuring the current active note is fully committed first
+  const handleSelectNote = (targetId: string) => {
+    if (targetId === activeNoteIdRef.current) return;
+    
+    // If user was actively typing, commit current note's content first
+    if (editorRef.current && activeNoteIdRef.current && document.activeElement === editorRef.current) {
+      const liveHtml = editorRef.current.innerHTML;
+      if (liveHtml && liveHtml.trim() && liveHtml !== '<p><br></p>') {
+        const curId = activeNoteIdRef.current;
+        const updated = notesRef.current.map(n => n.id === curId ? { ...n, content: liveHtml, updatedAt: new Date().toISOString() } : n);
+        notesRef.current = updated;
+        onUpdateNotes(updated);
+        try { localStorage.setItem(`note_backup_${curId}`, liveHtml); } catch (_) {}
+      }
+    }
+    pendingUpdatesRef.current = {};
+    setActiveNoteId(targetId);
+  };
+
   // Flush any pending typed updates immediately to storage & Supabase
   const flushPendingUpdates = () => {
     if (saveDebounceTimeoutRef.current) {
       clearTimeout(saveDebounceTimeoutRef.current);
       saveDebounceTimeoutRef.current = null;
     }
-    const currentPending = { ...pendingUpdatesRef.current };
     const currentId = activeNoteIdRef.current;
+    if (!currentId) return;
+
+    const currentPending = { ...pendingUpdatesRef.current };
     
-    // Always sync latest content from contentEditable DOM
-    if (editorRef.current && currentId) {
-      currentPending.content = editorRef.current.innerHTML;
+    // Only capture editor content if editor is focused and has non-empty text
+    if (editorRef.current && document.activeElement === editorRef.current) {
+      const liveHtml = editorRef.current.innerHTML;
+      if (liveHtml && liveHtml.trim() && liveHtml !== '<p><br></p>') {
+        currentPending.content = liveHtml;
+      }
     }
-    if (titleInputRef.current && currentId && titleInputRef.current.value) {
+    if (titleInputRef.current && titleInputRef.current.value) {
       currentPending.title = titleInputRef.current.value;
     }
 
-    if (currentId) {
+    if (Object.keys(currentPending).length > 0) {
       pendingUpdatesRef.current = {};
       const updated = notesRef.current.map(n => {
         if (n.id === currentId) {
+          const newContent = (currentPending.content !== undefined && currentPending.content.trim())
+            ? currentPending.content
+            : n.content;
+
           return {
             ...n,
             ...currentPending,
+            content: newContent,
             updatedAt: new Date().toISOString()
           };
         }
         return n;
       });
+      notesRef.current = updated;
       onUpdateNotes(updated);
     }
   };
 
-  // Schedule a debounced update (600ms debounce ensures 0ms typing lag!)
-  const scheduleDebouncedUpdate = (field: keyof NotepadNote, value: any, delay = 600) => {
+  // Schedule a debounced update for metadata fields
+  const scheduleDebouncedUpdate = (field: keyof NotepadNote, value: any, delay = 400) => {
     const currentId = activeNoteIdRef.current;
     if (!currentId) return;
     pendingUpdatesRef.current[field] = value;
@@ -239,17 +305,22 @@ export default function NotepadTab({
     }, delay);
   };
 
-  // Flush on note switch or unmount or beforeunload
+  // Flush on browser refresh / tab close. Never wipe on unmount!
   useEffect(() => {
     const handleBeforeUnload = () => {
+      if (editorRef.current && activeNoteIdRef.current) {
+        const liveHtml = editorRef.current.innerHTML;
+        if (liveHtml && liveHtml.trim() && liveHtml !== '<p><br></p>') {
+          try { localStorage.setItem(`note_backup_${activeNoteIdRef.current}`, liveHtml); } catch (_) {}
+        }
+      }
       flushPendingUpdates();
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
-      flushPendingUpdates();
     };
-  }, [activeNoteId]);
+  }, []);
 
   // Close image context menu on window click
   useEffect(() => {
@@ -338,8 +409,30 @@ export default function NotepadTab({
   // Sync editor HTML when activeNote changes or loads from Supabase
   useEffect(() => {
     if (editorRef.current && activeNote) {
-      if (document.activeElement !== editorRef.current && editorRef.current.innerHTML !== (activeNote.content || '')) {
-        editorRef.current.innerHTML = activeNote.content || '';
+      let targetContent = activeNote.content || '';
+
+      // Auto-recover from local backup if memory content is blank
+      if (!targetContent.trim() || targetContent === '<p><br></p>') {
+        try {
+          const cached = localStorage.getItem(`note_backup_${activeNote.id}`);
+          if (cached && cached.trim() && cached !== '<p><br></p>') {
+            targetContent = cached;
+            handleUpdateActiveNote('content', cached);
+          }
+        } catch (_) {}
+      }
+
+      // If note has subtasks (e.g. Daily Tasks) but content is blank, generate deliverables list
+      if ((!targetContent.trim() || targetContent === '<p><br></p>') && activeNote.tasks && activeNote.tasks.length > 0) {
+        const generatedList = `<p><strong>Deliverables & Tasks:</strong></p><ul>` + 
+          activeNote.tasks.map(t => `<li>${t.text}${t.isEveryDay ? ' (Every Day)' : ''}</li>`).join('') + 
+          `</ul>`;
+        targetContent = generatedList;
+        handleUpdateActiveNote('content', generatedList);
+      }
+
+      if (document.activeElement !== editorRef.current && editorRef.current.innerHTML !== targetContent) {
+        editorRef.current.innerHTML = targetContent;
       }
     }
   }, [activeNoteId, activeNote?.content]);
@@ -953,7 +1046,7 @@ export default function NotepadTab({
                   <div
                     key={note.id}
                     onClick={() => {
-                      setActiveNoteId(note.id);
+                      handleSelectNote(note.id);
                       setIsMobileListOpen(false); // Mobile: switch to editor
                     }}
                     className={`p-3.5 rounded-2xl cursor-pointer transition border relative flex flex-col gap-2.5 ${
@@ -1015,10 +1108,13 @@ export default function NotepadTab({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setActiveNoteId(note.id);
+                            handleSelectNote(note.id);
                             setIsMobileListOpen(false);
+                            const toDisplay = (note.content && note.content.trim() && note.content !== '<p><br></p>') 
+                              ? note.content 
+                              : (localStorage.getItem(`note_backup_${note.id}`) || note.content || '');
                             if (editorRef.current) {
-                              editorRef.current.innerHTML = note.content || '';
+                              editorRef.current.innerHTML = toDisplay;
                             }
                             setTimeout(() => {
                               editorWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -1610,6 +1706,10 @@ export default function NotepadTab({
                     <button
                       type="button"
                       onClick={() => {
+                        if (editorRef.current && activeNoteIdRef.current) {
+                          const liveHtml = editorRef.current.innerHTML;
+                          handleImmediateContentUpdate(liveHtml);
+                        }
                         flushPendingUpdates();
                         triggerToast('Document saved and synchronized to cloud!');
                       }}
@@ -1889,7 +1989,7 @@ export default function NotepadTab({
                     suppressContentEditableWarning
                     onInput={(e) => {
                       const html = (e.currentTarget as HTMLDivElement).innerHTML;
-                      scheduleDebouncedUpdate('content', html, 500);
+                      handleImmediateContentUpdate(html);
                       saveSelection();
                     }}
                     onBlur={() => {
@@ -1925,7 +2025,7 @@ export default function NotepadTab({
                                 }
                                 saveSelection();
                                 if (editorRef.current) {
-                                  scheduleDebouncedUpdate('content', editorRef.current.innerHTML, 300);
+                                  handleImmediateContentUpdate(editorRef.current.innerHTML);
                                 }
                                 triggerToast('Image pasted into document! Right-click image for options.');
                               };

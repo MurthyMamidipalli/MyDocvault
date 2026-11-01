@@ -2398,7 +2398,7 @@ export default function App() {
               } catch (_) {}
             }
 
-            // Merge remote notes with local notes by latest updatedAt timestamp
+            // Merge remote notes with local notes intelligently: NEVER overwrite non-empty content with empty!
             const mergedMap = new Map<string, NotepadNote>();
             for (const r of remoteNotes) {
               mergedMap.set(r.id, r);
@@ -2408,11 +2408,60 @@ export default function App() {
               if (!existing) {
                 mergedMap.set(l.id, l);
               } else {
+                const lContent = (l.content || '').trim();
+                const rContent = (existing.content || '').trim();
+                let finalContent = existing.content;
+                if (lContent && (!rContent || rContent === '<p><br></p>')) {
+                  finalContent = l.content;
+                } else if ((!lContent || lContent === '<p><br></p>') && rContent) {
+                  finalContent = existing.content;
+                } else if (lContent && rContent) {
+                  const existingTime = new Date(existing.updatedAt || 0).getTime();
+                  const localTime = new Date(l.updatedAt || 0).getTime();
+                  finalContent = localTime > existingTime ? l.content : existing.content;
+                }
+
+                // Fallback to local storage backup if both are empty
+                if (!finalContent || !finalContent.trim() || finalContent === '<p><br></p>') {
+                  try {
+                    const b = localStorage.getItem(`note_backup_${l.id}`);
+                    if (b && b.trim()) finalContent = b;
+                  } catch (_) {}
+                }
+
+                const lTasks = (l.tasks && l.tasks.length > 0) ? l.tasks : [];
+                const rTasks = (existing.tasks && existing.tasks.length > 0) ? existing.tasks : [];
+                const finalTasks = lTasks.length > 0 ? lTasks : (rTasks.length > 0 ? rTasks : []);
+
                 const existingTime = new Date(existing.updatedAt || 0).getTime();
                 const localTime = new Date(l.updatedAt || 0).getTime();
-                if (localTime > existingTime) {
-                  mergedMap.set(l.id, l);
-                }
+                const base = localTime > existingTime ? l : existing;
+
+                mergedMap.set(l.id, {
+                  ...base,
+                  content: finalContent,
+                  tasks: finalTasks
+                });
+              }
+            }
+
+            // Restore from local backups and preserve tasks for any empty note
+            for (const [id, note] of mergedMap.entries()) {
+              if (!note.content || !note.content.trim() || note.content === '<p><br></p>') {
+                try {
+                  const b = localStorage.getItem(`note_backup_${id}`);
+                  if (b && b.trim() && b !== '<p><br></p>') {
+                    note.content = b;
+                    mergedMap.set(id, note);
+                  }
+                } catch (_) {}
+              }
+              // If note is Daily Tasks and has tasks but empty content, render task list
+              if ((!note.content || !note.content.trim() || note.content === '<p><br></p>') && note.tasks && note.tasks.length > 0) {
+                note.content = `<p><strong>Deliverables & Tasks:</strong></p><ul>` + 
+                  note.tasks.map(t => `<li>${t.text}${t.isEveryDay ? ' (Every Day)' : ''}</li>`).join('') + 
+                  `</ul>`;
+                mergedMap.set(id, note);
               }
             }
 
@@ -5611,9 +5660,31 @@ export default function App() {
 
   // Notes update handler
   const handleUpdateNotes = async (newNotes: NotepadNote[]) => {
-    const cleanNotes = deduplicateNotes(newNotes);
+    // Preserve existing note content if incoming update is unexpectedly empty
+    const preservedNotes = newNotes.map(newN => {
+      const isBlank = !newN.content || !newN.content.trim() || newN.content === '<p><br></p>';
+      if (isBlank) {
+        const existing = notes.find(oldN => oldN.id === newN.id);
+        if (existing && existing.content && existing.content.trim() && existing.content !== '<p><br></p>') {
+          return {
+            ...newN,
+            content: existing.content
+          };
+        }
+      }
+      return newN;
+    });
+
+    const cleanNotes = deduplicateNotes(preservedNotes);
     const deletedNotes = notes.filter(oldN => !cleanNotes.some(newN => newN.id === oldN.id));
     setNotes(cleanNotes);
+
+    // Save individual note backups immediately to resilient localStorage
+    cleanNotes.forEach(n => {
+      if (n.content && n.content.trim() && n.content !== '<p><br></p>') {
+        try { localStorage.setItem(`note_backup_${n.id}`, n.content); } catch (_) {}
+      }
+    });
 
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     if (email) {

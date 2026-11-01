@@ -1196,7 +1196,7 @@ export default function ResumeTab({
           {links.length === 0 && (
             <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-900 rounded-2xl bg-[#0f1115]/30 p-6 space-y-3">
               <Link2 className="w-10 h-10 text-slate-600 mx-auto" />
-              <p className="text-sm text-gray-300 font-bold">No active links found</p>
+              <p className="text-sm text-gray-300 font-bold">No links found</p>
               <p className="text-xs text-gray-500 max-w-md mx-auto">Add links to your portfolio networks to share and sync them with Supabase.</p>
               <button
                 type="button"
