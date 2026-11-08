@@ -1348,6 +1348,15 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const u = session.user;
+        const curDevId = getDeviceId();
+        const activeDevId = u.user_metadata?.active_device_id;
+        
+        // If there's an active device on record and it doesn't match this present device,
+        // and this device hasn't been authorized yet, DO NOT auto-login - let AuthPage show option to logout other device!
+        if (activeDevId && activeDevId !== curDevId && localStorage.getItem('nexus_device_authorized') !== curDevId) {
+          return;
+        }
+
         const mappedUser = {
           id: u.id,
           email: u.email || '',
@@ -1367,6 +1376,15 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const u = session.user;
+        const curDevId = getDeviceId();
+        const activeDevId = u.user_metadata?.active_device_id;
+
+        // If another device is active and this present device hasn't been authorized yet,
+        // do not auto-set currentUser so AuthPage can display "Logout old login / another device"
+        if (activeDevId && activeDevId !== curDevId && localStorage.getItem('nexus_device_authorized') !== curDevId) {
+          return;
+        }
+
         const mappedUser = {
           id: u.id,
           email: u.email || '',
@@ -1383,6 +1401,8 @@ export default function App() {
       } else if (_event === 'SIGNED_OUT') {
         setCurrentUser(null);
         localStorage.removeItem('nexus_current_user');
+        localStorage.removeItem('nexus_device_authorized');
+        localStorage.removeItem('nexus_device_authorized_time');
         localStorage.setItem('nexus_active_tab', 'overview');
         setActiveTab('overview');
         if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
@@ -1401,6 +1421,10 @@ export default function App() {
       // Immediately hydrate all user states from local cache in 0ms!
       resetUserDataState(email, `${user.firstName || ''} ${user.lastName || ''}`.trim());
     }
+    const curDevId = getDeviceId();
+    const curDevLabel = getDeviceLabel();
+    localStorage.setItem('nexus_device_authorized', curDevId);
+    localStorage.setItem('nexus_device_authorized_time', String(Date.now()));
     setCurrentUser(user);
     localStorage.setItem('nexus_current_user', JSON.stringify(user));
     setActiveTab('overview');
@@ -1410,9 +1434,7 @@ export default function App() {
     }
 
     // Enforce Single Active Device session:
-    // Terminate all other sessions on Supabase Auth and register this device
-    const curDevId = getDeviceId();
-    const curDevLabel = getDeviceLabel();
+    // Terminate all other sessions on Supabase Auth and register this present device
     supabase.auth.signOut({ scope: 'others' }).catch(() => {});
     supabase.auth.updateUser({
       data: {
@@ -1507,6 +1529,8 @@ export default function App() {
     // 1. Immediately reset state locally with 0ms latency
     setCurrentUser(null);
     localStorage.removeItem('nexus_current_user');
+    localStorage.removeItem('nexus_device_authorized');
+    localStorage.removeItem('nexus_device_authorized_time');
     localStorage.setItem('nexus_active_tab', 'overview');
     setActiveTab('overview');
     if (window.location.hash && !window.location.hash.startsWith('#/public/') && !window.location.hash.startsWith('#/portfolio/') && !window.location.hash.startsWith('#/share/')) {
@@ -1526,6 +1550,8 @@ export default function App() {
     try {
       const curDevId = getDeviceId();
       const curDevLabel = getDeviceLabel();
+      localStorage.setItem('nexus_device_authorized', curDevId);
+      localStorage.setItem('nexus_device_authorized_time', String(Date.now()));
       await supabase.auth.signOut({ scope: 'others' });
       await supabase.auth.updateUser({
         data: {
@@ -1534,24 +1560,30 @@ export default function App() {
           active_device_login_at: Date.now()
         }
       });
-      triggerToast('✅ Other devices logged out successfully. Only this device is now active.');
+      triggerToast('✅ Other devices logged out successfully. Only this present device is now active.');
     } catch (err: any) {
       triggerToast('✅ Other devices logged out successfully.');
     }
   };
 
-  // Periodic active device validator: If another device logs in, disconnect this device
+  // Periodic active device validator: If another device logs in, disconnect this old session
   useEffect(() => {
     if (!currentUser?.email && !currentUser?.id) return;
     const curDevId = getDeviceId();
 
     const verifySingleActiveDeviceSession = async () => {
       try {
+        const lastAuthTime = Number(localStorage.getItem('nexus_device_authorized_time') || 0);
+        // Grace period: allow 15 seconds after login on this present device before checking
+        if (Date.now() - lastAuthTime < 15000) {
+          return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         const remoteDevId = user.user_metadata?.active_device_id;
         if (remoteDevId && remoteDevId !== curDevId) {
-          triggerToast('⚠️ Account signed in on another device. Disconnecting this session...');
+          triggerToast('⚠️ Account signed in on another device. Disconnecting old session...');
           setTimeout(() => {
             handleUserLogout();
             alert('Logged out: Your account was logged in from another device.');

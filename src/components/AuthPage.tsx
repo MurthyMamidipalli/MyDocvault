@@ -404,7 +404,7 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
       const curDevLabel = getDeviceLabel();
       // Revoke all other device sessions on Supabase Auth
       await supabase.auth.signOut({ scope: 'others' });
-      // Stamp this device as the authorized active session
+      // Stamp this present device as the authorized active session
       await supabase.auth.updateUser({
         data: {
           active_device_id: curDevId,
@@ -412,6 +412,8 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
           active_device_login_at: Date.now()
         }
       });
+      localStorage.setItem('nexus_device_authorized', curDevId);
+      localStorage.setItem('nexus_device_authorized_time', String(Date.now()));
 
       const trimmedEmail = (user.email || email).trim().toLowerCase();
       let userFirstName = user.user_metadata?.first_name || trimmedEmail.split('@')[0];
@@ -426,7 +428,7 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
       } catch (_) {}
 
       setPreviousSessionWarning(null);
-      triggerToast(`Previous devices logged out successfully. Welcome ${userFirstName}!`);
+      triggerToast(`Old device logged out. Present device is now active! Welcome ${userFirstName}!`);
       onLoginSuccess({
         id: user.id,
         email: trimmedEmail,
@@ -485,7 +487,9 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
         return;
       }
 
-      // No conflicting session: stamp this device and proceed
+      // No conflicting session: stamp this present device and proceed
+      localStorage.setItem('nexus_device_authorized', curDevId);
+      localStorage.setItem('nexus_device_authorized_time', String(Date.now()));
       await supabase.auth.signOut({ scope: 'others' }).catch(() => {});
       await supabase.auth.updateUser({
         data: {
@@ -763,15 +767,15 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
                 </div>
 
                 {/* Multi-Device Login Session Conflict Alert */}
-                {previousSessionWarning?.active && (
-                  <div className="p-4 bg-amber-500/15 border border-amber-500/40 rounded-2xl space-y-3 text-left animate-fade-in mb-2">
+                {previousSessionWarning?.active ? (
+                  <div className="p-4 bg-amber-500/15 border border-amber-500/40 rounded-2xl space-y-3.5 text-left animate-fade-in mb-2 shadow-xl">
                     <div className="flex items-start gap-2.5">
                       <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                       <div>
-                        <h4 className="text-sm font-bold text-white">First logout previous login</h4>
+                        <h4 className="text-sm font-bold text-white">Account Active on Another Device</h4>
                         <p className="text-xs text-amber-200/90 mt-1 leading-relaxed">
-                          Your account is currently active on: <span className="font-semibold text-white">{previousSessionWarning.deviceLabel}</span>. 
-                          Please first logout previous login to access this device.
+                          Your account is currently logged in on another device: <span className="font-semibold text-white">{previousSessionWarning.deviceLabel}</span> (Old Login).
+                          Click below to logout the old device and activate this present device.
                         </p>
                       </div>
                     </div>
@@ -779,10 +783,11 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
                       <button
                         type="button"
                         onClick={handleLogoutAllPreviousDevices}
-                        className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 active:scale-95"
+                        disabled={isValidating}
+                        className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold py-3 px-4 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-rose-950/40 active:scale-95 select-none"
                       >
-                        <LogOut className="w-3.5 h-3.5" />
-                        <span>Logout all previous devices</span>
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout Old Login (Logout Another Device)</span>
                       </button>
                       <button
                         type="button"
@@ -790,32 +795,33 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
                           setPreviousSessionWarning(null);
                           supabase.auth.signOut().catch(() => {});
                         }}
-                        className="px-3 py-2 text-xs text-gray-400 hover:text-white transition rounded-xl border border-slate-800"
+                        disabled={isValidating}
+                        className="px-4 py-2.5 text-xs text-gray-400 hover:text-white transition rounded-xl border border-slate-800 hover:bg-slate-900 select-none text-center"
                       >
                         Cancel
                       </button>
                     </div>
                   </div>
+                ) : (
+                  /* Standard Submit Button */
+                  <button
+                    type="submit"
+                    disabled={isValidating}
+                    className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-gray-500 disabled:cursor-not-allowed font-bold py-3 px-4 rounded-xl text-slate-950 transition active:scale-[0.99] shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5 focus:outline-none text-xs"
+                  >
+                    {isValidating ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
+                        <span>Verifying Identity...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Verify and Sign In</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
                 )}
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isValidating}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-gray-500 disabled:cursor-not-allowed font-bold py-3 px-4 rounded-xl text-slate-950 transition active:scale-[0.99] shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-1.5 focus:outline-none text-xs"
-                >
-                  {isValidating ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                      <span>Verifying Identity...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Verify and Sign In</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
               </form>
             )}
 
