@@ -257,27 +257,39 @@ export default function PublicPortfolioView({
   // Categorize Projects, Products, and Others (Reports) cleanly without duplicate entries
   const allPublicItems = (projects || []).filter(p => p && p.isPublic !== false);
 
-  // 1. Projects: type === 'project' OR category === 'projects' OR default project
-  const rawProjects = allPublicItems.filter(p => 
-    p.type === 'project' || (p.category as any) === 'projects' || (!p.type && (p.category as any) !== 'products' && (p.category as any) !== 'product' && (p.category as any) !== 'others' && (p.category as any) !== 'other' && !p.docType)
-  );
-  const projectsList = deduplicateByUniqueKey(rawProjects, p => (p.name || '').toLowerCase().trim());
-  const projectNames = new Set(projectsList.map(p => (p.name || '').toLowerCase().trim()));
+  // Helper: Deduplicate by unique ID first (fallback to name only if no id)
+  const deduplicateRecords = (items: Project[]): Project[] => {
+    const list: Project[] = [];
+    const seen = new Set<string>();
+    for (const p of items) {
+      if (!p) continue;
+      const key = p.id ? toUUID(p.id) : (p.name || '').toLowerCase().trim();
+      if (key && seen.has(key)) continue;
+      if (key) seen.add(key);
+      list.push(p);
+    }
+    return list;
+  };
 
-  // 2. Products: type === 'product' OR category === 'products' OR category === 'product'
+  // 1. Products: type === 'product' OR category is product(s)
   const rawProducts = allPublicItems.filter(p => 
-    !projectNames.has((p.name || '').toLowerCase().trim()) &&
-    (p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product')
+    p.type === 'product' || (p.category as any) === 'products' || (p.category as any) === 'product'
   );
-  const productsList = deduplicateByUniqueKey(rawProducts, p => (p.name || '').toLowerCase().trim());
-  const productNames = new Set([...projectNames, ...productsList.map(p => (p.name || '').toLowerCase().trim())]);
+  const productsList = deduplicateRecords(rawProducts);
 
-  // 3. Others: type === 'other' OR category === 'others' OR category === 'other' OR docType
+  // 2. Others: type === 'other' OR category is other(s) OR non-project/product docType
   const rawOthers = allPublicItems.filter(p => 
-    !productNames.has((p.name || '').toLowerCase().trim()) &&
-    (p.type === 'other' || (p.category as any) === 'others' || (p.category as any) === 'other' || !!p.docType)
+    (p.type === 'other' || (p.category as any) === 'others' || (p.category as any) === 'other') ||
+    (p.type !== 'project' && p.type !== 'product' && (p.category as any) !== 'projects' && (p.category as any) !== 'products' && !!p.docType)
   );
-  const othersList = deduplicateByUniqueKey(rawOthers, p => (p.name || '').toLowerCase().trim());
+  const othersList = deduplicateRecords(rawOthers);
+
+  // 3. Projects: type === 'project' OR category is projects OR default non-product/other
+  const rawProjects = allPublicItems.filter(p => 
+    ((p.type === 'project' || (p.category as any) === 'projects') && p.type !== 'product' && p.type !== 'other' && (p.category as any) !== 'products' && (p.category as any) !== 'others') ||
+    (!p.type && (p.category as any) !== 'products' && (p.category as any) !== 'product' && (p.category as any) !== 'others' && (p.category as any) !== 'other' && !p.docType)
+  );
+  const projectsList = deduplicateRecords(rawProjects);
 
   // Filter out documents from publicDocuments that are already shown under Resumes, Certifications, or Others
   const existingDocNames = new Set<string>();
@@ -894,7 +906,19 @@ export default function PublicPortfolioView({
 
                 <div className="grid grid-cols-1 gap-4">
                   {projectsList.map(proj => {
-                    const cover = proj.coverUrl || proj.imageUrl;
+                    let cover = proj.coverUrl || proj.imageUrl || '';
+                    if (!cover && proj.description && proj.description.includes('<!--banner:')) {
+                      const match = proj.description.match(/<!--banner:([\s\S]*?)-->/);
+                      if (match) cover = match[1];
+                    }
+                    let docUrl = proj.pdfUrl || (proj as any).fileUrl || '';
+                    let docName = proj.pdfName || (proj as any).fileName || '';
+                    if (!docName && proj.description && proj.description.includes('<!--filename:')) {
+                      const match = proj.description.match(/<!--filename:([\s\S]*?)-->/);
+                      if (match) docName = match[1];
+                    }
+                    const cleanDesc = (proj.description || '').replace(/<!--banner:[\s\S]*?-->/g, '').replace(/<!--filename:[\s\S]*?-->/g, '').trim();
+
                     return (
                       <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
                         {cover && (
@@ -919,7 +943,7 @@ export default function PublicPortfolioView({
                             )}
                           </div>
                           <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
-                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
+                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{cleanDesc}</p>
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-slate-900/60">
@@ -934,18 +958,20 @@ export default function PublicPortfolioView({
                           )}
 
                           <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
-                            {proj.pdfUrl && (
+                            {docUrl && (
                               <>
                                 <button 
-                                  onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
                                   className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                  title={docName || 'View Document'}
                                 >
                                   <Eye className="w-3 h-3" />
-                                  <span>View PDF</span>
+                                  <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
                                 </button>
                                 <button 
-                                  onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
                                   className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                                  title={docName || 'Download'}
                                 >
                                   <Download className="w-3 h-3" />
                                   <span>Download</span>
@@ -983,7 +1009,19 @@ export default function PublicPortfolioView({
 
                 <div className="grid grid-cols-1 gap-4">
                   {productsList.map(proj => {
-                    const cover = proj.coverUrl || proj.imageUrl;
+                    let cover = proj.coverUrl || proj.imageUrl || '';
+                    if (!cover && proj.description && proj.description.includes('<!--banner:')) {
+                      const match = proj.description.match(/<!--banner:([\s\S]*?)-->/);
+                      if (match) cover = match[1];
+                    }
+                    let docUrl = proj.pdfUrl || (proj as any).fileUrl || '';
+                    let docName = proj.pdfName || (proj as any).fileName || '';
+                    if (!docName && proj.description && proj.description.includes('<!--filename:')) {
+                      const match = proj.description.match(/<!--filename:([\s\S]*?)-->/);
+                      if (match) docName = match[1];
+                    }
+                    const cleanDesc = (proj.description || '').replace(/<!--banner:[\s\S]*?-->/g, '').replace(/<!--filename:[\s\S]*?-->/g, '').trim();
+
                     return (
                       <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
                         {cover && (
@@ -1004,7 +1042,7 @@ export default function PublicPortfolioView({
                             {proj.date && <span className="text-[10px] font-mono text-gray-650">{proj.date}</span>}
                           </div>
                           <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
-                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
+                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{cleanDesc}</p>
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-slate-900/60">
@@ -1019,18 +1057,20 @@ export default function PublicPortfolioView({
                           )}
 
                           <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
-                            {proj.pdfUrl && (
+                            {docUrl && (
                               <>
                                 <button 
-                                  onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
                                   className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                  title={docName || 'View Document'}
                                 >
                                   <Eye className="w-3 h-3" />
-                                  <span>View PDF</span>
+                                  <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
                                 </button>
                                 <button 
-                                  onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
                                   className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                                  title={docName || 'Download'}
                                 >
                                   <Download className="w-3 h-3" />
                                   <span>Download</span>
@@ -1062,7 +1102,19 @@ export default function PublicPortfolioView({
 
                 <div className="grid grid-cols-1 gap-4">
                   {othersList.map(proj => {
-                    const cover = proj.coverUrl || proj.imageUrl;
+                    let cover = proj.coverUrl || proj.imageUrl || '';
+                    if (!cover && proj.description && proj.description.includes('<!--banner:')) {
+                      const match = proj.description.match(/<!--banner:([\s\S]*?)-->/);
+                      if (match) cover = match[1];
+                    }
+                    let docUrl = proj.pdfUrl || (proj as any).fileUrl || '';
+                    let docName = proj.pdfName || (proj as any).fileName || '';
+                    if (!docName && proj.description && proj.description.includes('<!--filename:')) {
+                      const match = proj.description.match(/<!--filename:([\s\S]*?)-->/);
+                      if (match) docName = match[1];
+                    }
+                    const cleanDesc = (proj.description || '').replace(/<!--banner:[\s\S]*?-->/g, '').replace(/<!--filename:[\s\S]*?-->/g, '').trim();
+
                     return (
                       <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
                         {cover && (
@@ -1083,22 +1135,24 @@ export default function PublicPortfolioView({
                             {proj.date && <span className="text-[10px] font-mono text-gray-650">{proj.date}</span>}
                           </div>
                           <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
-                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
+                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{cleanDesc}</p>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-900/60 font-mono text-[10px]">
-                          {proj.pdfUrl && (
+                          {docUrl && (
                             <>
                               <button 
-                                onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
                                 className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                title={docName || 'View Document'}
                               >
                                 <Eye className="w-3 h-3" />
-                                <span>View PDF</span>
+                                <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
                               </button>
                               <button 
-                                onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
                                 className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
+                                title={docName || 'Download'}
                               >
                                 <Download className="w-3 h-3" />
                                 <span>Download</span>

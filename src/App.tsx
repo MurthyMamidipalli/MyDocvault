@@ -415,11 +415,13 @@ export const deduplicateProjects = (items?: Project[]): Project[] => {
       const mergedCover = pickLongerOrFirst(item.coverUrl || item.imageUrl, existing.coverUrl || existing.imageUrl);
       const mergedPdf = pickLongerOrFirst(item.pdfUrl || (item as any).fileUrl, existing.pdfUrl || (existing as any).fileUrl);
       const mergedPdfName = pickLongerOrFirst(item.pdfName || (item as any).fileName, existing.pdfName || (existing as any).fileName);
+      const mergedDesc = pickLongerOrFirst(item.description, existing.description);
 
       result[matchIdx] = {
         ...existing,
         ...item,
         id: existing.id || item.id,
+        description: mergedDesc,
         coverUrl: mergedCover || undefined,
         imageUrl: mergedCover || undefined,
         pdfUrl: mergedPdf || undefined,
@@ -1517,9 +1519,51 @@ export default function App() {
     setSkills(deduplicateSkills(getLocal('skills', isUserLoggedIn ? [] : INITIAL_SKILLS)));
     setExperience(deduplicateExperience(getLocal('experience', isUserLoggedIn ? [] : INITIAL_EXPERIENCE)));
     setCertifications(deduplicateCertifications(getLocal('certs', isUserLoggedIn ? [] : INITIAL_CERTIFICATIONS)));
-    setProjects(deduplicateProjects(getLocal('projects', isUserLoggedIn ? [] : INITIAL_PROJECTS)));
-    setProducts(deduplicateProjects(getLocal('products', [])));
-    setOthers(deduplicateProjects(getLocal('others', [])));
+    setProjects(prev => {
+      const local = getLocal('projects', isUserLoggedIn ? [] : INITIAL_PROJECTS);
+      const existing = prev || [];
+      const merged = local.map((p: any) => {
+        const match = existing.find(e => e.id === p.id || toUUID(e.id) === toUUID(p.id));
+        return {
+          ...p,
+          pdfUrl: match?.pdfUrl || p.pdfUrl,
+          pdfName: match?.pdfName || p.pdfName,
+          coverUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl,
+          imageUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl
+        };
+      });
+      return deduplicateProjects(merged);
+    });
+    setProducts(prev => {
+      const local = getLocal('products', []);
+      const existing = prev || [];
+      const merged = local.map((p: any) => {
+        const match = existing.find(e => e.id === p.id || toUUID(e.id) === toUUID(p.id));
+        return {
+          ...p,
+          pdfUrl: match?.pdfUrl || p.pdfUrl,
+          pdfName: match?.pdfName || p.pdfName,
+          coverUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl,
+          imageUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl
+        };
+      });
+      return deduplicateProjects(merged);
+    });
+    setOthers(prev => {
+      const local = getLocal('others', []);
+      const existing = prev || [];
+      const merged = local.map((p: any) => {
+        const match = existing.find(e => e.id === p.id || toUUID(e.id) === toUUID(p.id));
+        return {
+          ...p,
+          pdfUrl: match?.pdfUrl || p.pdfUrl,
+          pdfName: match?.pdfName || p.pdfName,
+          coverUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl,
+          imageUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl
+        };
+      });
+      return deduplicateProjects(merged);
+    });
     setEducation(deduplicateEducation(getLocal('education', isUserLoggedIn ? [] : INITIAL_EDUCATION)));
     setSpecializations(deduplicateSpecializations(getLocal('specializations', [])));
     setAchievements(deduplicateAchievements(getLocal('achievements', isUserLoggedIn ? [] : INITIAL_ACHIEVEMENTS)));
@@ -3080,7 +3124,9 @@ export default function App() {
             }
 
             const prodData = prodRes.status === 'fulfilled' && Array.isArray(prodRes.value.data) ? prodRes.value.data : [];
-            const mappedProd: Project[] = prodData.map(p => {
+            const extraProdsFromProj = projData.filter(p => p.type === 'product' || p.category === 'products');
+            const allProdRows = [...prodData, ...extraProdsFromProj];
+            const mappedProd: Project[] = allProdRows.map(p => {
               let itemDesc = p.description || '';
               let itemBanner = '';
               if (itemDesc.includes('<!--banner:')) {
@@ -3146,20 +3192,22 @@ export default function App() {
                 const r = mappedProd.find(rem => rem.id === p.id);
                 if (p && ((p.pdfUrl && (!r || !r.pdfUrl)) || ((p.coverUrl || p.imageUrl) && (!r || (!r.imageUrl && !r.coverUrl))))) {
                   try {
+                    const banner = p.coverUrl || p.imageUrl || '';
                     const rawDesc = (p.description || '').replace(/<!--banner:[\s\S]*?-->/g, '').replace(/<!--filename:[\s\S]*?-->/g, '').trim();
                     const descWithFile = p.pdfName ? `${rawDesc}\n<!--filename:${p.pdfName}-->` : rawDesc;
+                    const descWithFileAndBanner = banner ? `${descWithFile}\n<!--banner:${banner}-->` : descWithFile;
                     await supabase.from('products').upsert({
                       id: ensureUUID(p.id),
                       user_id: userId,
                       name: p.name,
                       category: p.category || 'products',
-                      description: descWithFile,
+                      description: descWithFileAndBanner,
                       highlights: p.highlights || [],
                       tech_stack: p.techStack || [],
                       live_url: p.liveUrl || '',
                       github_url: p.githubUrl || '',
                       pdf_url: p.pdfUrl || '',
-                      image_url: p.coverUrl || p.imageUrl || '',
+                      image_url: banner,
                       is_public: p.isPublic !== false,
                       date: p.date || ''
                     });
@@ -3170,7 +3218,9 @@ export default function App() {
 
             const othData = othRes.status === 'fulfilled' && Array.isArray(othRes.value.data) ? othRes.value.data : [];
             const nonOldRows = othData.filter(p => p.category !== '__old_data__');
-            const mappedOth: Project[] = nonOldRows.map(p => {
+            const extraOthsFromProj = projData.filter(p => p.type === 'other' || p.category === 'others');
+            const allOthRows = [...nonOldRows, ...extraOthsFromProj];
+            const mappedOth: Project[] = allOthRows.map(p => {
               let itemDesc = p.description || '';
               let itemBanner = '';
               if (itemDesc.includes('<!--banner:')) {
@@ -4748,12 +4798,14 @@ export default function App() {
         try {
           const rawDesc = (newPr.description || '').replace(/<!--filename:[\s\S]*?-->/g, '').replace(/<!--banner:[\s\S]*?-->/g, '').trim();
           const descWithFile = cleanPdfName ? `${rawDesc}\n<!--filename:${cleanPdfName}-->` : rawDesc;
+          const bannerToEmbed = cleanImg || '';
+          const descWithFileAndBanner = bannerToEmbed ? `${descWithFile}\n<!--banner:${bannerToEmbed}-->` : descWithFile;
           const payload = {
             id,
             user_id: userId,
             name: newPr.name,
             category: newPr.category || 'products',
-            description: descWithFile,
+            description: descWithFileAndBanner,
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
             live_url: newPr.liveUrl || '',
@@ -4765,8 +4817,9 @@ export default function App() {
           };
           const { error } = await supabase.from('products').upsert(payload);
           if (error) {
-            console.error("[Supabase Add Product Error]", error);
-            triggerToast(`Product Error: ${error.message}`);
+            console.warn("[Supabase Add Product Fallback to projects]", error);
+            const { image_url, ...projPayload } = payload;
+            await supabase.from('projects').upsert(projPayload);
           }
         } catch (err) { console.warn("[Supabase Add Product Error]", err); }
       }
@@ -7097,6 +7150,14 @@ export default function App() {
                     itemDesc = itemDesc.replace(/<!--banner:[\s\S]*?-->/g, '').trim();
                   }
                 }
+                let pName = p.pdf_name || p.file_name || '';
+                if (itemDesc.includes('<!--filename:')) {
+                  const match = itemDesc.match(/<!--filename:([\s\S]*?)-->/);
+                  if (match) {
+                    if (!pName) pName = match[1];
+                    itemDesc = itemDesc.replace(/<!--filename:[\s\S]*?-->/g, '').trim();
+                  }
+                }
                 const img = itemBanner || p.image_url || p.cover_url || '';
                 return {
                   id: p.id,
@@ -7108,7 +7169,7 @@ export default function App() {
                   liveUrl: p.live_url,
                   githubUrl: p.github_url,
                   pdfUrl: p.pdf_url || p.file_url,
-                  pdfName: p.pdf_name || p.file_name,
+                  pdfName: pName,
                   imageUrl: img,
                   coverUrl: img,
                   date: p.date,

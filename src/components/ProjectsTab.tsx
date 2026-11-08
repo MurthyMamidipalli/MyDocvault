@@ -71,6 +71,7 @@ export default function ProjectsTab({
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [pdfName, setPdfName] = useState<string>('');
   const [isReadingFile, setIsReadingFile] = useState(false);
+  const [isReadingCover, setIsReadingCover] = useState(false);
 
   // Advanced States
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -94,7 +95,7 @@ export default function ProjectsTab({
     const candidateProjects = projects.filter(p => {
       if (!p) return false;
       if (isUserLoggedIn && isDemoItem(p)) return false;
-      if (p.type === 'product' || p.type === 'other') return false;
+      if (p.type === 'product' || p.type === 'other' || p.category === 'products' || p.category === 'others' || Boolean(p.docType)) return false;
       if (products && products.some(prod => Boolean(prod.id && p.id && prod.id === p.id))) return false;
       if (others && others.some(oth => Boolean(oth.id && p.id && oth.id === p.id))) return false;
       return true;
@@ -122,13 +123,13 @@ export default function ProjectsTab({
 
     const allCandidates = [
       ...(products && Array.isArray(products) ? products : []),
-      ...(projects && Array.isArray(projects) ? projects.filter(p => p.type === 'product') : [])
+      ...(projects && Array.isArray(projects) ? projects.filter(p => p.type === 'product' || p.category === 'products') : [])
     ];
 
     for (const p of allCandidates) {
       if (!p) continue;
       if (isUserLoggedIn && isDemoItem(p)) continue;
-      if (p.type && p.type !== 'product') continue;
+      if (p.type && p.type !== 'product' && p.category !== 'products') continue;
 
       const idKey = p.id ? p.id.toLowerCase().trim() : '';
       const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -156,13 +157,13 @@ export default function ProjectsTab({
 
     const allCandidates = [
       ...(others && Array.isArray(others) ? others : []),
-      ...(projects && Array.isArray(projects) ? projects.filter(p => p.type === 'other') : [])
+      ...(projects && Array.isArray(projects) ? projects.filter(p => p.type === 'other' || p.category === 'others' || Boolean(p.docType)) : [])
     ];
 
     for (const p of allCandidates) {
       if (!p) continue;
       if (isUserLoggedIn && isDemoItem(p)) continue;
-      if (p.type && p.type !== 'other') continue;
+      if (p.type && p.type !== 'other' && p.category !== 'others' && !p.docType) continue;
       if (!isNonCertificate(p)) continue;
 
       const idKey = p.id ? p.id.toLowerCase().trim() : '';
@@ -266,78 +267,99 @@ export default function ProjectsTab({
     setDocType('Report');
     setIsPublic(true);
     setEditingItem(null);
+    setIsReadingFile(false);
+    setIsReadingCover(false);
     setShowForm(false);
   };
 
   // File Change Handlers - Process and attach immediately without blocking UI
+  const processCoverFile = (file: File) => {
+    setIsReadingCover(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawResult = event.target?.result as string;
+      if (!rawResult) {
+        setIsReadingCover(false);
+        return;
+      }
+      const img = new Image();
+      img.src = rawResult;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_AXIS = 600;
+
+        if (width > height) {
+          if (width > MAX_AXIS) {
+            height *= MAX_AXIS / width;
+            width = MAX_AXIS;
+          }
+        } else {
+          if (height > MAX_AXIS) {
+            width *= MAX_AXIS / height;
+            height = MAX_AXIS;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.7);
+          setCoverUrl(compressed);
+        } else {
+          setCoverUrl(rawResult);
+        }
+        setIsReadingCover(false);
+      };
+      img.onerror = () => {
+        setCoverUrl(rawResult);
+        setIsReadingCover(false);
+      };
+    };
+    reader.onerror = () => {
+      setIsReadingCover(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const rawResult = event.target?.result as string;
-        if (!rawResult) return;
-        const img = new Image();
-        img.src = rawResult;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const MAX_AXIS = 600;
-
-          if (width > height) {
-            if (width > MAX_AXIS) {
-              height *= MAX_AXIS / width;
-              width = MAX_AXIS;
-            }
-          } else {
-            if (height > MAX_AXIS) {
-              width *= MAX_AXIS / height;
-              height = MAX_AXIS;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            const compressed = canvas.toDataURL('image/jpeg', 0.7);
-            setCoverUrl(compressed);
-          } else {
-            setCoverUrl(rawResult);
-          }
-        };
-        img.onerror = () => {
-          setCoverUrl(rawResult);
-        };
-      };
-      reader.readAsDataURL(file);
+      processCoverFile(file);
     }
+    e.target.value = '';
+  };
+
+  const processPdfFile = (file: File) => {
+    setPdfName(file.name);
+    setIsReadingFile(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setPdfUrl(event.target.result as string);
+      }
+      setIsReadingFile(false);
+    };
+    reader.onerror = () => {
+      setIsReadingFile(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setPdfName(file.name);
-      setIsReadingFile(true);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setPdfUrl(event.target.result as string);
-        }
-        setIsReadingFile(false);
-      };
-      reader.onerror = () => {
-        setIsReadingFile(false);
-      };
-      reader.readAsDataURL(file);
+      processPdfFile(file);
     }
+    e.target.value = '';
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isReadingFile) return;
+    if (isReadingFile || isReadingCover) return;
     if (!title.trim() || !description.trim()) return;
 
     if (activeFilter === 'other') {
@@ -723,6 +745,13 @@ export default function ProjectsTab({
                 </label>
                 <div 
                   onClick={() => pdfInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) processPdfFile(file);
+                  }}
                   className={`border border-dashed rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition flex-1 min-h-[110px] select-none ${
                     pdfUrl 
                       ? 'border-[#10b981]/50 bg-slate-950' 
@@ -766,6 +795,13 @@ export default function ProjectsTab({
                 </label>
                 <div 
                   onClick={() => coverInputRef.current?.click()}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const file = e.dataTransfer.files?.[0];
+                    if (file) processCoverFile(file);
+                  }}
                   className={`border border-dashed rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition flex-1 min-h-[110px] select-none ${
                     coverUrl 
                       ? 'border-emerald-500/50 bg-slate-950' 
@@ -875,11 +911,11 @@ export default function ProjectsTab({
             </button>
             <button
               type="submit"
-              disabled={isReadingFile}
+              disabled={isReadingFile || isReadingCover}
               className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold rounded-xl cursor-pointer transition shadow-md flex items-center gap-2"
             >
               <Check className="w-4 h-4" />
-              <span>{isReadingFile ? 'Reading file...' : editingItem ? `Update "${editingItem.name}"` : 'Save Record'}</span>
+              <span>{isReadingFile ? 'Reading file...' : isReadingCover ? 'Processing cover...' : editingItem ? `Update "${editingItem.name}"` : 'Save Record'}</span>
             </button>
           </div>
         </form>
@@ -887,327 +923,345 @@ export default function ProjectsTab({
 
       {/* Grid: Displays Records for Active Category */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl">
-        {currentItems.map(item => (
-          <div 
-            key={item.id} 
-            className="bg-[#0c0c10] border border-slate-800/65 rounded-[24px] overflow-hidden flex flex-col justify-between group hover:border-slate-800 transition-all duration-300 relative shadow-2xl"
-          >
-            {/* Top Mockup / Header Banner */}
-            {activeFilter === 'other' ? (
-              /* Dedicated Others Document Header Banner */
-              <div className="h-[180px] relative select-none rounded-t-[24px] overflow-hidden flex flex-col justify-between p-5 border-b border-slate-800/40 bg-gradient-to-tr from-[#0b0c10] via-[#111218] to-[#181a24]">
-                {(item.coverUrl || item.imageUrl) ? (
-                  <img 
-                    src={item.coverUrl || item.imageUrl} 
-                    alt={item.name} 
-                    className="absolute inset-0 w-full h-full object-cover opacity-35" 
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.08),transparent_70%)]" />
-                )}
+        {currentItems.map(item => {
+          let cardCover = item.coverUrl || item.imageUrl || '';
+          if (!cardCover && item.description && item.description.includes('<!--banner:')) {
+            const m = item.description.match(/<!--banner:([\s\S]*?)-->/);
+            if (m) cardCover = m[1];
+          }
+          let cardPdfUrl = item.pdfUrl || (item as any).fileUrl || '';
+          let cardPdfName = item.pdfName || (item as any).fileName || '';
+          if (!cardPdfName && item.description && item.description.includes('<!--filename:')) {
+            const m = item.description.match(/<!--filename:([\s\S]*?)-->/);
+            if (m) cardPdfName = m[1];
+          }
+          const cleanDesc = (item.description || '')
+            .replace(/<!--banner:[\s\S]*?-->/g, '')
+            .replace(/<!--filename:[\s\S]*?-->/g, '')
+            .trim();
 
-                <div className="relative z-10 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wider uppercase border border-slate-700 bg-slate-900/90 text-white">
-                      {getDocTypeIcon(item.docType)}
-                      <span>{item.docType || 'Document'}</span>
-                    </span>
-                  </div>
-
-                  <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono uppercase font-bold border select-none ${
-                    item.isPublic !== false 
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                      : 'bg-red-500/10 text-rose-450 border-red-500/20'
-                  }`}>
-                    {item.isPublic !== false ? 'Public' : 'Private'}
-                  </div>
-                </div>
-
-                {/* Central Document Icon & Details in Banner */}
-                <div className="relative z-10 flex items-center gap-3 my-auto">
-                  <div className="w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-700/80 flex items-center justify-center text-emerald-400 shadow-md">
-                    {item.pdfUrl ? (
-                      <Paperclip className="w-6 h-6" />
-                    ) : item.liveUrl ? (
-                      <Link2 className="w-6 h-6" />
-                    ) : (
-                      <File className="w-6 h-6" />
-                    )}
-                  </div>
-                  <div className="space-y-0.5 overflow-hidden">
-                    <span className="text-[10px] font-mono text-gray-400 block truncate">
-                      {item.pdfName || (item.liveUrl ? 'Online Link Attached' : 'Document File Record')}
-                    </span>
-                    <span className="text-xs font-bold text-gray-200 block truncate">
-                      {item.date || 'Added Recently'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
-                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                  <button 
-                    onClick={() => handleStartEdit(item)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                    title={`Edit ${item.name}`}
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Edit</span>
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setDeleteId(item.id);
-                      setDeleteName(item.name);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                    title={`Delete ${item.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Delete</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Projects & Products Mockup / Cover Region */
-              <div className="h-[220px] relative select-none rounded-t-[24px] overflow-hidden flex items-center justify-center border-b border-slate-800/40">
-                {(item.coverUrl || item.imageUrl) ? (
-                  <img 
-                    src={item.coverUrl || item.imageUrl} 
-                    alt={item.name} 
-                    className="w-full h-full object-cover" 
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-gradient-to-tr from-[#0e0e11] to-[#1a1b24] p-4 flex flex-col justify-between overflow-hidden">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.035),transparent_70%)]" />
-                    
-                    <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-                        <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                        <span className="text-[9px] font-mono text-slate-500 ml-2 tracking-wide truncate max-w-[120px]">
-                          {item.name.toLowerCase().replace(/\s+/g, '-')}.xlsx
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[8px] font-mono text-emerald-400 bg-emerald-950/40 px-1 py-0.5 rounded border border-emerald-900/30">
-                          {activeFilter === 'product' ? 'PRODUCT RELEASE' : 'ANALYTICS ASSET'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Dashboard Visual Simulator */}
-                    <div className="grid grid-cols-4 gap-2.5 my-auto z-10">
-                      <div className="col-span-2 bg-[#121217] border border-slate-800 p-2.5 rounded-xl flex flex-col justify-between">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[8px] font-mono text-gray-500 uppercase whitespace-nowrap">Status</span>
-                          <TrendingUp className="w-2.5 h-2.5 text-emerald-400" />
-                        </div>
-                        <span className="text-xs font-bold text-white tracking-tight mt-1">Verified</span>
-                        <span className="text-[7px] text-emerald-400 font-mono mt-0.5">Production Ready</span>
-                      </div>
-                      
-                      <div className="col-span-2 bg-[#121217] border border-slate-800 p-2 rounded-xl flex items-center justify-center">
-                        <div className="relative w-10 h-10 rounded-full border-2 border-emerald-400/20 flex items-center justify-center">
-                          <div className="absolute inset-0.5 rounded-full border-t-2 border-r-2 border-emerald-400" />
-                          <span className="text-[8px] font-extrabold text-slate-300">CRM</span>
-                        </div>
-                        <div className="ml-1 px-1 flex flex-col">
-                          <span className="text-[7px] font-mono text-slate-400">MySQL</span>
-                          <span className="text-[7.5px] font-mono text-emerald-400 font-extrabold">Active</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-slate-800/40 pt-2 text-[10px]">
-                      <div className="flex items-center gap-1 text-slate-500 font-mono">
-                        <Grid className="w-3 h-3 text-slate-650" />
-                        <span>Interactive Showcase</span>
-                      </div>
-                      <span className="text-[8.5px] font-mono text-slate-500 uppercase">Production Environment</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
-                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                  <button 
-                    onClick={() => handleStartEdit(item)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                    title={`Edit ${item.name}`}
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Edit</span>
-                  </button>
-                  <button 
-                    onClick={() => {
-                      setDeleteId(item.id);
-                      setDeleteName(item.name);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                    title={`Delete ${item.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Delete</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Content Area */}
-            <div className="p-6 md:p-8 flex-1 flex flex-col justify-between space-y-5">
-              <div className="space-y-3">
-                <h3 className="text-white font-bold text-lg md:text-xl tracking-tight leading-snug group-hover:text-emerald-400 transition-colors duration-200">
-                  {item.name}
-                </h3>
-                
-                {/* Date and Meta Row */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="inline-flex items-center gap-1.5 text-gray-400 text-xs font-semibold select-none">
-                    <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>{item.date || 'Jan 2026'}{item.toDate ? ` – ${item.toDate}` : ''}</span>
-                  </div>
-
-                  {activeFilter === 'other' && item.docType && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-mono uppercase font-bold border bg-slate-900 border-slate-800 text-emerald-400">
-                      {item.docType}
-                    </span>
+          return (
+            <div 
+              key={item.id} 
+              className="bg-[#0c0c10] border border-slate-800/65 rounded-[24px] overflow-hidden flex flex-col justify-between group hover:border-slate-800 transition-all duration-300 relative shadow-2xl"
+            >
+              {/* Top Mockup / Header Banner */}
+              {activeFilter === 'other' ? (
+                /* Dedicated Others Document Header Banner */
+                <div className="h-[180px] relative select-none rounded-t-[24px] overflow-hidden flex flex-col justify-between p-5 border-b border-slate-800/40 bg-gradient-to-tr from-[#0b0c10] via-[#111218] to-[#181a24]">
+                  {cardCover ? (
+                    <img 
+                      src={cardCover} 
+                      alt={item.name} 
+                      className="absolute inset-0 w-full h-full object-cover opacity-35" 
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.08),transparent_70%)]" />
                   )}
 
-                  {activeFilter !== 'other' && (
-                    <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono uppercase font-bold border select-none ${
+                  <div className="relative z-10 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold font-mono tracking-wider uppercase border border-slate-700 bg-slate-900/90 text-white">
+                        {getDocTypeIcon(item.docType)}
+                        <span>{item.docType || 'Document'}</span>
+                      </span>
+                    </div>
+
+                    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-mono uppercase font-bold border select-none ${
                       item.isPublic !== false 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' 
-                        : 'bg-red-500/10 text-rose-450 border-red-500/10'
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        : 'bg-red-500/10 text-rose-450 border-red-500/20'
                     }`}>
                       {item.isPublic !== false ? 'Public' : 'Private'}
                     </div>
-                  )}
-                </div>
+                  </div>
 
-                <p className="text-gray-400 text-xs md:text-sm leading-relaxed font-sans mt-2">
-                  {item.description}
-                </p>
-              </div>
-
-              {/* Highlights & Tech Tags for Projects & Products */}
-              {activeFilter !== 'other' && (
-                <div className="space-y-4 pt-1">
-                  {item.highlights && item.highlights.length > 0 && (
-                    <div className="space-y-1.5 bg-slate-950/20 p-3 rounded-xl border border-slate-850/60">
-                      <span className="text-[9px] font-mono font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1 select-none">
-                        <Star className="w-3 h-3 text-emerald-400" />
-                        Key Insights / Accomplishments
+                  {/* Central Document Icon & Details in Banner */}
+                  <div className="relative z-10 flex items-center gap-3 my-auto">
+                    <div className="w-12 h-12 rounded-xl bg-slate-900/80 border border-slate-700/80 flex items-center justify-center text-emerald-400 shadow-md">
+                      {cardPdfUrl ? (
+                        <Paperclip className="w-6 h-6" />
+                      ) : item.liveUrl ? (
+                        <Link2 className="w-6 h-6" />
+                      ) : (
+                        <File className="w-6 h-6" />
+                      )}
+                    </div>
+                    <div className="space-y-0.5 overflow-hidden">
+                      <span className="text-[10px] font-mono text-gray-400 block truncate">
+                        {cardPdfName || (item.liveUrl ? 'Online Link Attached' : 'Document File Record')}
                       </span>
-                      <ul className="text-[11px] text-gray-450 space-y-1 pl-1 font-sans">
-                        {item.highlights.slice(0, 3).map((hl, idx) => (
-                          <li key={idx} className="flex gap-2 items-start text-xs leading-normal">
-                            <span className="text-emerald-450 font-bold font-mono shrink-0">›</span>
-                            <span className="line-clamp-2">{hl}</span>
-                          </li>
-                        ))}
-                      </ul>
+                      <span className="text-xs font-bold text-gray-200 block truncate">
+                        {item.date || 'Added Recently'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
+                  <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+                    <button 
+                      onClick={() => handleStartEdit(item)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                      title={`Edit ${item.name}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Edit</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setDeleteId(item.id);
+                        setDeleteName(item.name);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                      title={`Delete ${item.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Projects & Products Mockup / Cover Region */
+                <div className="h-[220px] relative select-none rounded-t-[24px] overflow-hidden flex items-center justify-center border-b border-slate-800/40">
+                  {cardCover ? (
+                    <img 
+                      src={cardCover} 
+                      alt={item.name} 
+                      className="w-full h-full object-cover" 
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-gradient-to-tr from-[#0e0e11] to-[#1a1b24] p-4 flex flex-col justify-between overflow-hidden">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.035),transparent_70%)]" />
+                      
+                      <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                          <span className="text-[9px] font-mono text-slate-500 ml-2 tracking-wide truncate max-w-[120px]">
+                            {item.name.toLowerCase().replace(/\s+/g, '-')}.xlsx
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[8px] font-mono text-emerald-400 bg-emerald-950/40 px-1 py-0.5 rounded border border-emerald-900/30">
+                            {activeFilter === 'product' ? 'PRODUCT RELEASE' : 'ANALYTICS ASSET'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Dashboard Visual Simulator */}
+                      <div className="grid grid-cols-4 gap-2.5 my-auto z-10">
+                        <div className="col-span-2 bg-[#121217] border border-slate-800 p-2.5 rounded-xl flex flex-col justify-between">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[8px] font-mono text-gray-500 uppercase whitespace-nowrap">Status</span>
+                            <TrendingUp className="w-2.5 h-2.5 text-emerald-400" />
+                          </div>
+                          <span className="text-xs font-bold text-white tracking-tight mt-1">Verified</span>
+                          <span className="text-[7px] text-emerald-400 font-mono mt-0.5">Production Ready</span>
+                        </div>
+                        
+                        <div className="col-span-2 bg-[#121217] border border-slate-800 p-2 rounded-xl flex items-center justify-center">
+                          <div className="relative w-10 h-10 rounded-full border-2 border-emerald-400/20 flex items-center justify-center">
+                            <div className="absolute inset-0.5 rounded-full border-t-2 border-r-2 border-emerald-400" />
+                            <span className="text-[8px] font-extrabold text-slate-300">CRM</span>
+                          </div>
+                          <div className="ml-1 px-1 flex flex-col">
+                            <span className="text-[7px] font-mono text-slate-400">MySQL</span>
+                            <span className="text-[7.5px] font-mono text-emerald-400 font-extrabold">Active</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-slate-800/40 pt-2 text-[10px]">
+                        <div className="flex items-center gap-1 text-slate-500 font-mono">
+                          <Grid className="w-3 h-3 text-slate-650" />
+                          <span>Interactive Showcase</span>
+                        </div>
+                        <span className="text-[8.5px] font-mono text-slate-500 uppercase">Production Environment</span>
+                      </div>
                     </div>
                   )}
 
-                  {/* Tech stack badges */}
-                  {item.techStack && item.techStack.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {item.techStack.map((tech, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-slate-900/80 border border-slate-800 rounded text-[10px] font-mono text-gray-400">
-                          {tech}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
+                  <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
+                    <button 
+                      onClick={() => handleStartEdit(item)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                      title={`Edit ${item.name}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Edit</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setDeleteId(item.id);
+                        setDeleteName(item.name);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                      title={`Delete ${item.name}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
               )}
 
-              {/* Action Links & File Downloads */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/40 pt-4 text-xs font-mono">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 bg-slate-950 px-2 py-0.5 border border-slate-850 rounded select-none truncate">
-                  {activeFilter === 'other' ? (item.docType || 'DOCUMENT') : (item.category || 'SHOWCASE')}
-                </span>
+              {/* Content Area */}
+              <div className="p-6 md:p-8 flex-1 flex flex-col justify-between space-y-5">
+                <div className="space-y-3">
+                  <h3 className="text-white font-bold text-lg md:text-xl tracking-tight leading-snug group-hover:text-emerald-400 transition-colors duration-200">
+                    {item.name}
+                  </h3>
+                  
+                  {/* Date and Meta Row */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="inline-flex items-center gap-1.5 text-gray-400 text-xs font-semibold select-none">
+                      <Calendar className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{item.date || 'Jan 2026'}{item.toDate ? ` – ${item.toDate}` : ''}</span>
+                    </div>
 
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Separate View / Open and Download File Buttons - Always visible when file is present */}
-                  {(item.pdfUrl || (item as any).fileUrl) && (
-                    <>
-                      <button 
-                        onClick={() => openPdfInNewTab((item.pdfUrl || (item as any).fileUrl)!, item.pdfName || (item as any).fileName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                        title={/\.(xlsx?|csv)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Excel sheet' : /\.(docx?)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Word document' : 'View file in new tab'}
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>
-                          {/\.(xlsx?|csv)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Excel' : /\.(docx?)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Word' : 'View Document'}
+                    {activeFilter === 'other' && item.docType && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-mono uppercase font-bold border bg-slate-900 border-slate-800 text-emerald-400">
+                        {item.docType}
+                      </span>
+                    )}
+
+                    {activeFilter !== 'other' && (
+                      <div className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-mono uppercase font-bold border select-none ${
+                        item.isPublic !== false 
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/10' 
+                          : 'bg-red-500/10 text-rose-450 border-red-500/10'
+                      }`}>
+                        {item.isPublic !== false ? 'Public' : 'Private'}
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-gray-400 text-xs md:text-sm leading-relaxed font-sans mt-2">
+                    {cleanDesc}
+                  </p>
+                </div>
+
+                {/* Highlights & Tech Tags for Projects & Products */}
+                {activeFilter !== 'other' && (
+                  <div className="space-y-4 pt-1">
+                    {item.highlights && item.highlights.length > 0 && (
+                      <div className="space-y-1.5 bg-slate-950/20 p-3 rounded-xl border border-slate-850/60">
+                        <span className="text-[9px] font-mono font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1 select-none">
+                          <Star className="w-3 h-3 text-emerald-400" />
+                          Key Insights / Accomplishments
                         </span>
-                      </button>
-                      <button 
-                        onClick={() => downloadFileUrl((item.pdfUrl || (item as any).fileUrl)!, item.pdfName || (item as any).fileName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                        title={item.pdfName || (item as any).fileName || "Download file"}
+                        <ul className="text-[11px] text-gray-450 space-y-1 pl-1 font-sans">
+                          {item.highlights.slice(0, 3).map((hl, idx) => (
+                            <li key={idx} className="flex gap-2 items-start text-xs leading-normal">
+                              <span className="text-emerald-450 font-bold font-mono shrink-0">›</span>
+                              <span className="line-clamp-2">{hl}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Tech stack badges */}
+                    {item.techStack && item.techStack.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {item.techStack.map((tech, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-slate-900/80 border border-slate-800 rounded text-[10px] font-mono text-gray-400">
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Action Links & File Downloads */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/40 pt-4 text-xs font-mono">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 bg-slate-950 px-2 py-0.5 border border-slate-850 rounded select-none truncate">
+                    {activeFilter === 'other' ? (item.docType || 'DOCUMENT') : (item.category || 'SHOWCASE')}
+                  </span>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Separate View / Open and Download File Buttons - Always visible when file is present */}
+                    {cardPdfUrl && (
+                      <>
+                        <button 
+                          onClick={() => openPdfInNewTab(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
+                          title={/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel sheet' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word document' : 'View file in new tab'}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>
+                            {/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word' : 'View Document'}
+                          </span>
+                        </button>
+                        <button 
+                          onClick={() => downloadFileUrl(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
+                          title={cardPdfName || "Download file"}
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download</span>
+                        </button>
+                      </>
+                    )}
+
+                    {/* GitHub Repo Link (For projects) */}
+                    {activeFilter === 'project' && item.githubUrl && (
+                      <a 
+                        href={item.githubUrl} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-gray-400 hover:text-white transition-colors"
                       >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Download</span>
-                      </button>
-                    </>
-                  )}
+                        <GitBranch className="w-3.5 h-3.5 text-gray-550 shrink-0" />
+                        <span>Code</span>
+                      </a>
+                    )}
 
-                  {/* GitHub Repo Link (For projects) */}
-                  {activeFilter === 'project' && item.githubUrl && (
-                    <a 
-                      href={item.githubUrl} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-gray-400 hover:text-white transition-colors"
+                    {/* Live URL or External Link */}
+                    {item.liveUrl && (
+                      <a 
+                        href={item.liveUrl} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold transition-colors"
+                      >
+                        <span>{activeFilter === 'other' ? 'Open Link' : 'Live'}</span>
+                        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                      </a>
+                    )}
+
+                    {/* Explicit Edit & Delete action buttons in the bottom row for 100% clarity and immediate access */}
+                    <button 
+                      onClick={() => handleStartEdit(item)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/40 text-blue-400 hover:text-blue-300 font-bold rounded-xl transition-colors text-xs cursor-pointer select-none"
+                      title={`Edit ${item.name}`}
                     >
-                      <GitBranch className="w-3.5 h-3.5 text-gray-550 shrink-0" />
-                      <span>Code</span>
-                    </a>
-                  )}
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
 
-                  {/* Live URL or External Link */}
-                  {item.liveUrl && (
-                    <a 
-                      href={item.liveUrl} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold transition-colors"
+                    <button 
+                      onClick={() => {
+                        setDeleteId(item.id);
+                        setDeleteName(item.name);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/15 hover:bg-rose-600/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 font-bold rounded-xl transition-colors text-xs cursor-pointer select-none"
+                      title={`Delete ${item.name}`}
                     >
-                      <span>{activeFilter === 'other' ? 'Open Link' : 'Live'}</span>
-                      <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                    </a>
-                  )}
-
-                  {/* Explicit Edit & Delete action buttons in the bottom row for 100% clarity and immediate access */}
-                  <button 
-                    onClick={() => handleStartEdit(item)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/40 text-blue-400 hover:text-blue-300 font-bold rounded-xl transition-colors text-xs cursor-pointer select-none"
-                    title={`Edit ${item.name}`}
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                    <span>Edit</span>
-                  </button>
-
-                  <button 
-                    onClick={() => {
-                      setDeleteId(item.id);
-                      setDeleteName(item.name);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/15 hover:bg-rose-600/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 font-bold rounded-xl transition-colors text-xs cursor-pointer select-none"
-                    title={`Delete ${item.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete</span>
-                  </button>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {/* Empty State when no items in current tab */}
         {currentItems.length === 0 && (
