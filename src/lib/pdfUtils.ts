@@ -87,6 +87,17 @@ export function openPdfInNewTab(url: string, filename?: string): void {
   if (!url || url.includes('example.com')) return;
   let targetUrl = url;
 
+  const lowerName = (filename || '').toLowerCase();
+  const isOfficeOrBinary = lowerName.endsWith('.docx') || lowerName.endsWith('.doc') || 
+                           lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls') || 
+                           lowerName.endsWith('.csv') || lowerName.endsWith('.pptx') || 
+                           lowerName.endsWith('.ppt');
+
+  if (isOfficeOrBinary) {
+    downloadFileUrl(url, filename || 'document');
+    return;
+  }
+
   if (targetUrl.startsWith('data:')) {
     targetUrl = dataUrlToBlobUrl(targetUrl, filename);
   }

@@ -680,7 +680,7 @@ export default function ProjectsTab({
             <input 
               type="file" 
               ref={pdfInputRef}
-              accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,image/*"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,image/*"
               onChange={handlePdfChange}
               className="hidden"
             />
@@ -690,7 +690,7 @@ export default function ProjectsTab({
               {/* File / PDF Upload panel */}
               <div className="space-y-1 flex flex-col">
                 <label className="text-xs font-mono text-gray-400 select-none">
-                  {activeFilter === 'other' ? 'File / PDF Upload (Document)' : 'Documentation (PDF)'}
+                  {activeFilter === 'other' ? 'File / Document (PDF, Word, Excel)' : 'Documentation (PDF, Word, Excel)'}
                 </label>
                 <div 
                   onClick={() => pdfInputRef.current?.click()}
@@ -722,9 +722,9 @@ export default function ProjectsTab({
                     <>
                       <Paperclip className="w-5.5 h-5.5 text-gray-500 mb-1.5 stroke-[1.5]" />
                       <span className="text-[11px] text-gray-300 font-semibold">
-                        {activeFilter === 'other' ? 'Upload Document or PDF' : 'Upload PDF Document'}
+                        Upload Document (PDF, Word, Excel)
                       </span>
-                      <span className="text-[9px] text-gray-500 mt-0.5">Click or drop file</span>
+                      <span className="text-[9px] text-gray-500 mt-0.5">Click or drop file (PDF, DOCX, XLSX, etc.)</span>
                     </>
                   )}
                 </div>
@@ -1097,16 +1097,18 @@ export default function ProjectsTab({
                 </span>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  {/* Separate View PDF and Download PDF Buttons */}
+                  {/* Separate View / Open and Download File Buttons */}
                   {item.pdfUrl && (
                     <>
                       <button 
                         onClick={() => openPdfInNewTab(item.pdfUrl!, item.pdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                        title="View PDF in new tab"
+                        title={/\.(xlsx?|csv)$/i.test(item.pdfName || '') ? 'Open Excel sheet' : /\.(docx?)$/i.test(item.pdfName || '') ? 'Open Word document' : 'View file in new tab'}
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        <span>View PDF</span>
+                        <span>
+                          {/\.(xlsx?|csv)$/i.test(item.pdfName || '') ? 'Open Excel' : /\.(docx?)$/i.test(item.pdfName || '') ? 'Open Word' : 'View Document'}
+                        </span>
                       </button>
                       <button 
                         onClick={() => downloadFileUrl(item.pdfUrl!, item.pdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}

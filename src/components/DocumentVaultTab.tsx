@@ -317,7 +317,7 @@ export default function DocumentVaultTab({
                   <div className="space-y-1">
                     <h3 className="text-sm font-bold text-white">Upload New Document</h3>
                     <p className="text-xs text-gray-400 max-w-[220px] mx-auto">
-                      Drag & drop PDF, Word, or image files here, or browse from device
+                      Drag & drop PDF, Word, Excel, or image files here, or browse from device
                     </p>
                   </div>
                 </div>
@@ -329,7 +329,7 @@ export default function DocumentVaultTab({
                       type="file" 
                       onChange={handleFileSelect}
                       className="hidden" 
-                      accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,image/*"
                     />
                   </label>
                 </div>

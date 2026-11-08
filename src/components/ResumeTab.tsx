@@ -765,7 +765,7 @@ export default function ResumeTab({
                   type="file" 
                   ref={fileInputRef} 
                   onChange={handleFileSelect} 
-                  accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.txt"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.png,.jpg,.jpeg,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,image/*"
                   multiple
                   className="hidden" 
                 />
@@ -773,13 +773,13 @@ export default function ResumeTab({
                 <CloudUpload className="w-10 h-10 text-emerald-400/80 stroke-[1.5]" />
                 <div className="text-center">
                   <p className="text-xs sm:text-sm font-bold text-gray-200 select-none">
-                    Select or Drag & Drop PDF Resume / CV
+                    Select or Drag & Drop Document / Resume / CV
                   </p>
                   <p className="text-[11px] text-emerald-400 font-semibold font-mono select-none mt-1">
                     Select file, then click "Save Record in Vault"
                   </p>
                   <p className="text-[10px] text-gray-500 select-none mt-0.5">
-                    Supports PDF, DOC, DOCX, PNG, JPG (up to 1GB)
+                    Supports PDF, Word, Excel, CSV, Text, PNG, JPG (up to 1GB)
                   </p>
                 </div>
               </div>
