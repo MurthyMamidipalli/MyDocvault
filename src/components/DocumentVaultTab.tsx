@@ -168,62 +168,32 @@ export default function DocumentVaultTab({
     }
   };
 
-  const handleActualUpload = async (file: File) => {
+  const handleActualUpload = (file: File) => {
     setUploadingName(file.name);
-    setUploadProgress(10);
+    setUploadProgress(30);
     setErrorMessage(null);
 
-    let driveFileId: string | undefined = undefined;
-    let uploadedPublicUrl: string | undefined = undefined;
-
-    // Supabase / Cloud Upload Attempt
-    try {
-      const user = (await supabase.auth.getUser()).data.user;
-      if (user) {
-        const res = await uploadFileToSupabaseStorage(STORAGE_BUCKETS.DOCUMENTS, user.id, file, 'vault');
-        if (res && res.publicUrl) {
-          uploadedPublicUrl = res.publicUrl;
-        }
-      }
-    } catch (e) {
-      console.warn("Supabase Storage Upload deferred:", e);
-    }
-
-    // Google Drive upload if connected
-    if (googleAccessToken) {
-      try {
-        setUploadProgress(40);
-        const uploadedDriveFile = await uploadFileToDrive(file, googleAccessToken, (progress) => setUploadProgress(progress));
-        driveFileId = uploadedDriveFile.id;
-        setUploadProgress(80);
-      } catch (err: any) {
-        console.error("Google Drive Upload Exception:", err);
-      }
-    }
-
-    setUploadProgress(95);
-
-    // Read Data URL fallback
     const reader = new FileReader();
-    reader.onloadend = () => {
-      const resultDataUrl = reader.result as string;
+    reader.onload = (event) => {
+      setUploadProgress(85);
+      const resultDataUrl = event.target?.result as string;
       const newDoc: Omit<VaultDocument, 'id'> = {
         name: file.name,
         category: file.name.toLowerCase().includes('resume') ? 'resume' : file.name.toLowerCase().includes('transcript') ? 'transcript' : 'certificate',
         size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
         uploadDate: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        fileUrl: uploadedPublicUrl || resultDataUrl,
-        googleDriveFileId: driveFileId,
+        fileUrl: resultDataUrl,
         visibility: 'public'
       };
 
       onAddDocument(newDoc);
+      setUploadProgress(100);
 
       setTimeout(() => {
         setUploadProgress(0);
         setUploadingName('');
         isUploadingRef.current = false;
-      }, 500);
+      }, 300);
     };
 
     reader.readAsDataURL(file);

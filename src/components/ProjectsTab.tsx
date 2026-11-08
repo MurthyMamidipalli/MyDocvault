@@ -238,26 +238,14 @@ export default function ProjectsTab({
     setShowForm(false);
   };
 
-  // File Change Handlers
-  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File Change Handlers - Process and attach immediately without blocking UI
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      try {
-        const user = (await supabase.auth.getUser()).data.user;
-        if (user) {
-          const folder = activeFilter === 'other' ? 'others' : activeFilter === 'product' ? 'products' : 'projects';
-          const result = await uploadFileToSupabaseStorage(STORAGE_BUCKETS.PROJECTS, user.id, file, `${folder}/covers`);
-          if (result && result.publicUrl) {
-            setCoverUrl(result.publicUrl);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn("Cover storage upload fallback:", err);
-      }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        const rawResult = reader.result as string;
+      reader.onload = (event) => {
+        const rawResult = event.target?.result as string;
+        if (!rawResult) return;
         const img = new Image();
         img.src = rawResult;
         img.onload = () => {
@@ -297,26 +285,15 @@ export default function ProjectsTab({
     }
   };
 
-  const handlePdfChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setPdfName(file.name);
-      try {
-        const user = (await supabase.auth.getUser()).data.user;
-        if (user) {
-          const folder = activeFilter === 'other' ? 'others' : activeFilter === 'product' ? 'products' : 'projects';
-          const result = await uploadFileToSupabaseStorage(STORAGE_BUCKETS.PROJECTS, user.id, file, folder);
-          if (result && result.publicUrl) {
-            setPdfUrl(result.publicUrl);
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn("Storage upload fallback to reader:", err);
-      }
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPdfUrl(reader.result as string);
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setPdfUrl(event.target.result as string);
+        }
       };
       reader.readAsDataURL(file);
     }
