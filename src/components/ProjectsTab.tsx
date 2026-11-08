@@ -413,7 +413,7 @@ export default function ProjectsTab({
   };
 
   return (
-    <div className="space-y-8 animate-fade-in" id="projects-pane">
+    <div className="space-y-8" id="projects-pane">
       {/* Header with Title and Add Button */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-3 border-b border-slate-800/80">
         <div className="flex items-center gap-3">
@@ -501,7 +501,7 @@ export default function ProjectsTab({
 
       {/* Styled Inline Form (Placed at TOP for immediate visibility upon clicking Add Project) */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl space-y-6 animate-fade-in mt-2 max-w-4xl">
+        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl space-y-6 mt-2 max-w-4xl">
           <div className="flex justify-between items-start">
             <div>
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -947,7 +947,7 @@ export default function ProjectsTab({
                   />
                 ) : (
                   <div className="absolute inset-0 bg-gradient-to-tr from-[#0e0e11] to-[#1a1b24] p-4 flex flex-col justify-between overflow-hidden">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.035),transparent_70%)] animate-pulse" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.035),transparent_70%)]" />
                     
                     <div className="flex items-center justify-between border-b border-slate-800/60 pb-2">
                       <div className="flex items-center gap-1.5">
@@ -998,8 +998,8 @@ export default function ProjectsTab({
                   </div>
                 )}
 
-                {/* Floating Edit/Delete Actions overlay */}
-                <div className="absolute top-4 right-4 flex items-center gap-1.5 z-10 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition duration-150">
+                {/* Floating Edit/Delete Actions overlay - always visible */}
+                <div className="absolute top-4 right-4 flex items-center gap-1.5 z-20">
                   <button 
                     onClick={() => handleStartEdit(item)}
                     className="p-1.5 bg-[#0e0e11]/90 hover:bg-[#10b981]/15 border border-slate-800 text-gray-400 hover:text-emerald-400 rounded-lg cursor-pointer transition select-none"
@@ -1097,23 +1097,23 @@ export default function ProjectsTab({
                 </span>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  {/* Separate View / Open and Download File Buttons */}
-                  {item.pdfUrl && (
+                  {/* Separate View / Open and Download File Buttons - Always visible when file is present */}
+                  {(item.pdfUrl || (item as any).fileUrl) && (
                     <>
                       <button 
-                        onClick={() => openPdfInNewTab(item.pdfUrl!, item.pdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
+                        onClick={() => openPdfInNewTab((item.pdfUrl || (item as any).fileUrl)!, item.pdfName || (item as any).fileName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                        title={/\.(xlsx?|csv)$/i.test(item.pdfName || '') ? 'Open Excel sheet' : /\.(docx?)$/i.test(item.pdfName || '') ? 'Open Word document' : 'View file in new tab'}
+                        title={/\.(xlsx?|csv)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Excel sheet' : /\.(docx?)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Word document' : 'View file in new tab'}
                       >
                         <Eye className="w-3.5 h-3.5" />
                         <span>
-                          {/\.(xlsx?|csv)$/i.test(item.pdfName || '') ? 'Open Excel' : /\.(docx?)$/i.test(item.pdfName || '') ? 'Open Word' : 'View Document'}
+                          {/\.(xlsx?|csv)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Excel' : /\.(docx?)$/i.test(item.pdfName || (item as any).fileName || '') ? 'Open Word' : 'View Document'}
                         </span>
                       </button>
                       <button 
-                        onClick={() => downloadFileUrl(item.pdfUrl!, item.pdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
+                        onClick={() => downloadFileUrl((item.pdfUrl || (item as any).fileUrl)!, item.pdfName || (item as any).fileName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                        title={item.pdfName || "Download file"}
+                        title={item.pdfName || (item as any).fileName || "Download file"}
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Download</span>

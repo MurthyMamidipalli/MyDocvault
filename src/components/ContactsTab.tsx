@@ -129,7 +129,7 @@ export default function ContactsTab({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in" id="contacts-pane">
+    <div className="space-y-6" id="contacts-pane">
       <div className="flex justify-between items-center pb-2 border-b border-slate-800">
         <div>
           <h2 className="text-xl font-bold text-white">Professional Contacts CRM</h2>
@@ -406,7 +406,7 @@ export default function ContactsTab({
               {activeLogContactId === ct.id && (
                 <form 
                   onSubmit={e => handleLogInteraction(e, ct.id)} 
-                  className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5 animate-fade-in"
+                  className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2.5"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
