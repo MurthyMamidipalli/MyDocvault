@@ -388,6 +388,14 @@ export const deduplicateProjects = (items?: Project[]): Project[] => {
   const result: Project[] = [];
   const seenIds = new Set<string>();
 
+  const pickLongerOrFirst = (a?: string, b?: string) => {
+    const sa = (a || '').trim();
+    const sb = (b || '').trim();
+    if (!sa) return sb;
+    if (!sb) return sa;
+    return sa.length >= sb.length ? sa : sb;
+  };
+
   for (const item of items) {
     if (!item) continue;
     if (isUserLoggedIn && isDemoItem(item)) continue;
@@ -404,19 +412,34 @@ export const deduplicateProjects = (items?: Project[]): Project[] => {
 
     if (matchIdx >= 0) {
       const existing = result[matchIdx];
+      const mergedCover = pickLongerOrFirst(item.coverUrl || item.imageUrl, existing.coverUrl || existing.imageUrl);
+      const mergedPdf = pickLongerOrFirst(item.pdfUrl || (item as any).fileUrl, existing.pdfUrl || (existing as any).fileUrl);
+      const mergedPdfName = pickLongerOrFirst(item.pdfName || (item as any).fileName, existing.pdfName || (existing as any).fileName);
+
       result[matchIdx] = {
         ...existing,
         ...item,
         id: existing.id || item.id,
-        pdfUrl: item.pdfUrl || existing.pdfUrl,
-        imageUrl: item.imageUrl || existing.imageUrl,
+        coverUrl: mergedCover || undefined,
+        imageUrl: mergedCover || undefined,
+        pdfUrl: mergedPdf || undefined,
+        pdfName: mergedPdfName || undefined,
         highlights: (item.highlights && item.highlights.length > 0) ? item.highlights : existing.highlights,
         techStack: (item.techStack && item.techStack.length > 0) ? item.techStack : existing.techStack
       };
     } else {
       if (idKey) seenIds.add(idKey);
       if (rawId) seenIds.add(`raw:${rawId}`);
-      result.push(item);
+      const itemCover = item.coverUrl || item.imageUrl || '';
+      const itemPdf = item.pdfUrl || (item as any).fileUrl || '';
+      const itemPdfName = item.pdfName || (item as any).fileName || '';
+      result.push({
+        ...item,
+        coverUrl: itemCover || undefined,
+        imageUrl: itemCover || undefined,
+        pdfUrl: itemPdf || undefined,
+        pdfName: itemPdfName || undefined
+      });
     }
   }
   return result;
@@ -1705,6 +1728,7 @@ export default function App() {
           if (typeof node === 'string') {
             if (node.startsWith('data:') && node.length > 500) {
               if (parentKey === 'avatarUrl' && node.length < 1500000) return node;
+              if ((parentKey === 'coverUrl' || parentKey === 'imageUrl') && node.length < 500000) return node;
               return '';
             }
             return node;
@@ -1718,6 +1742,8 @@ export default function App() {
               const v = node[k];
               if (typeof v === 'string' && v.startsWith('data:') && v.length > 500) {
                 if (k === 'avatarUrl' && v.length < 1500000) {
+                  out[k] = v;
+                } else if ((k === 'coverUrl' || k === 'imageUrl') && v.length < 500000) {
                   out[k] = v;
                 } else {
                   out[k] = '';
@@ -2923,21 +2949,28 @@ export default function App() {
 
             const projData = projRes.status === 'fulfilled' ? projRes.value.data : null;
             if (projData && Array.isArray(projData) && projData.length > 0) {
-              const remoteProjects: Project[] = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => ({
-                id: p.id,
-                name: p.name,
-                category: p.category,
-                type: 'project' as const,
-                description: p.description,
-                highlights: p.highlights || [],
-                techStack: p.tech_stack || [],
-                liveUrl: p.live_url,
-                githubUrl: p.github_url,
-                pdfUrl: p.pdf_url,
-                imageUrl: p.image_url,
-                isPublic: p.is_public !== false,
-                date: p.date
-              }));
+              const remoteProjects: Project[] = projData.filter(p => p.type === 'project' || (!p.type && p.category !== 'products' && p.category !== 'others')).map(p => {
+                const img = p.image_url || p.cover_url || '';
+                const pdf = p.pdf_url || (p as any).file_url || '';
+                const pName = p.pdf_name || (p as any).file_name || '';
+                return {
+                  id: p.id,
+                  name: p.name,
+                  category: p.category,
+                  type: 'project' as const,
+                  description: p.description,
+                  highlights: p.highlights || [],
+                  techStack: p.tech_stack || [],
+                  liveUrl: p.live_url,
+                  githubUrl: p.github_url,
+                  pdfUrl: pdf,
+                  pdfName: pName,
+                  imageUrl: img,
+                  coverUrl: img,
+                  isPublic: p.is_public !== false,
+                  date: p.date
+                };
+              });
 
               let localStoredProjs: Project[] = [];
               try {
@@ -2945,71 +2978,194 @@ export default function App() {
                 if (raw) localStoredProjs = JSON.parse(raw);
               } catch (_) {}
 
-              const allProjs = deduplicateProjects([...remoteProjects, ...localStoredProjs, ...(projects || [])]);
+              let heavyStoredProjs: Project[] = [];
+              try {
+                const h = await heavyStorage.get(`${email}_projects`);
+                if (h && Array.isArray(h)) heavyStoredProjs = h;
+              } catch (_) {}
+
+              const allProjs = deduplicateProjects([...remoteProjects, ...heavyStoredProjs, ...localStoredProjs, ...(projects || [])]);
               setProjects(allProjs);
               if (currentUser?.email) {
                 const em = currentUser.email.toLowerCase().trim();
                 safeLocalStorageSetItem(`${em}_projects`, JSON.stringify(allProjs));
                 heavyStorage.set(`${em}_projects`, allProjs).catch(() => {});
               }
+
+              // Auto-sync back to Supabase if local/heavyStorage had documents or images that remote lacked
+              if (userId) {
+                for (const p of allProjs) {
+                  const r = remoteProjects.find(rem => rem.id === p.id);
+                  if (p && ((p.pdfUrl && (!r || !r.pdfUrl)) || ((p.coverUrl || p.imageUrl) && (!r || (!r.imageUrl && !r.coverUrl))))) {
+                    try {
+                      await supabase.from('projects').upsert({
+                        id: ensureUUID(p.id),
+                        user_id: userId,
+                        name: p.name,
+                        category: p.category || 'projects',
+                        type: 'project',
+                        description: p.description || '',
+                        highlights: p.highlights || [],
+                        tech_stack: p.techStack || [],
+                        live_url: p.liveUrl || '',
+                        github_url: p.githubUrl || '',
+                        pdf_url: p.pdfUrl || '',
+                        pdf_name: p.pdfName || '',
+                        image_url: p.coverUrl || p.imageUrl || '',
+                        is_public: p.isPublic !== false,
+                        date: p.date || ''
+                      });
+                    } catch (_) {}
+                  }
+                }
+              }
             }
 
             const prodData = prodRes.status === 'fulfilled' ? prodRes.value.data : null;
             if (prodData && Array.isArray(prodData) && prodData.length > 0) {
-              const mappedProd = prodData.map(p => ({
-                id: p.id,
-                name: p.name,
-                category: p.category,
-                type: 'product' as const,
-                description: p.description,
-                highlights: p.highlights || [],
-                techStack: p.tech_stack || [],
-                liveUrl: p.live_url,
-                githubUrl: p.github_url,
-                pdfUrl: p.pdf_url,
-                imageUrl: p.image_url,
-                isPublic: p.is_public !== false,
-                date: p.date
-              }));
-              setProducts(prev => {
-                const merged = deduplicateProjects([...mappedProd, ...(prev || [])]);
-                if (currentUser?.email) {
-                  const em = currentUser.email.toLowerCase().trim();
-                  safeLocalStorageSetItem(`${em}_products`, JSON.stringify(merged));
-                  heavyStorage.set(`${em}_products`, merged).catch(() => {});
-                }
-                return merged;
+              const mappedProd: Project[] = prodData.map(p => {
+                const img = p.image_url || p.cover_url || '';
+                const pdf = p.pdf_url || (p as any).file_url || '';
+                const pName = p.pdf_name || (p as any).file_name || '';
+                return {
+                  id: p.id,
+                  name: p.name,
+                  category: p.category,
+                  type: 'product' as const,
+                  description: p.description,
+                  highlights: p.highlights || [],
+                  techStack: p.tech_stack || [],
+                  liveUrl: p.live_url,
+                  githubUrl: p.github_url,
+                  pdfUrl: pdf,
+                  pdfName: pName,
+                  imageUrl: img,
+                  coverUrl: img,
+                  isPublic: p.is_public !== false,
+                  date: p.date
+                };
               });
+
+              let localStoredProds: Project[] = [];
+              try {
+                const raw = localStorage.getItem(`${email}_products`);
+                if (raw) localStoredProds = JSON.parse(raw);
+              } catch (_) {}
+
+              let heavyStoredProds: Project[] = [];
+              try {
+                const h = await heavyStorage.get(`${email}_products`);
+                if (h && Array.isArray(h)) heavyStoredProds = h;
+              } catch (_) {}
+
+              const allProds = deduplicateProjects([...mappedProd, ...heavyStoredProds, ...localStoredProds, ...(products || [])]);
+              setProducts(allProds);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_products`, JSON.stringify(allProds));
+                heavyStorage.set(`${em}_products`, allProds).catch(() => {});
+              }
+
+              if (userId) {
+                for (const p of allProds) {
+                  const r = mappedProd.find(rem => rem.id === p.id);
+                  if (p && ((p.pdfUrl && (!r || !r.pdfUrl)) || ((p.coverUrl || p.imageUrl) && (!r || (!r.imageUrl && !r.coverUrl))))) {
+                    try {
+                      await supabase.from('products').upsert({
+                        id: ensureUUID(p.id),
+                        user_id: userId,
+                        name: p.name,
+                        category: p.category || 'products',
+                        type: 'product',
+                        description: p.description || '',
+                        highlights: p.highlights || [],
+                        tech_stack: p.techStack || [],
+                        live_url: p.liveUrl || '',
+                        github_url: p.githubUrl || '',
+                        pdf_url: p.pdfUrl || '',
+                        image_url: p.coverUrl || p.imageUrl || '',
+                        is_public: p.isPublic !== false,
+                        date: p.date || ''
+                      });
+                    } catch (_) {}
+                  }
+                }
+              }
             }
 
             const othData = othRes.status === 'fulfilled' ? othRes.value.data : null;
             if (othData && Array.isArray(othData) && othData.length > 0) {
               const nonOldRows = othData.filter(p => p.category !== '__old_data__');
-              const mappedOth = nonOldRows.map(p => ({
-                id: p.id,
-                name: p.name,
-                category: p.category,
-                type: 'other' as const,
-                docType: p.doc_type || p.category || 'Report',
-                description: p.description,
-                highlights: p.highlights || [],
-                techStack: p.tech_stack || [],
-                liveUrl: p.live_url,
-                githubUrl: p.github_url,
-                pdfUrl: p.pdf_url,
-                imageUrl: p.image_url,
-                isPublic: p.is_public !== false,
-                date: p.date
-              }));
-              setOthers(prev => {
-                const merged = deduplicateProjects([...mappedOth, ...(prev || [])]);
-                if (currentUser?.email) {
-                  const em = currentUser.email.toLowerCase().trim();
-                  safeLocalStorageSetItem(`${em}_others`, JSON.stringify(merged));
-                  heavyStorage.set(`${em}_others`, merged).catch(() => {});
-                }
-                return merged;
+              const mappedOth: Project[] = nonOldRows.map(p => {
+                const img = p.image_url || p.cover_url || '';
+                const pdf = p.pdf_url || (p as any).file_url || '';
+                const pName = p.pdf_name || (p as any).file_name || '';
+                return {
+                  id: p.id,
+                  name: p.name,
+                  category: p.category,
+                  type: 'other' as const,
+                  docType: p.doc_type || p.category || 'Report',
+                  description: p.description,
+                  highlights: p.highlights || [],
+                  techStack: p.tech_stack || [],
+                  liveUrl: p.live_url,
+                  githubUrl: p.github_url,
+                  pdfUrl: pdf,
+                  pdfName: pName,
+                  imageUrl: img,
+                  coverUrl: img,
+                  isPublic: p.is_public !== false,
+                  date: p.date
+                };
               });
+
+              let localStoredOthers: Project[] = [];
+              try {
+                const raw = localStorage.getItem(`${email}_others`);
+                if (raw) localStoredOthers = JSON.parse(raw);
+              } catch (_) {}
+
+              let heavyStoredOthers: Project[] = [];
+              try {
+                const h = await heavyStorage.get(`${email}_others`);
+                if (h && Array.isArray(h)) heavyStoredOthers = h;
+              } catch (_) {}
+
+              const allOthers = deduplicateProjects([...mappedOth, ...heavyStoredOthers, ...localStoredOthers, ...(others || [])]);
+              setOthers(allOthers);
+              if (currentUser?.email) {
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_others`, JSON.stringify(allOthers));
+                heavyStorage.set(`${em}_others`, allOthers).catch(() => {});
+              }
+
+              if (userId) {
+                for (const p of allOthers) {
+                  const r = mappedOth.find(rem => rem.id === p.id);
+                  if (p && ((p.pdfUrl && (!r || !r.pdfUrl)) || ((p.coverUrl || p.imageUrl) && (!r || (!r.imageUrl && !r.coverUrl))))) {
+                    try {
+                      await supabase.from('others').upsert({
+                        id: ensureUUID(p.id),
+                        user_id: userId,
+                        name: p.name,
+                        category: p.category || 'others',
+                        type: 'other',
+                        doc_type: p.docType || 'Report',
+                        description: p.description || '',
+                        highlights: p.highlights || [],
+                        tech_stack: p.techStack || [],
+                        live_url: p.liveUrl || '',
+                        github_url: p.githubUrl || '',
+                        pdf_url: p.pdfUrl || '',
+                        image_url: p.coverUrl || p.imageUrl || '',
+                        is_public: p.isPublic !== false,
+                        date: p.date || ''
+                      });
+                    } catch (_) {}
+                  }
+                }
+              }
             }
           } catch (err) { console.warn("[Supabase Projects Load]", err); }
         };
@@ -4471,12 +4627,19 @@ export default function App() {
   // Projects & Products & Others
   const handleAddProj = async (newPr: Omit<Project, 'id'>) => {
     const id = generateUUID();
-    const proj: Project = { ...newPr, id };
+    const cleanPdf = newPr.pdfUrl || (newPr as any).fileUrl || '';
+    const cleanImg = newPr.imageUrl || newPr.coverUrl || '';
+    const cleanPdfName = newPr.pdfName || (newPr as any).fileName || '';
+    const proj: Project = { 
+      ...newPr, 
+      id,
+      pdfUrl: cleanPdf,
+      pdfName: cleanPdfName,
+      imageUrl: cleanImg,
+      coverUrl: cleanImg
+    };
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     const userId = await getActiveUserId();
-
-    const cleanPdf = (newPr.pdfUrl && newPr.pdfUrl.startsWith('data:') && newPr.pdfUrl.length > 50000) ? '' : (newPr.pdfUrl || '');
-    const cleanImg = (newPr.imageUrl && newPr.imageUrl.startsWith('data:') && newPr.imageUrl.length > 50000) ? '' : (newPr.imageUrl || newPr.coverUrl || '');
 
     if (newPr.type === 'product') {
       const updatedProducts = deduplicateProjects([proj, ...products]);
@@ -4493,6 +4656,7 @@ export default function App() {
             user_id: userId,
             name: newPr.name,
             category: newPr.category || 'products',
+            type: 'product',
             description: newPr.description || '',
             highlights: newPr.highlights || [],
             tech_stack: newPr.techStack || [],
@@ -4540,8 +4704,7 @@ export default function App() {
           const { error } = await supabase.from('others').upsert(payload);
           if (error) {
             console.warn("[Supabase Add Other Fallback to projects]", error);
-            const { image_url, ...projPayload } = payload;
-            await supabase.from('projects').upsert(projPayload);
+            await supabase.from('projects').upsert(payload);
           }
         } catch (err) { console.warn("[Supabase Add Other Error]", err); }
       }
@@ -4567,7 +4730,8 @@ export default function App() {
             live_url: newPr.liveUrl || '',
             github_url: newPr.githubUrl || '',
             pdf_url: cleanPdf,
-            pdf_name: newPr.pdfName || '',
+            pdf_name: cleanPdfName,
+            image_url: cleanImg,
             is_public: newPr.isPublic !== false,
             date: newPr.date || ''
           };
@@ -4625,12 +4789,19 @@ export default function App() {
 
   const handleUpdateProj = async (updatedPr: Project) => {
     const targetId = ensureUUID(updatedPr.id);
-    const item = { ...updatedPr, id: targetId };
+    const cleanPdf = updatedPr.pdfUrl || (updatedPr as any).fileUrl || '';
+    const cleanImg = updatedPr.imageUrl || updatedPr.coverUrl || '';
+    const cleanPdfName = updatedPr.pdfName || (updatedPr as any).fileName || '';
+    const item: Project = { 
+      ...updatedPr, 
+      id: targetId,
+      pdfUrl: cleanPdf,
+      pdfName: cleanPdfName,
+      imageUrl: cleanImg,
+      coverUrl: cleanImg
+    };
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     const userId = await getActiveUserId();
-
-    const cleanPdf = (updatedPr.pdfUrl && updatedPr.pdfUrl.startsWith('data:') && updatedPr.pdfUrl.length > 50000) ? '' : (updatedPr.pdfUrl || '');
-    const cleanImg = (updatedPr.imageUrl && updatedPr.imageUrl.startsWith('data:') && updatedPr.imageUrl.length > 50000) ? '' : (updatedPr.imageUrl || updatedPr.coverUrl || '');
 
     if (updatedPr.type === 'product') {
       const updatedProducts = deduplicateProjects(products.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
@@ -4649,6 +4820,7 @@ export default function App() {
             user_id: userId,
             name: updatedPr.name,
             category: updatedPr.category || 'products',
+            type: 'product',
             description: updatedPr.description || '',
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
@@ -4728,7 +4900,8 @@ export default function App() {
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
             pdf_url: cleanPdf,
-            pdf_name: updatedPr.pdfName || '',
+            pdf_name: cleanPdfName,
+            image_url: cleanImg,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -6787,8 +6960,10 @@ export default function App() {
                 techStack: p.tech_stack,
                 liveUrl: p.live_url,
                 githubUrl: p.github_url,
-                pdfUrl: p.pdf_url,
-                imageUrl: p.image_url,
+                pdfUrl: p.pdf_url || p.file_url,
+                pdfName: p.pdf_name || p.file_name,
+                imageUrl: p.image_url || p.cover_url,
+                coverUrl: p.cover_url || p.image_url,
                 date: p.date,
                 isPublic: p.is_public !== false,
                 type: p.type || (p.category === 'products' || p.category === 'product' ? 'product' : p.category === 'others' || p.category === 'other' || p.doc_type ? 'other' : 'project'),
@@ -6803,8 +6978,10 @@ export default function App() {
                 techStack: p.tech_stack,
                 liveUrl: p.live_url,
                 githubUrl: p.github_url,
-                pdfUrl: p.pdf_url,
-                imageUrl: p.image_url,
+                pdfUrl: p.pdf_url || p.file_url,
+                pdfName: p.pdf_name || p.file_name,
+                imageUrl: p.image_url || p.cover_url,
+                coverUrl: p.cover_url || p.image_url,
                 date: p.date,
                 isPublic: p.is_public !== false,
                 type: 'product'
@@ -6818,8 +6995,10 @@ export default function App() {
                 techStack: p.tech_stack,
                 liveUrl: p.live_url,
                 githubUrl: p.github_url,
-                pdfUrl: p.pdf_url,
-                imageUrl: p.image_url,
+                pdfUrl: p.pdf_url || p.file_url,
+                pdfName: p.pdf_name || p.file_name,
+                imageUrl: p.image_url || p.cover_url,
+                coverUrl: p.cover_url || p.image_url,
                 date: p.date,
                 isPublic: p.is_public !== false,
                 type: 'other',

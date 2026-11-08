@@ -893,69 +893,82 @@ export default function PublicPortfolioView({
                 </h3>
 
                 <div className="grid grid-cols-1 gap-4">
-                  {projectsList.map(proj => (
-                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="bg-slate-950 text-gray-500 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
-                            {proj.category || 'Project'}
-                          </span>
-                          {proj.date && (
-                            <span className="text-[10px] font-mono text-gray-400">
-                              {proj.date}{proj.toDate ? ` – ${proj.toDate}` : ''}
-                            </span>
-                          )}
-                        </div>
-                        <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
-                        <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
-                      </div>
-
-                      <div className="space-y-3 pt-2 border-t border-slate-900/60">
-                        {proj.techStack && proj.techStack.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {proj.techStack.map((tech, idx) => (
-                              <span key={idx} className="bg-slate-950/60 text-gray-500 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-900">
-                                {tech}
-                              </span>
-                            ))}
+                  {projectsList.map(proj => {
+                    const cover = proj.coverUrl || proj.imageUrl;
+                    return (
+                      <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                        {cover && (
+                          <div className="h-40 -mx-5 -mt-5 mb-1 overflow-hidden relative border-b border-slate-900/60">
+                            <img 
+                              src={cover} 
+                              alt={proj.name} 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer"
+                            />
                           </div>
                         )}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="bg-slate-950 text-gray-500 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
+                              {proj.category || 'Project'}
+                            </span>
+                            {proj.date && (
+                              <span className="text-[10px] font-mono text-gray-400">
+                                {proj.date}{proj.toDate ? ` – ${proj.toDate}` : ''}
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
+                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
+                        </div>
 
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
-                          {proj.pdfUrl && (
-                            <>
-                              <button 
-                                onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
-                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>View PDF</span>
-                              </button>
-                              <button 
-                                onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
-                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
-                              >
-                                <Download className="w-3 h-3" />
-                                <span>Download</span>
-                              </button>
-                            </>
+                        <div className="space-y-3 pt-2 border-t border-slate-900/60">
+                          {proj.techStack && proj.techStack.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {proj.techStack.map((tech, idx) => (
+                                <span key={idx} className="bg-slate-950/60 text-gray-500 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-900">
+                                  {tech}
+                                </span>
+                              ))}
+                            </div>
                           )}
-                          {proj.liveUrl && (
-                            <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
-                              <span>Live</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                          {proj.githubUrl && (
-                            <a href={proj.githubUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white flex items-center gap-1 transition">
-                              <span>Code</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
+
+                          <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
+                            {proj.pdfUrl && (
+                              <>
+                                <button 
+                                  onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View PDF</span>
+                                </button>
+                                <button 
+                                  onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Download</span>
+                                </button>
+                              </>
+                            )}
+                            {proj.liveUrl && (
+                              <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
+                                <span>Live</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                            {proj.githubUrl && (
+                              <a href={proj.githubUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-white flex items-center gap-1 transition">
+                                <span>Code</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -969,59 +982,72 @@ export default function PublicPortfolioView({
                 </h3>
 
                 <div className="grid grid-cols-1 gap-4">
-                  {productsList.map(proj => (
-                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="bg-slate-950 text-gray-500 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
-                            Product Release
-                          </span>
-                          {proj.date && <span className="text-[10px] font-mono text-gray-650">{proj.date}</span>}
-                        </div>
-                        <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
-                        <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
-                      </div>
-
-                      <div className="space-y-3 pt-2 border-t border-slate-900/60">
-                        {proj.techStack && proj.techStack.length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {proj.techStack.map((tech, idx) => (
-                              <span key={idx} className="bg-slate-950/60 text-gray-500 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-900">
-                                {tech}
-                              </span>
-                            ))}
+                  {productsList.map(proj => {
+                    const cover = proj.coverUrl || proj.imageUrl;
+                    return (
+                      <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                        {cover && (
+                          <div className="h-40 -mx-5 -mt-5 mb-1 overflow-hidden relative border-b border-slate-900/60">
+                            <img 
+                              src={cover} 
+                              alt={proj.name} 
+                              className="w-full h-full object-cover" 
+                              referrerPolicy="no-referrer"
+                            />
                           </div>
                         )}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="bg-slate-950 text-gray-500 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
+                              Product Release
+                            </span>
+                            {proj.date && <span className="text-[10px] font-mono text-gray-650">{proj.date}</span>}
+                          </div>
+                          <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
+                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
+                        </div>
 
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
-                          {proj.pdfUrl && (
-                            <>
-                              <button 
-                                onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
-                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>View PDF</span>
-                              </button>
-                              <button 
-                                onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
-                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
-                              >
-                                <Download className="w-3 h-3" />
-                                <span>Download</span>
-                              </button>
-                            </>
+                        <div className="space-y-3 pt-2 border-t border-slate-900/60">
+                          {proj.techStack && proj.techStack.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {proj.techStack.map((tech, idx) => (
+                                <span key={idx} className="bg-slate-950/60 text-gray-500 font-mono text-[9px] px-1.5 py-0.5 rounded border border-slate-900">
+                                  {tech}
+                                </span>
+                              ))}
+                            </div>
                           )}
-                          {proj.liveUrl && (
-                            <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
-                              <span>Live Product</span>
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
+
+                          <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
+                            {proj.pdfUrl && (
+                              <>
+                                <button 
+                                  onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>View PDF</span>
+                                </button>
+                                <button 
+                                  onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                  className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Download</span>
+                                </button>
+                              </>
+                            )}
+                            {proj.liveUrl && (
+                              <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
+                                <span>Live Product</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1035,47 +1061,60 @@ export default function PublicPortfolioView({
                 </h3>
 
                 <div className="grid grid-cols-1 gap-4">
-                  {othersList.map(proj => (
-                    <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="bg-slate-950 text-emerald-400 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
-                            {proj.docType || 'Document'}
-                          </span>
-                          {proj.date && <span className="text-[10px] font-mono text-gray-650">{proj.date}</span>}
+                  {othersList.map(proj => {
+                    const cover = proj.coverUrl || proj.imageUrl;
+                    return (
+                      <div key={proj.id} className={`bg-[#0b0c10]/70 border ${getThemeBorder()} p-5 rounded-2xl space-y-4 relative overflow-hidden backdrop-blur-sm transition flex flex-col justify-between`}>
+                        {cover && (
+                          <div className="h-40 -mx-5 -mt-5 mb-1 overflow-hidden relative border-b border-slate-900/60">
+                            <img 
+                              src={cover} 
+                              alt={proj.name} 
+                              className="w-full h-full object-cover opacity-60" 
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        )}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="bg-slate-950 text-emerald-400 font-mono text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 rounded border border-slate-905">
+                              {proj.docType || 'Document'}
+                            </span>
+                            {proj.date && <span className="text-[10px] font-mono text-gray-650">{proj.date}</span>}
+                          </div>
+                          <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
+                          <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
                         </div>
-                        <h4 className="text-white font-bold text-[13px] tracking-tight">{proj.name}</h4>
-                        <p className="text-xs text-gray-400 leading-relaxed font-sans">{proj.description}</p>
-                      </div>
 
-                      <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-900/60 font-mono text-[10px]">
-                        {proj.pdfUrl && (
-                          <>
-                            <button 
-                              onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
-                              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                            >
-                              <Eye className="w-3 h-3" />
-                              <span>View PDF</span>
-                            </button>
-                            <button 
-                              onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
-                              className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
-                            >
-                              <Download className="w-3 h-3" />
-                              <span>Download</span>
-                            </button>
-                          </>
-                        )}
-                        {proj.liveUrl && (
-                          <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
-                            <span>Open Link</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
+                        <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-900/60 font-mono text-[10px]">
+                          {proj.pdfUrl && (
+                            <>
+                              <button 
+                                onClick={() => openPdfInNewTab(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>View PDF</span>
+                              </button>
+                              <button 
+                                onClick={() => downloadFileUrl(proj.pdfUrl!, proj.pdfName || `${proj.name}.pdf`)}
+                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Download</span>
+                              </button>
+                            </>
+                          )}
+                          {proj.liveUrl && (
+                            <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
+                              <span>Open Link</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

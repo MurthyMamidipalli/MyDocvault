@@ -239,9 +239,22 @@ export default function ProjectsTab({
   };
 
   // File Change Handlers
-  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      try {
+        const user = (await supabase.auth.getUser()).data.user;
+        if (user) {
+          const folder = activeFilter === 'other' ? 'others' : activeFilter === 'product' ? 'products' : 'projects';
+          const result = await uploadFileToSupabaseStorage(STORAGE_BUCKETS.PROJECTS, user.id, file, `${folder}/covers`);
+          if (result && result.publicUrl) {
+            setCoverUrl(result.publicUrl);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Cover storage upload fallback:", err);
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         const rawResult = reader.result as string;
@@ -328,6 +341,7 @@ export default function ProjectsTab({
         liveUrl: url.trim(),
         highlights: highlightsText.trim() ? highlightsText.split('\n').map(h => h.trim()).filter(Boolean) : [],
         coverUrl: coverUrl || undefined,
+        imageUrl: coverUrl || undefined,
         pdfUrl: pdfUrl || undefined,
         pdfName: pdfName || undefined,
         isPublic: isPublic
@@ -363,6 +377,7 @@ export default function ProjectsTab({
         liveUrl: url.trim(),
         highlights: actualHighlights,
         coverUrl: coverUrl || undefined,
+        imageUrl: coverUrl || undefined,
         pdfUrl: pdfUrl || undefined,
         pdfName: pdfName || undefined,
         isPublic: isPublic
@@ -850,9 +865,9 @@ export default function ProjectsTab({
             {activeFilter === 'other' ? (
               /* Dedicated Others Document Header Banner */
               <div className="h-[180px] relative select-none rounded-t-[24px] overflow-hidden flex flex-col justify-between p-5 border-b border-slate-800/40 bg-gradient-to-tr from-[#0b0c10] via-[#111218] to-[#181a24]">
-                {item.coverUrl ? (
+                {(item.coverUrl || item.imageUrl) ? (
                   <img 
-                    src={item.coverUrl} 
+                    src={item.coverUrl || item.imageUrl} 
                     alt={item.name} 
                     className="absolute inset-0 w-full h-full object-cover opacity-35" 
                     referrerPolicy="no-referrer"
@@ -923,9 +938,9 @@ export default function ProjectsTab({
             ) : (
               /* Projects & Products Mockup / Cover Region */
               <div className="h-[220px] relative select-none rounded-t-[24px] overflow-hidden flex items-center justify-center border-b border-slate-800/40">
-                {item.coverUrl ? (
+                {(item.coverUrl || item.imageUrl) ? (
                   <img 
-                    src={item.coverUrl} 
+                    src={item.coverUrl || item.imageUrl} 
                     alt={item.name} 
                     className="w-full h-full object-cover" 
                     referrerPolicy="no-referrer"
