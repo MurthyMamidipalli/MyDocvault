@@ -801,7 +801,16 @@ export const deduplicateDocuments = (items?: VaultDocument[]): VaultDocument[] =
     }
 
     if (matchIdx >= 0) {
-      result[matchIdx] = { ...result[matchIdx], ...item, id: result[matchIdx].id || item.id };
+      const existing = result[matchIdx];
+      const validFileUrl = (item.fileUrl && !item.fileUrl.startsWith('vault://')) 
+        ? item.fileUrl 
+        : (existing.fileUrl || item.fileUrl);
+      result[matchIdx] = { 
+        ...existing, 
+        ...item, 
+        id: existing.id || item.id,
+        fileUrl: validFileUrl
+      };
     } else {
       if (idKey) seen.add(`id:${idKey}`);
       if (nameKey) seen.add(`name:${nameKey}`);
@@ -1987,7 +1996,8 @@ export default function App() {
             const existing = prev || [];
             const merged = existing.map(pDoc => {
               const match = dDocs.find((d: any) => d.id === pDoc.id || d.fileName === pDoc.fileName || d.name === pDoc.name);
-              return match?.fileDataUrl && !pDoc.fileDataUrl ? { ...pDoc, fileDataUrl: match.fileDataUrl } : pDoc;
+              const restoredFile = pDoc.fileUrl || match?.fileUrl || match?.fileDataUrl || '';
+              return { ...pDoc, fileUrl: restoredFile, fileDataUrl: restoredFile };
             });
             const extra = dDocs.filter(d => !existing.some(p => p.id === d.id));
             return deduplicateDocuments([...merged, ...extra]);
@@ -2058,15 +2068,15 @@ export default function App() {
         }
 
         if (dProjs && Array.isArray(dProjs) && dProjs.length > 0) {
-          setProjects(prev => deduplicateProjects([...(prev || []), ...dProjs]));
+          setProjects(prev => deduplicateProjects([...dProjs, ...(prev || [])]));
         }
 
         if (dProds && Array.isArray(dProds) && dProds.length > 0) {
-          setProducts(prev => deduplicateProjects([...(prev || []), ...dProds]));
+          setProducts(prev => deduplicateProjects([...dProds, ...(prev || [])]));
         }
 
         if (dOthers && Array.isArray(dOthers) && dOthers.length > 0) {
-          setOthers(prev => deduplicateProjects([...(prev || []), ...dOthers]));
+          setOthers(prev => deduplicateProjects([...dOthers, ...(prev || [])]));
         }
 
         if (dEdu && Array.isArray(dEdu) && dEdu.length > 0) {
@@ -2924,16 +2934,45 @@ export default function App() {
               if (raw) localDocs = JSON.parse(raw);
             } catch (_) {}
 
-            if ((!localDocs || localDocs.length === 0) && remoteDocs.length === 0) {
+            let heavyDocs: VaultDocument[] = [];
+            try {
+              const h = await heavyStorage.get(`${email}_documents`);
+              if (h && Array.isArray(h)) heavyDocs = h;
+            } catch (_) {}
+
+            if ((!localDocs || localDocs.length === 0) && remoteDocs.length === 0 && heavyDocs.length === 0) {
               localDocs = INITIAL_DOCUMENTS;
             }
 
-            const allDocs = deduplicateDocuments([...remoteDocs, ...localDocs, ...(documents || [])]);
+            const allDocs = deduplicateDocuments([...heavyDocs, ...remoteDocs, ...localDocs, ...(documents || [])]);
             setDocuments(allDocs);
             if (currentUser?.email) {
               const em = currentUser.email.toLowerCase().trim();
               safeLocalStorageSetItem(`${em}_documents`, JSON.stringify(allDocs));
               heavyStorage.set(`${em}_documents`, allDocs).catch(() => {});
+            }
+
+            // Sync any local documents with fileUrl to Supabase if Supabase lacked file_url
+            if (userId) {
+              for (const doc of allDocs) {
+                const r = remoteDocs.find(rem => rem.id === doc.id);
+                if (doc.fileUrl && (!r || !r.fileUrl)) {
+                  try {
+                    await supabase.from('documents').upsert({
+                      id: ensureUUID(doc.id),
+                      user_id: userId,
+                      title: doc.title || doc.name,
+                      category: doc.category || 'other',
+                      description: doc.description || '',
+                      file_name: doc.name || doc.fileName,
+                      file_type: doc.fileType || 'application/pdf',
+                      file_size: parseFileSizeToBytes(doc.size || doc.fileSize),
+                      file_url: doc.fileUrl,
+                      visibility: doc.visibility || 'public'
+                    });
+                  } catch (_) {}
+                }
+              }
             }
           } catch (err) { console.warn("[Supabase Documents Load]", err); }
         };
@@ -2999,7 +3038,7 @@ export default function App() {
               if (h && Array.isArray(h)) heavyStoredProjs = h;
             } catch (_) {}
 
-            const allProjs = deduplicateProjects([...remoteProjects, ...heavyStoredProjs, ...localStoredProjs, ...(projects || [])]);
+            const allProjs = deduplicateProjects([...heavyStoredProjs, ...remoteProjects, ...localStoredProjs, ...(projects || [])]);
             if (allProjs.length > 0 || remoteProjects.length > 0) {
               setProjects(allProjs);
               if (currentUser?.email) {
@@ -3092,7 +3131,7 @@ export default function App() {
               if (h && Array.isArray(h)) heavyStoredProds = h;
             } catch (_) {}
 
-            const allProds = deduplicateProjects([...mappedProd, ...heavyStoredProds, ...localStoredProds, ...(products || [])]);
+            const allProds = deduplicateProjects([...heavyStoredProds, ...mappedProd, ...localStoredProds, ...(products || [])]);
             if (allProds.length > 0 || mappedProd.length > 0) {
               setProducts(allProds);
               if (currentUser?.email) {
@@ -3183,7 +3222,7 @@ export default function App() {
               if (h && Array.isArray(h)) heavyStoredOthers = h;
             } catch (_) {}
 
-            const allOthers = deduplicateProjects([...mappedOth, ...heavyStoredOthers, ...localStoredOthers, ...(others || [])]);
+            const allOthers = deduplicateProjects([...heavyStoredOthers, ...mappedOth, ...localStoredOthers, ...(others || [])]);
             if (allOthers.length > 0 || mappedOth.length > 0) {
               setOthers(allOthers);
               if (currentUser?.email) {
@@ -4866,16 +4905,6 @@ export default function App() {
     const cleanPdf = updatedPr.pdfUrl || (updatedPr as any).fileUrl || '';
     const cleanImg = updatedPr.imageUrl || updatedPr.coverUrl || '';
     const cleanPdfName = updatedPr.pdfName || (updatedPr as any).fileName || '';
-    const item: Project = { 
-      ...updatedPr, 
-      id: rawId || targetId,
-      pdfUrl: cleanPdf,
-      pdfName: cleanPdfName,
-      imageUrl: cleanImg,
-      coverUrl: cleanImg
-    };
-    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
-    const userId = await getActiveUserId();
 
     const matchesTarget = (p: Project) => {
       if (!p) return false;
@@ -4884,6 +4913,22 @@ export default function App() {
       if (p.id && (toUUID(p.id) === targetId || (rawId && toUUID(p.id) === toUUID(rawId)))) return true;
       return false;
     };
+
+    const existingItem = [...projects, ...products, ...others].find(matchesTarget);
+    const resolvedPdf = cleanPdf || existingItem?.pdfUrl || (existingItem as any)?.fileUrl || '';
+    const resolvedPdfName = cleanPdfName || existingItem?.pdfName || (existingItem as any)?.fileName || '';
+    const resolvedImg = cleanImg || existingItem?.imageUrl || existingItem?.coverUrl || '';
+
+    const item: Project = { 
+      ...updatedPr, 
+      id: rawId || targetId,
+      pdfUrl: resolvedPdf,
+      pdfName: resolvedPdfName,
+      imageUrl: resolvedImg,
+      coverUrl: resolvedImg
+    };
+    const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+    const userId = await getActiveUserId();
 
     if (updatedPr.type === 'product') {
       setProducts(prev => {
@@ -4901,8 +4946,8 @@ export default function App() {
       if (userId) {
         try {
           const rawDesc = (updatedPr.description || '').replace(/<!--filename:[\s\S]*?-->/g, '').replace(/<!--banner:[\s\S]*?-->/g, '').trim();
-          const descWithFile = cleanPdfName ? `${rawDesc}\n<!--filename:${cleanPdfName}-->` : rawDesc;
-          const bannerToEmbed = cleanImg || '';
+          const descWithFile = resolvedPdfName ? `${rawDesc}\n<!--filename:${resolvedPdfName}-->` : rawDesc;
+          const bannerToEmbed = resolvedImg || '';
           const descWithFileAndBanner = bannerToEmbed ? `${descWithFile}\n<!--banner:${bannerToEmbed}-->` : descWithFile;
           const payload = {
             id: toUUID(rawId || targetId),
@@ -4914,8 +4959,8 @@ export default function App() {
             tech_stack: updatedPr.techStack || [],
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
-            pdf_url: cleanPdf,
-            image_url: cleanImg,
+            pdf_url: resolvedPdf,
+            image_url: resolvedImg,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -4938,8 +4983,8 @@ export default function App() {
       if (userId) {
         try {
           const rawDesc = (updatedPr.description || '').replace(/<!--filename:[\s\S]*?-->/g, '').replace(/<!--banner:[\s\S]*?-->/g, '').trim();
-          const descWithFile = cleanPdfName ? `${rawDesc}\n<!--filename:${cleanPdfName}-->` : rawDesc;
-          const bannerToEmbed = cleanImg || '';
+          const descWithFile = resolvedPdfName ? `${rawDesc}\n<!--filename:${resolvedPdfName}-->` : rawDesc;
+          const bannerToEmbed = resolvedImg || '';
           const descWithFileAndBanner = bannerToEmbed ? `${descWithFile}\n<!--banner:${bannerToEmbed}-->` : descWithFile;
           const payload = {
             id: toUUID(rawId || targetId),
@@ -4953,8 +4998,8 @@ export default function App() {
             tech_stack: updatedPr.techStack || [],
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
-            pdf_url: cleanPdf,
-            image_url: cleanImg,
+            pdf_url: resolvedPdf,
+            image_url: resolvedImg,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -4982,9 +5027,9 @@ export default function App() {
       if (userId) {
         try {
           const rawDesc = (updatedPr.description || '').replace(/<!--filename:[\s\S]*?-->/g, '').replace(/<!--banner:[\s\S]*?-->/g, '').trim();
-          const descWithFile = cleanPdfName ? `${rawDesc}\n<!--filename:${cleanPdfName}-->` : rawDesc;
-          const descWithBanner = cleanImg 
-            ? `${descWithFile}\n<!--banner:${cleanImg}-->` 
+          const descWithFile = resolvedPdfName ? `${rawDesc}\n<!--filename:${resolvedPdfName}-->` : rawDesc;
+          const descWithBanner = resolvedImg 
+            ? `${descWithFile}\n<!--banner:${resolvedImg}-->` 
             : descWithFile;
           const payload = {
             id: toUUID(rawId || targetId),
@@ -4997,8 +5042,8 @@ export default function App() {
             tech_stack: updatedPr.techStack || [],
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
-            pdf_url: cleanPdf,
-            pdf_name: cleanPdfName,
+            pdf_url: resolvedPdf,
+            pdf_name: resolvedPdfName,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
@@ -5581,11 +5626,9 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        const cleanFileUrl = (newDoc.fileUrl && newDoc.fileUrl.startsWith('data:') && newDoc.fileUrl.length > 50000) 
-          ? '' 
-          : (newDoc.fileUrl || `vault://${encodeURIComponent(newDoc.name || 'document.pdf')}`);
+        const cleanFileUrl = newDoc.fileUrl || '';
         const byteSize = parseFileSizeToBytes(newDoc.size || newDoc.fileSize);
-        const { error } = await supabase.from('documents').insert({
+        const { error } = await supabase.from('documents').upsert({
           id,
           user_id: userId,
           title: newDoc.title || newDoc.name,
@@ -5598,7 +5641,7 @@ export default function App() {
           storage_path: newDoc.storagePath || '',
           expiry_date: newDoc.expiryDate || null,
           tags: newDoc.tags || [newDoc.category || 'vault'],
-          visibility: newDoc.visibility || 'private'
+          visibility: newDoc.visibility || 'public'
         });
         if (error) console.error("[Supabase Add Document Error]", error);
 
@@ -5659,9 +5702,7 @@ export default function App() {
     const userId = await getActiveUserId();
     if (userId) {
       try {
-        const cleanFileUrl = (updatedDoc.fileUrl && updatedDoc.fileUrl.startsWith('data:') && updatedDoc.fileUrl.length > 50000) 
-          ? '' 
-          : (updatedDoc.fileUrl || `vault://${encodeURIComponent(updatedDoc.name || 'document.pdf')}`);
+        const cleanFileUrl = updatedDoc.fileUrl || '';
         const byteSize = parseFileSizeToBytes(updatedDoc.size || updatedDoc.fileSize);
         const { error } = await supabase.from('documents').upsert({
           id: targetId,
@@ -5676,7 +5717,7 @@ export default function App() {
           storage_path: updatedDoc.storagePath || '',
           expiry_date: updatedDoc.expiryDate || null,
           tags: updatedDoc.tags || [updatedDoc.category || 'vault'],
-          visibility: updatedDoc.visibility || 'private'
+          visibility: updatedDoc.visibility || 'public'
         });
         if (error) console.error("[Supabase Update Document Error]", error);
       } catch (err) { console.warn("[Supabase Update Document Error]", err); }

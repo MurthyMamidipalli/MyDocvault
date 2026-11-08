@@ -70,6 +70,7 @@ export default function ProjectsTab({
   const [coverUrl, setCoverUrl] = useState<string>('');
   const [pdfUrl, setPdfUrl] = useState<string>('');
   const [pdfName, setPdfName] = useState<string>('');
+  const [isReadingFile, setIsReadingFile] = useState(false);
 
   // Advanced States
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -191,10 +192,26 @@ export default function ProjectsTab({
     setDate(item.date || '');
     setToDate(item.toDate || '');
     setUrl(item.liveUrl || '');
-    setDescription(item.description || '');
-    setCoverUrl(item.coverUrl || item.imageUrl || '');
+
+    const rawDesc = item.description || '';
+    let extractedBanner = item.coverUrl || item.imageUrl || '';
+    if (!extractedBanner && rawDesc.includes('<!--banner:')) {
+      const match = rawDesc.match(/<!--banner:([\s\S]*?)-->/);
+      if (match) extractedBanner = match[1];
+    }
+    setCoverUrl(extractedBanner);
+
+    let extractedFilename = item.pdfName || (item as any).fileName || '';
+    if (!extractedFilename && rawDesc.includes('<!--filename:')) {
+      const match = rawDesc.match(/<!--filename:([\s\S]*?)-->/);
+      if (match) extractedFilename = match[1];
+    }
+    setPdfName(extractedFilename);
+
+    const cleanDesc = rawDesc.replace(/<!--banner:[\s\S]*?-->/g, '').replace(/<!--filename:[\s\S]*?-->/g, '').trim();
+    setDescription(cleanDesc);
+
     setPdfUrl(item.pdfUrl || (item as any).fileUrl || '');
-    setPdfName(item.pdfName || (item as any).fileName || '');
     setCategory(item.category || 'utilities');
     setDocType(item.docType || 'Report');
     setTechStackText(item.techStack ? item.techStack.join(', ') : '');
@@ -303,11 +320,16 @@ export default function ProjectsTab({
     const file = e.target.files?.[0];
     if (file) {
       setPdfName(file.name);
+      setIsReadingFile(true);
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
           setPdfUrl(event.target.result as string);
         }
+        setIsReadingFile(false);
+      };
+      reader.onerror = () => {
+        setIsReadingFile(false);
       };
       reader.readAsDataURL(file);
     }
@@ -315,6 +337,7 @@ export default function ProjectsTab({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadingFile) return;
     if (!title.trim() || !description.trim()) return;
 
     if (activeFilter === 'other') {
@@ -852,10 +875,11 @@ export default function ProjectsTab({
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl cursor-pointer transition shadow-md flex items-center gap-2"
+              disabled={isReadingFile}
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-slate-950 font-bold rounded-xl cursor-pointer transition shadow-md flex items-center gap-2"
             >
               <Check className="w-4 h-4" />
-              <span>{editingItem ? `Update "${editingItem.name}"` : 'Save Record'}</span>
+              <span>{isReadingFile ? 'Reading file...' : editingItem ? `Update "${editingItem.name}"` : 'Save Record'}</span>
             </button>
           </div>
         </form>
