@@ -4814,14 +4814,21 @@ export default function App() {
   const handleDeleteProj = async (id: string) => {
     const targetId = toUUID(id);
 
-    const targetItem = [...projects, ...products, ...others].find(p => p.id === id || p.id === targetId || toUUID(p.id) === targetId);
+    const matchesTarget = (p: Project) => {
+      if (!p) return false;
+      if (p.id === id || p.id === targetId) return true;
+      if (p.id && (toUUID(p.id) === targetId || toUUID(p.id) === toUUID(id))) return true;
+      return false;
+    };
+
+    const targetItem = [...projects, ...products, ...others].find(matchesTarget);
     if (targetItem) {
       addDeletedItem(targetItem, 'project', targetItem.name || 'Project', targetItem.category);
     }
 
-    const updatedProj = projects.filter(p => p.id !== id && p.id !== targetId);
-    const updatedProd = products.filter(p => p.id !== id && p.id !== targetId);
-    const updatedOth = others.filter(p => p.id !== id && p.id !== targetId);
+    const updatedProj = projects.filter(p => !matchesTarget(p));
+    const updatedProd = products.filter(p => !matchesTarget(p));
+    const updatedOth = others.filter(p => !matchesTarget(p));
 
     setProjects(updatedProj);
     setProducts(updatedProd);
@@ -4854,13 +4861,14 @@ export default function App() {
   };
 
   const handleUpdateProj = async (updatedPr: Project) => {
-    const targetId = ensureUUID(updatedPr.id);
+    const rawId = updatedPr.id;
+    const targetId = rawId ? ensureUUID(rawId) : generateUUID();
     const cleanPdf = updatedPr.pdfUrl || (updatedPr as any).fileUrl || '';
     const cleanImg = updatedPr.imageUrl || updatedPr.coverUrl || '';
     const cleanPdfName = updatedPr.pdfName || (updatedPr as any).fileName || '';
     const item: Project = { 
       ...updatedPr, 
-      id: targetId,
+      id: rawId || targetId,
       pdfUrl: cleanPdf,
       pdfName: cleanPdfName,
       imageUrl: cleanImg,
@@ -4869,26 +4877,39 @@ export default function App() {
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     const userId = await getActiveUserId();
 
+    const matchesTarget = (p: Project) => {
+      if (!p) return false;
+      if (rawId && p.id === rawId) return true;
+      if (p.id === targetId) return true;
+      if (p.id && (toUUID(p.id) === targetId || (rawId && toUUID(p.id) === toUUID(rawId)))) return true;
+      return false;
+    };
+
     if (updatedPr.type === 'product') {
-      const updatedProducts = deduplicateProjects(products.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
-      setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-      setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-      setProducts(updatedProducts);
-      if (email) {
-        safeLocalStorageSetItem(`${email}_products`, JSON.stringify(updatedProducts));
-        heavyStorage.set(`${email}_products`, updatedProducts).catch(() => {});
-      }
-      triggerToast(`Updated product assets: ${updatedPr.name}`);
+      setProducts(prev => {
+        const index = prev.findIndex(matchesTarget);
+        const next = index >= 0 
+          ? prev.map((p, idx) => idx === index ? item : p)
+          : [...prev, item];
+        if (email) {
+          safeLocalStorageSetItem(`${email}_products`, JSON.stringify(next));
+          heavyStorage.set(`${email}_products`, next).catch(() => {});
+        }
+        return next;
+      });
+      triggerToast(`Updated product: ${updatedPr.name}`);
       if (userId) {
         try {
           const rawDesc = (updatedPr.description || '').replace(/<!--filename:[\s\S]*?-->/g, '').replace(/<!--banner:[\s\S]*?-->/g, '').trim();
           const descWithFile = cleanPdfName ? `${rawDesc}\n<!--filename:${cleanPdfName}-->` : rawDesc;
+          const bannerToEmbed = cleanImg || '';
+          const descWithFileAndBanner = bannerToEmbed ? `${descWithFile}\n<!--banner:${bannerToEmbed}-->` : descWithFile;
           const payload = {
-            id: targetId,
+            id: toUUID(rawId || targetId),
             user_id: userId,
             name: updatedPr.name,
             category: updatedPr.category || 'products',
-            description: descWithFile,
+            description: descWithFileAndBanner,
             highlights: updatedPr.highlights || [],
             tech_stack: updatedPr.techStack || [],
             live_url: updatedPr.liveUrl || '',
@@ -4899,19 +4920,20 @@ export default function App() {
             date: updatedPr.date || ''
           };
           await supabase.from('products').upsert(payload);
-          await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
-          await supabase.from('others').delete().eq('id', targetId).eq('user_id', userId);
         } catch (err) { console.warn("[Supabase Update Product Error]", err); }
       }
     } else if (updatedPr.type === 'other') {
-      const updatedOthers = deduplicateProjects(others.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
-      setProjects(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-      setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-      setOthers(updatedOthers);
-      if (email) {
-        safeLocalStorageSetItem(`${email}_others`, JSON.stringify(updatedOthers));
-        heavyStorage.set(`${email}_others`, updatedOthers).catch(() => {});
-      }
+      setOthers(prev => {
+        const index = prev.findIndex(matchesTarget);
+        const next = index >= 0 
+          ? prev.map((p, idx) => idx === index ? item : p)
+          : [...prev, item];
+        if (email) {
+          safeLocalStorageSetItem(`${email}_others`, JSON.stringify(next));
+          heavyStorage.set(`${email}_others`, next).catch(() => {});
+        }
+        return next;
+      });
       triggerToast(`Updated document: ${updatedPr.name}`);
       if (userId) {
         try {
@@ -4920,7 +4942,7 @@ export default function App() {
           const bannerToEmbed = cleanImg || '';
           const descWithFileAndBanner = bannerToEmbed ? `${descWithFile}\n<!--banner:${bannerToEmbed}-->` : descWithFile;
           const payload = {
-            id: targetId,
+            id: toUUID(rawId || targetId),
             user_id: userId,
             name: updatedPr.name,
             category: updatedPr.category || 'others',
@@ -4941,22 +4963,22 @@ export default function App() {
             console.warn("[Supabase Update Other Fallback to projects]", othErr);
             const { image_url, doc_type, ...projPayload } = payload;
             await supabase.from('projects').upsert(projPayload);
-          } else {
-            await supabase.from('projects').delete().eq('id', targetId).eq('user_id', userId);
           }
-          await supabase.from('products').delete().eq('id', targetId).eq('user_id', userId);
         } catch (err) { console.warn("[Supabase Update Other Error]", err); }
       }
     } else {
-      const updatedProjects = deduplicateProjects(projects.map(p => (p.id === updatedPr.id || p.id === targetId) ? item : p));
-      setProducts(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-      setOthers(prev => prev.filter(p => p.id !== updatedPr.id && p.id !== targetId));
-      setProjects(updatedProjects);
-      if (email) {
-        safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(updatedProjects));
-        heavyStorage.set(`${email}_projects`, updatedProjects).catch(() => {});
-      }
-      triggerToast(`Updated project assets: ${updatedPr.name}`);
+      setProjects(prev => {
+        const index = prev.findIndex(matchesTarget);
+        const next = index >= 0 
+          ? prev.map((p, idx) => idx === index ? item : p)
+          : [...prev, item];
+        if (email) {
+          safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(next));
+          heavyStorage.set(`${email}_projects`, next).catch(() => {});
+        }
+        return next;
+      });
+      triggerToast(`Updated project: ${updatedPr.name}`);
       if (userId) {
         try {
           const rawDesc = (updatedPr.description || '').replace(/<!--filename:[\s\S]*?-->/g, '').replace(/<!--banner:[\s\S]*?-->/g, '').trim();
@@ -4965,7 +4987,7 @@ export default function App() {
             ? `${descWithFile}\n<!--banner:${cleanImg}-->` 
             : descWithFile;
           const payload = {
-            id: targetId,
+            id: toUUID(rawId || targetId),
             user_id: userId,
             name: updatedPr.name,
             category: updatedPr.category || 'projects',
@@ -4981,8 +5003,6 @@ export default function App() {
             date: updatedPr.date || ''
           };
           await supabase.from('projects').upsert(payload);
-          await supabase.from('products').delete().eq('id', targetId).eq('user_id', userId);
-          await supabase.from('others').delete().eq('id', targetId).eq('user_id', userId);
         } catch (err) { console.warn("[Supabase Update Project Error]", err); }
       }
     }

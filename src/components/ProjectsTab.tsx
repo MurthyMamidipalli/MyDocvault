@@ -102,11 +102,13 @@ export default function ProjectsTab({
     for (const p of candidateProjects) {
       const idKey = p.id ? p.id.toLowerCase().trim() : '';
       const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (idKey && seen.has(`id:${idKey}`)) continue;
-      if (nameKey && seen.has(`name:${nameKey}`)) continue;
-
-      if (idKey) seen.add(`id:${idKey}`);
-      if (nameKey) seen.add(`name:${nameKey}`);
+      if (idKey) {
+        if (seen.has(`id:${idKey}`)) continue;
+        seen.add(`id:${idKey}`);
+      } else if (nameKey) {
+        if (seen.has(`name:${nameKey}`)) continue;
+        seen.add(`name:${nameKey}`);
+      }
       list.push(p);
     }
     return list;
@@ -129,11 +131,13 @@ export default function ProjectsTab({
 
       const idKey = p.id ? p.id.toLowerCase().trim() : '';
       const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (idKey && seen.has(`id:${idKey}`)) continue;
-      if (nameKey && seen.has(`name:${nameKey}`)) continue;
-
-      if (idKey) seen.add(`id:${idKey}`);
-      if (nameKey) seen.add(`name:${nameKey}`);
+      if (idKey) {
+        if (seen.has(`id:${idKey}`)) continue;
+        seen.add(`id:${idKey}`);
+      } else if (nameKey) {
+        if (seen.has(`name:${nameKey}`)) continue;
+        seen.add(`name:${nameKey}`);
+      }
       list.push(p);
     }
     return list;
@@ -162,11 +166,13 @@ export default function ProjectsTab({
 
       const idKey = p.id ? p.id.toLowerCase().trim() : '';
       const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (idKey && seen.has(`id:${idKey}`)) continue;
-      if (nameKey && seen.has(`name:${nameKey}`)) continue;
-
-      if (idKey) seen.add(`id:${idKey}`);
-      if (nameKey) seen.add(`name:${nameKey}`);
+      if (idKey) {
+        if (seen.has(`id:${idKey}`)) continue;
+        seen.add(`id:${idKey}`);
+      } else if (nameKey) {
+        if (seen.has(`name:${nameKey}`)) continue;
+        seen.add(`name:${nameKey}`);
+      }
       list.push(p);
     }
     return list;
@@ -186,9 +192,9 @@ export default function ProjectsTab({
     setToDate(item.toDate || '');
     setUrl(item.liveUrl || '');
     setDescription(item.description || '');
-    setCoverUrl(item.coverUrl || '');
-    setPdfUrl(item.pdfUrl || '');
-    setPdfName(item.pdfName || '');
+    setCoverUrl(item.coverUrl || item.imageUrl || '');
+    setPdfUrl(item.pdfUrl || (item as any).fileUrl || '');
+    setPdfName(item.pdfName || (item as any).fileName || '');
     setCategory(item.category || 'utilities');
     setDocType(item.docType || 'Report');
     setTechStackText(item.techStack ? item.techStack.join(', ') : '');
@@ -196,6 +202,14 @@ export default function ProjectsTab({
     setHighlightsText(item.highlights ? item.highlights.join('\n') : '');
     setIsPublic(item.isPublic !== false);
     setShowForm(true);
+
+    // Smoothly scroll to the form so the user immediately sees the form editing this item
+    setTimeout(() => {
+      const el = document.getElementById('project-form-container');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 60);
   };
 
   const handleStartAdd = () => {
@@ -478,28 +492,43 @@ export default function ProjectsTab({
 
       {/* Styled Inline Form (Placed at TOP for immediate visibility upon clicking Add Project) */}
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-2xl space-y-6 mt-2 max-w-4xl">
-          <div className="flex justify-between items-start">
+        <form 
+          id="project-form-container"
+          onSubmit={handleSubmit} 
+          className="bg-slate-900 border-2 border-emerald-500/40 p-6 md:p-8 rounded-2xl space-y-6 mt-2 max-w-4xl shadow-2xl relative"
+        >
+          <div className="flex justify-between items-start gap-4">
             <div>
-              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                {activeFilter === 'other' ? (
-                  editingItem ? 'Edit Document / File' : 'Add New Document / File'
-                ) : (
-                  editingItem 
-                    ? `Edit ${activeFilter === 'product' ? 'Product' : 'Project'}` 
-                    : `Add New ${activeFilter === 'product' ? 'Product' : 'Project'}`
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                  {activeFilter === 'other' ? (
+                    editingItem ? 'Edit Document / File' : 'Add New Document / File'
+                  ) : (
+                    editingItem 
+                      ? `Edit ${activeFilter === 'product' ? 'Product' : 'Project'}` 
+                      : `Add New ${activeFilter === 'product' ? 'Product' : 'Project'}`
+                  )}
+                </h3>
+                {editingItem && (
+                  <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center gap-1.5 shadow-sm">
+                    <Pencil className="w-3 h-3 text-blue-400" />
+                    <span>Target: {editingItem.name}</span>
+                  </span>
                 )}
-              </h3>
-              <p className="text-xs text-gray-400 mt-1">
-                {activeFilter === 'other' 
-                  ? 'Add reports, research papers, case studies, certificates, or other PDFs/documents.'
-                  : `Enter details for your ${activeFilter === 'product' ? 'product release' : 'project showcase'}.`}
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                {editingItem 
+                  ? `Editing only "${editingItem.name}". Only this record will be updated, leaving other items intact.`
+                  : activeFilter === 'other' 
+                    ? 'Add reports, research papers, case studies, certificates, or other PDFs/documents.'
+                    : `Enter details for your ${activeFilter === 'product' ? 'product release' : 'project showcase'}.`}
               </p>
             </div>
             <button
               type="button"
               onClick={handleResetForm}
-              className="p-1 text-gray-400 hover:text-white rounded-lg transition"
+              className="p-1.5 text-gray-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 rounded-lg transition cursor-pointer"
+              title="Cancel and close form"
             >
               <X className="w-5 h-5" />
             </button>
@@ -813,19 +842,20 @@ export default function ProjectsTab({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-2 text-xs font-bold pt-2">
+          <div className="flex justify-end gap-3 text-xs font-bold pt-2">
             <button
               type="button"
               onClick={handleResetForm}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-gray-300 rounded-xl cursor-pointer transition border border-transparent"
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-gray-300 rounded-xl cursor-pointer transition border border-transparent"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 rounded-xl cursor-pointer transition"
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl cursor-pointer transition shadow-md flex items-center gap-2"
             >
-              {editingItem ? 'Update Record' : 'Save Record'}
+              <Check className="w-4 h-4" />
+              <span>{editingItem ? `Update "${editingItem.name}"` : 'Save Record'}</span>
             </button>
           </div>
         </form>
@@ -891,24 +921,26 @@ export default function ProjectsTab({
                   </div>
                 </div>
 
-                {/* Floating Edit/Delete Actions overlay */}
-                <div className="absolute top-4 right-4 flex items-center gap-1.5 z-20">
+                {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
+                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
                   <button 
                     onClick={() => handleStartEdit(item)}
-                    className="p-1.5 bg-[#0e0e11]/90 hover:bg-[#10b981]/15 border border-slate-800 text-gray-400 hover:text-emerald-400 rounded-lg cursor-pointer transition select-none"
-                    title="Edit document"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                    title={`Edit ${item.name}`}
                   >
-                    <Pencil className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Edit</span>
                   </button>
                   <button 
                     onClick={() => {
                       setDeleteId(item.id);
                       setDeleteName(item.name);
                     }}
-                    className="p-1.5 bg-[#0e0e11]/90 hover:bg-rose-950 border border-slate-800 text-gray-400 hover:text-rose-400 rounded-lg cursor-pointer transition select-none"
-                    title="Remove document"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                    title={`Delete ${item.name}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Delete</span>
                   </button>
                 </div>
               </div>
@@ -975,24 +1007,26 @@ export default function ProjectsTab({
                   </div>
                 )}
 
-                {/* Floating Edit/Delete Actions overlay - always visible */}
-                <div className="absolute top-4 right-4 flex items-center gap-1.5 z-20">
+                {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
+                <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
                   <button 
                     onClick={() => handleStartEdit(item)}
-                    className="p-1.5 bg-[#0e0e11]/90 hover:bg-[#10b981]/15 border border-slate-800 text-gray-400 hover:text-emerald-400 rounded-lg cursor-pointer transition select-none"
-                    title="Edit entry"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                    title={`Edit ${item.name}`}
                   >
-                    <Pencil className="w-3.5 h-3.5" />
+                    <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Edit</span>
                   </button>
                   <button 
                     onClick={() => {
                       setDeleteId(item.id);
                       setDeleteName(item.name);
                     }}
-                    className="p-1.5 bg-[#0e0e11]/90 hover:bg-rose-950 border border-slate-800 text-gray-400 hover:text-rose-400 rounded-lg cursor-pointer transition select-none"
-                    title="Remove asset"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
+                    title={`Delete ${item.name}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Delete</span>
                   </button>
                 </div>
               </div>
@@ -1123,6 +1157,28 @@ export default function ProjectsTab({
                       <ExternalLink className="w-3.5 h-3.5 shrink-0" />
                     </a>
                   )}
+
+                  {/* Explicit Edit & Delete action buttons in the bottom row for 100% clarity and immediate access */}
+                  <button 
+                    onClick={() => handleStartEdit(item)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/40 text-blue-400 hover:text-blue-300 font-bold rounded-xl transition-colors text-xs cursor-pointer select-none"
+                    title={`Edit ${item.name}`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Edit</span>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      setDeleteId(item.id);
+                      setDeleteName(item.name);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/15 hover:bg-rose-600/25 border border-rose-500/40 text-rose-400 hover:text-rose-300 font-bold rounded-xl transition-colors text-xs cursor-pointer select-none"
+                    title={`Delete ${item.name}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
                 </div>
               </div>
             </div>
