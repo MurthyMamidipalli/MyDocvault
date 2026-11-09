@@ -395,51 +395,46 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
     }
   };
 
-  const handleLogoutAllPreviousDevices = async () => {
+  const handleLogoutAllPreviousDevices = () => {
     if (!previousSessionWarning?.user) return;
     const user = previousSessionWarning.user;
-    setIsValidating(true);
+    setIsValidating(false);
+
+    const curDevId = getDeviceId();
+    const curDevLabel = getDeviceLabel();
+    localStorage.setItem('nexus_device_authorized', curDevId);
+    localStorage.setItem('nexus_device_authorized_time', String(Date.now()));
+
+    const trimmedEmail = (user.email || email).trim().toLowerCase();
+    let userFirstName = user.user_metadata?.first_name || trimmedEmail.split('@')[0];
+    let userLastName = user.user_metadata?.last_name || '';
     try {
-      const curDevId = getDeviceId();
-      const curDevLabel = getDeviceLabel();
-      // Revoke all other device sessions on Supabase Auth
-      await supabase.auth.signOut({ scope: 'others' });
-      // Stamp this present device as the authorized active session
-      await supabase.auth.updateUser({
-        data: {
-          active_device_id: curDevId,
-          active_device_label: curDevLabel,
-          active_device_login_at: Date.now()
-        }
-      });
-      localStorage.setItem('nexus_device_authorized', curDevId);
-      localStorage.setItem('nexus_device_authorized_time', String(Date.now()));
+      const cachedP = localStorage.getItem(`${trimmedEmail}_profile`);
+      if (cachedP) {
+        const parsed = JSON.parse(cachedP);
+        if (parsed.firstName) userFirstName = parsed.firstName;
+        if (parsed.lastName) userLastName = parsed.lastName;
+      }
+    } catch (_) {}
 
-      const trimmedEmail = (user.email || email).trim().toLowerCase();
-      let userFirstName = user.user_metadata?.first_name || trimmedEmail.split('@')[0];
-      let userLastName = user.user_metadata?.last_name || '';
-      try {
-        const cachedP = localStorage.getItem(`${trimmedEmail}_profile`);
-        if (cachedP) {
-          const parsed = JSON.parse(cachedP);
-          if (parsed.firstName) userFirstName = parsed.firstName;
-          if (parsed.lastName) userLastName = parsed.lastName;
-        }
-      } catch (_) {}
+    setPreviousSessionWarning(null);
+    triggerToast(`Old device logged out. Present device is now active! Welcome ${userFirstName}!`);
+    onLoginSuccess({
+      id: user.id,
+      email: trimmedEmail,
+      firstName: userFirstName,
+      lastName: userLastName,
+    });
 
-      setPreviousSessionWarning(null);
-      triggerToast(`Old device logged out. Present device is now active! Welcome ${userFirstName}!`);
-      onLoginSuccess({
-        id: user.id,
-        email: trimmedEmail,
-        firstName: userFirstName,
-        lastName: userLastName,
-      });
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to logout previous sessions. Please try again.');
-    } finally {
-      setIsValidating(false);
-    }
+    // Run remote session invalidations in the background without blocking the UI
+    supabase.auth.signOut({ scope: 'others' }).catch(() => {});
+    supabase.auth.updateUser({
+      data: {
+        active_device_id: curDevId,
+        active_device_label: curDevLabel,
+        active_device_login_at: Date.now()
+      }
+    }).catch(() => {});
   };
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -490,8 +485,8 @@ export default function AuthPage({ onLoginSuccess, triggerToast }: AuthPageProps
       // No conflicting session: stamp this present device and proceed
       localStorage.setItem('nexus_device_authorized', curDevId);
       localStorage.setItem('nexus_device_authorized_time', String(Date.now()));
-      await supabase.auth.signOut({ scope: 'others' }).catch(() => {});
-      await supabase.auth.updateUser({
+      supabase.auth.signOut({ scope: 'others' }).catch(() => {});
+      supabase.auth.updateUser({
         data: {
           active_device_id: curDevId,
           active_device_label: getDeviceLabel(),

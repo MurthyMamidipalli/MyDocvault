@@ -1385,15 +1385,6 @@ export default function App() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         const u = session.user;
-        const curDevId = getDeviceId();
-        const activeDevId = u.user_metadata?.active_device_id;
-        
-        // If there's an active device on record and it doesn't match this present device,
-        // and this device hasn't been authorized yet, DO NOT auto-login - let AuthPage show option to logout other device!
-        if (activeDevId && activeDevId !== curDevId && localStorage.getItem('nexus_device_authorized') !== curDevId) {
-          return;
-        }
-
         const mappedUser = {
           id: u.id,
           email: u.email || '',
@@ -1407,21 +1398,13 @@ export default function App() {
         }
         setCurrentUser(mappedUser);
         localStorage.setItem('nexus_current_user', JSON.stringify(mappedUser));
+        localStorage.setItem('nexus_device_authorized', getDeviceId());
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const u = session.user;
-        const curDevId = getDeviceId();
-        const activeDevId = u.user_metadata?.active_device_id;
-
-        // If another device is active and this present device hasn't been authorized yet,
-        // do not auto-set currentUser so AuthPage can display "Logout old login / another device"
-        if (activeDevId && activeDevId !== curDevId && localStorage.getItem('nexus_device_authorized') !== curDevId) {
-          return;
-        }
-
         const mappedUser = {
           id: u.id,
           email: u.email || '',
@@ -1435,6 +1418,7 @@ export default function App() {
         }
         setCurrentUser(mappedUser);
         localStorage.setItem('nexus_current_user', JSON.stringify(mappedUser));
+        localStorage.setItem('nexus_device_authorized', getDeviceId());
       } else if (_event === 'SIGNED_OUT') {
         setCurrentUser(null);
         localStorage.removeItem('nexus_current_user');
@@ -1660,91 +1644,6 @@ export default function App() {
       triggerToast('✅ Other devices logged out successfully.');
     }
   };
-
-  // Periodic active device validator: If another device logs in, disconnect this old session
-  useEffect(() => {
-    if (!currentUser?.email && !currentUser?.id) return;
-    const curDevId = getDeviceId();
-
-    const verifySingleActiveDeviceSession = async () => {
-      try {
-        const lastAuthTime = Number(localStorage.getItem('nexus_device_authorized_time') || 0);
-        // Grace period: allow 15 seconds after login on this present device before checking
-        if (Date.now() - lastAuthTime < 15000) {
-          return;
-        }
-
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const remoteDevId = user.user_metadata?.active_device_id;
-        if (remoteDevId && remoteDevId !== curDevId) {
-          triggerToast('⚠️ Account signed in on another device. Disconnecting old session...');
-          setTimeout(() => {
-            handleUserLogout();
-            alert('Logged out: Your account was logged in from another device.');
-          }, 600);
-        }
-      } catch (_) {}
-    };
-
-    const interval = setInterval(verifySingleActiveDeviceSession, 12000);
-    const onWindowFocus = () => { verifySingleActiveDeviceSession(); };
-    window.addEventListener('focus', onWindowFocus);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', onWindowFocus);
-    };
-  }, [currentUser?.email, currentUser?.id]);
-
-  // Global Right-Click Page Context Menu (Open in New Tab, New Window, Incognito Window, Reload)
-  const [globalContextMenu, setGlobalContextMenu] = useState<{
-    visible: boolean;
-    x: number;
-    y: number;
-  }>({ visible: false, x: 0, y: 0 });
-
-  useEffect(() => {
-    const handleContextMenu = (e: MouseEvent) => {
-      // If right-clicked on an image inside notepad editor, let notepad's image menu handle it
-      const target = e.target as HTMLElement;
-      if (target && target.tagName === 'IMG' && target.closest('.notepad-editor-surface')) {
-        return;
-      }
-      e.preventDefault();
-      const menuWidth = 240;
-      const menuHeight = 190;
-      const posX = e.clientX + menuWidth > window.innerWidth ? window.innerWidth - menuWidth - 12 : e.clientX;
-      const posY = e.clientY + menuHeight > window.innerHeight ? window.innerHeight - menuHeight - 12 : e.clientY;
-      setGlobalContextMenu({
-        visible: true,
-        x: Math.max(10, posX),
-        y: Math.max(10, posY)
-      });
-    };
-
-    const closeContextMenu = () => {
-      setGlobalContextMenu(prev => prev.visible ? { ...prev, visible: false } : prev);
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setGlobalContextMenu(prev => prev.visible ? { ...prev, visible: false } : prev);
-      }
-    };
-
-    window.addEventListener('contextmenu', handleContextMenu);
-    window.addEventListener('click', closeContextMenu);
-    window.addEventListener('scroll', closeContextMenu, true);
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('contextmenu', handleContextMenu);
-      window.removeEventListener('click', closeContextMenu);
-      window.removeEventListener('scroll', closeContextMenu, true);
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
 
   // Styled custom modal dialog to bypass native iframe confirm blocking
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -8405,69 +8304,6 @@ export default function App() {
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* 5. GLOBAL PAGE RIGHT-CLICK CONTEXT MENU */}
-      {globalContextMenu.visible && (
-        <div 
-          className="fixed z-[999999] bg-[#0c0d12]/95 border border-slate-750/90 rounded-2xl shadow-2xl p-1.5 w-60 animate-fade-in backdrop-blur-2xl text-left font-sans select-none"
-          style={{ top: `${globalContextMenu.y}px`, left: `${globalContextMenu.x}px` }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-3 py-1.5 border-b border-slate-800/80 mb-1 flex items-center justify-between">
-            <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Page Options</span>
-            <span className="text-[9px] font-mono text-emerald-400 bg-emerald-950/70 border border-emerald-500/30 px-1.5 py-0.5 rounded font-semibold capitalize">{activeTab}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              window.open(window.location.href, '_blank');
-              setGlobalContextMenu(prev => ({ ...prev, visible: false }));
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
-            <span>Open in New Tab</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              window.open(window.location.href, '_blank', 'width=1280,height=800,resizable=yes');
-              setGlobalContextMenu(prev => ({ ...prev, visible: false }));
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
-          >
-            <Laptop className="w-3.5 h-3.5 text-purple-400" />
-            <span>Open in New Window</span>
-          </button>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(window.location.href);
-                triggerToast('📋 URL copied! Press Ctrl+Shift+N (Cmd+Shift+N on Mac) and paste in Incognito window.');
-              } catch (_) {
-                triggerToast('Copy link to open in Incognito window.');
-              }
-              setGlobalContextMenu(prev => ({ ...prev, visible: false }));
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-gray-200 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
-          >
-            <Shield className="w-3.5 h-3.5 text-amber-400" />
-            <span>Open Incognito Window</span>
-          </button>
-          <div className="my-1 border-t border-slate-800/60" />
-          <button
-            type="button"
-            onClick={() => {
-              window.location.reload();
-            }}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs font-semibold text-gray-400 hover:text-white hover:bg-slate-800/80 rounded-xl transition cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-gray-400" />
-            <span>Reload Page</span>
-          </button>
         </div>
       )}
 
