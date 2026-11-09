@@ -883,6 +883,8 @@ export default function App() {
   const isCertsRestoringRef = useRef<boolean>(true);
   const isProjsRestoringRef = useRef<boolean>(true);
   const loadProjectsAndProductsRef = useRef<(() => Promise<void>) | null>(null);
+  const loadCertificationsRef = useRef<(() => Promise<void>) | null>(null);
+  const loadSupabaseUserDataRef = useRef<(() => Promise<void>) | null>(null);
 
   // Enforce clean slate ONCE initially to secure empty-by-default behavior
   if (!localStorage.getItem('nexus_empty_slate_initialized_v2')) {
@@ -1519,7 +1521,20 @@ export default function App() {
     setProfile(loadedProf);
     setSkills(deduplicateSkills(getLocal('skills', isUserLoggedIn ? [] : INITIAL_SKILLS)));
     setExperience(deduplicateExperience(getLocal('experience', isUserLoggedIn ? [] : INITIAL_EXPERIENCE)));
-    setCertifications(deduplicateCertifications(getLocal('certs', isUserLoggedIn ? [] : INITIAL_CERTIFICATIONS)));
+    setCertifications(prev => {
+      const local = getLocal('certs', isUserLoggedIn ? [] : INITIAL_CERTIFICATIONS);
+      const existing = prev || [];
+      const merged = local.map((c: any) => {
+        const match = existing.find(e => e && (e.id === c.id || toUUID(e.id) === toUUID(c.id)));
+        return {
+          ...c,
+          fileUrl: match?.fileUrl || c.fileUrl,
+          fileName: match?.fileName || c.fileName
+        };
+      });
+      const extra = existing.filter(e => e && !local.some((c: any) => c && (c.id === e.id || toUUID(c.id) === toUUID(e.id))));
+      return deduplicateCertifications([...merged, ...extra]);
+    });
     setProjects(prev => {
       const local = getLocal('projects', isUserLoggedIn ? [] : INITIAL_PROJECTS);
       const existing = prev || [];
@@ -1883,7 +1898,12 @@ export default function App() {
       const email = currentUser.email.toLowerCase().trim();
       if (isCertsRestoringRef.current) return;
       safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(certifications));
-      heavyStorage.set(`${email}_certs`, certifications).catch(e => {});
+      heavyStorage.get(`${email}_certs`).then(existing => {
+        const merged = deduplicateCertifications([...(certifications || []), ...(Array.isArray(existing) ? existing : [])]);
+        heavyStorage.set(`${email}_certs`, merged).catch(() => {});
+      }).catch(() => {
+        heavyStorage.set(`${email}_certs`, certifications).catch(() => {});
+      });
     }
   }, [certifications, currentUser]);
 
@@ -2282,6 +2302,7 @@ export default function App() {
     resetUserDataState(email, `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim());
 
     const loadSupabaseUserData = async () => {
+      loadSupabaseUserDataRef.current = loadSupabaseUserData;
       // Ensure Supabase Auth session is active so auth token is attached to requests
       let userId: string | null = null;
       try {
@@ -2876,19 +2897,62 @@ export default function App() {
 
         // 7. Certifications Loader
         const loadCertifications = async () => {
+          loadCertificationsRef.current = loadCertifications;
           try {
+            let activeUserId = userId;
+            if (!activeUserId) {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user?.id) activeUserId = session.user.id;
+              } catch (_) {}
+              if (!activeUserId && currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
+                activeUserId = currentUser.id;
+              }
+              if (!activeUserId && email) {
+                try {
+                  const { data: p } = await supabase.from('profiles').select('user_id').eq('email', email).maybeSingle();
+                  if (p?.user_id) activeUserId = p.user_id;
+                } catch (_) {}
+              }
+            }
+            if (activeUserId) userId = activeUserId;
+
             const { data: cData } = await supabase.from('certifications').select('*').eq('user_id', userId);
+            let mapped: Certification[] = [];
             if (cData && Array.isArray(cData)) {
-              const mapped = cData.map(c => {
+              mapped = cData.map(c => {
                 const dVal = c.issue_date || c.date_issued || c.dateIssued || c.issueDate || '';
                 let certType = c.type;
                 let certPct = c.percentage || '';
+                let certFileName = c.file_name || c.fileName || '';
                 let certDesc = c.description || '';
+
+                if (certDesc.includes('<!--type:')) {
+                  const match = certDesc.match(/<!--type:([\s\S]*?)-->/);
+                  if (match) {
+                    certType = match[1].trim();
+                    certDesc = certDesc.replace(/<!--type:[\s\S]*?-->/g, '').trim();
+                  }
+                }
+                if (certDesc.includes('<!--percentage:')) {
+                  const match = certDesc.match(/<!--percentage:([\s\S]*?)-->/);
+                  if (match) {
+                    certPct = match[1].trim();
+                    certDesc = certDesc.replace(/<!--percentage:[\s\S]*?-->/g, '').trim();
+                  }
+                }
+                if (certDesc.includes('<!--filename:')) {
+                  const match = certDesc.match(/<!--filename:([\s\S]*?)-->/);
+                  if (match) {
+                    if (!certFileName) certFileName = match[1].trim();
+                    certDesc = certDesc.replace(/<!--filename:[\s\S]*?-->/g, '').trim();
+                  }
+                }
                 if (c.description && typeof c.description === 'string' && c.description.startsWith('{')) {
                   try {
                     const parsed = JSON.parse(c.description);
-                    if (parsed.type) certType = parsed.type;
-                    if (parsed.percentage) certPct = parsed.percentage;
+                    if (parsed.type && !certType) certType = parsed.type;
+                    if (parsed.percentage && !certPct) certPct = parsed.percentage;
                     if (parsed.desc !== undefined) certDesc = parsed.desc;
                   } catch (_) {}
                 }
@@ -2915,23 +2979,77 @@ export default function App() {
                   expiryDate: c.expiry_date || c.expiryDate || '',
                   credentialUrl: c.credential_url || c.credentialUrl,
                   description: certDesc,
-                  fileName: c.file_name || c.fileName || '',
-                  fileUrl: c.file_url || c.fileUrl,
+                  fileName: certFileName,
+                  fileUrl: c.file_url || c.fileUrl || '',
                   storagePath: c.storage_path || c.storagePath,
                   type: certType,
                   percentage: certPct,
                   visibility: c.visibility || 'public'
                 };
               });
-              const updatedCerts = deduplicateCertifications(mapped);
-              setCertifications(updatedCerts);
+            }
+
+            let localStoredCerts: Certification[] = [];
+            try {
+              const raw = localStorage.getItem(`${email}_certs`);
+              if (raw) localStoredCerts = JSON.parse(raw);
+            } catch (_) {}
+
+            let heavyStoredCerts: Certification[] = [];
+            try {
+              const h = await heavyStorage.get(`${email}_certs`);
+              if (h && Array.isArray(h)) heavyStoredCerts = h;
+            } catch (_) {}
+
+            const allCerts = deduplicateCertifications([
+              ...heavyStoredCerts,
+              ...mapped,
+              ...localStoredCerts,
+              ...(certifications || [])
+            ]);
+
+            if (allCerts.length > 0 || mapped.length > 0) {
+              setCertifications(allCerts);
               if (currentUser?.email) {
-                safeLocalStorageSetItem(`${currentUser.email.toLowerCase().trim()}_certs`, JSON.stringify(updatedCerts));
-                heavyStorage.set(`${currentUser.email.toLowerCase().trim()}_certs`, updatedCerts).catch(() => {});
+                const em = currentUser.email.toLowerCase().trim();
+                safeLocalStorageSetItem(`${em}_certs`, JSON.stringify(allCerts));
+                heavyStorage.set(`${em}_certs`, allCerts).catch(() => {});
+              }
+            }
+
+            // Auto-sync back to Supabase if local/heavyStorage had documents that remote lacked
+            if (userId) {
+              for (const c of allCerts) {
+                const r = mapped.find(rem => rem.id === c.id || toUUID(rem.id) === toUUID(c.id));
+                if (c && c.fileUrl && (!r || !r.fileUrl)) {
+                  try {
+                    const rawDesc = (c.description || '')
+                      .replace(/<!--type:[\s\S]*?-->/g, '')
+                      .replace(/<!--percentage:[\s\S]*?-->/g, '')
+                      .replace(/<!--filename:[\s\S]*?-->/g, '')
+                      .trim();
+                    const descWithMeta = `${rawDesc}\n<!--type:${c.type || 'study'}-->${c.percentage ? `\n<!--percentage:${c.percentage}-->` : ''}${c.fileName ? `\n<!--filename:${c.fileName}-->` : ''}`.trim();
+                    await supabase.from('certifications').upsert({
+                      id: ensureUUID(c.id),
+                      user_id: userId,
+                      title: c.title,
+                      issuer: c.issuer,
+                      credential_id: c.credentialId,
+                      issue_date: c.dateIssued || c.issueDate || '',
+                      description: descWithMeta,
+                      file_name: c.fileName || '',
+                      file_url: c.fileUrl || '',
+                      type: c.type || 'study',
+                      percentage: c.percentage || '',
+                      visibility: c.visibility || 'public'
+                    });
+                  } catch (_) {}
+                }
               }
             }
           } catch (err) { console.warn("[Supabase Certifications Load]", err); }
         };
+        loadCertificationsRef.current = loadCertifications;
 
         // 8. Experience Loader
         const loadExperience = async () => {
@@ -3559,10 +3677,12 @@ export default function App() {
     loadSupabaseUserData();
   }, [currentUser]);
 
-  // Cross-device and tab synchronization for projects, products, and others
+  // Cross-device and tab synchronization for certifications, projects, products, and others
   useEffect(() => {
     if (activeTab === 'projects' && currentUser?.email) {
       loadProjectsAndProductsRef.current?.();
+    } else if (activeTab === 'certifications' && currentUser?.email) {
+      loadCertificationsRef.current?.();
     }
   }, [activeTab, currentUser]);
 
@@ -3570,6 +3690,8 @@ export default function App() {
     const handleWindowFocus = () => {
       if (currentUser?.email && !isProjsRestoringRef.current) {
         loadProjectsAndProductsRef.current?.();
+        loadCertificationsRef.current?.();
+        loadSupabaseUserDataRef.current?.();
       }
     };
     window.addEventListener('focus', handleWindowFocus);
@@ -4485,10 +4607,11 @@ export default function App() {
   const handleAddCert = async (newCert: Omit<Certification, 'id'>) => {
     const id = generateUUID();
     const dVal = newCert.dateIssued || newCert.issueDate || '';
-    const cert: Certification = { ...newCert, id, dateIssued: dVal, issueDate: dVal };
+    const certType = newCert.type || 'study';
+    const cert: Certification = { ...newCert, id, type: certType, dateIssued: dVal, issueDate: dVal };
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
     setCertifications(prev => {
-      const updatedCerts = deduplicateCertifications([cert, ...prev]);
+      const updatedCerts = deduplicateCertifications([cert, ...(prev || [])]);
       if (email) {
         safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
         heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
@@ -4499,6 +4622,13 @@ export default function App() {
 
     const userId = await getActiveUserId();
     if (userId) {
+      const rawDesc = (newCert.description || '')
+        .replace(/<!--type:[\s\S]*?-->/g, '')
+        .replace(/<!--percentage:[\s\S]*?-->/g, '')
+        .replace(/<!--filename:[\s\S]*?-->/g, '')
+        .trim();
+      const descWithMeta = `${rawDesc}\n<!--type:${certType}-->${newCert.percentage ? `\n<!--percentage:${newCert.percentage}-->` : ''}${newCert.fileName ? `\n<!--filename:${newCert.fileName}-->` : ''}`.trim();
+
       const payload: any = {
         id,
         user_id: userId,
@@ -4508,33 +4638,21 @@ export default function App() {
         issue_date: dVal,
         expiry_date: newCert.expirationDate || newCert.expiryDate,
         credential_url: newCert.credentialUrl,
-        description: newCert.description,
-        file_name: newCert.fileName,
-        file_url: newCert.fileUrl,
+        description: descWithMeta,
+        file_name: newCert.fileName || '',
+        file_url: newCert.fileUrl || '',
         storage_path: newCert.storagePath,
-        type: newCert.type || 'study',
-        percentage: newCert.percentage,
+        type: certType,
+        percentage: newCert.percentage || '',
         visibility: newCert.visibility || 'public'
       };
-      let insertPayload = { ...payload };
-      if (insertPayload.file_url && insertPayload.file_url.startsWith('data:') && insertPayload.file_url.length > 50000) {
-        insertPayload.file_url = '';
-      }
+
       try {
-        const { error: insErr } = await supabase.from('certifications').upsert(insertPayload);
+        const { error: insErr } = await supabase.from('certifications').upsert(payload);
         if (insErr) {
-          console.warn("[Supabase Add Cert Warning]", insErr);
-          let retryPayload = { ...insertPayload };
-          if (retryPayload.file_url) retryPayload.file_url = '';
-          const { error: retryErr } = await supabase.from('certifications').upsert(retryPayload);
-          if (retryErr) {
-            // If schema lacks type or percentage columns, stash in description JSON
-            const meta = { type: newCert.type || 'study', percentage: newCert.percentage || '', desc: newCert.description || '' };
-            delete retryPayload.type;
-            delete retryPayload.percentage;
-            retryPayload.description = JSON.stringify(meta);
-            await supabase.from('certifications').upsert(retryPayload);
-          }
+          console.warn("[Supabase Add Cert Warning, retrying without optional columns]", insErr);
+          const { type, percentage, ...retryPayload } = payload;
+          await supabase.from('certifications').upsert(retryPayload);
         }
       } catch (err) {
         console.warn("[Supabase Add Cert Exception]", err);
@@ -4583,24 +4701,39 @@ export default function App() {
   };
 
   const handleUpdateCert = async (updatedCert: Certification) => {
-    const targetId = ensureUUID(updatedCert.id);
+    const rawId = updatedCert.id;
+    const targetId = rawId ? ensureUUID(rawId) : generateUUID();
     const dVal = updatedCert.dateIssued || updatedCert.issueDate || '';
-    const item = { ...updatedCert, id: targetId, dateIssued: dVal, issueDate: dVal };
+    const certType = updatedCert.type || 'study';
+    const item: Certification = { ...updatedCert, id: rawId || targetId, type: certType, dateIssued: dVal, issueDate: dVal };
     const email = currentUser?.email?.toLowerCase().trim() || getCurrentUserEmail();
+
     setCertifications(prev => {
-      const updatedCerts = prev.map(c => (c.id === updatedCert.id || c.id === targetId) ? item : c);
+      const matchIndex = (prev || []).findIndex(c => 
+        c && (c.id === rawId || c.id === targetId || toUUID(c.id) === targetId || (rawId && toUUID(c.id) === toUUID(rawId)))
+      );
+      const next = matchIndex >= 0 
+        ? (prev || []).map((c, i) => i === matchIndex ? item : c)
+        : [item, ...(prev || [])];
       if (email) {
-        safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(updatedCerts));
-        heavyStorage.set(`${email}_certs`, updatedCerts).catch(e => {});
+        safeLocalStorageSetItem(`${email}_certs`, JSON.stringify(next));
+        heavyStorage.set(`${email}_certs`, next).catch(e => {});
       }
-      return updatedCerts;
+      return next;
     });
-    triggerToast(`Updated file attachment for: ${updatedCert.title}`);
+    triggerToast(`Updated credential: ${updatedCert.title}`);
 
     const userId = await getActiveUserId();
     if (userId) {
+      const rawDesc = (updatedCert.description || '')
+        .replace(/<!--type:[\s\S]*?-->/g, '')
+        .replace(/<!--percentage:[\s\S]*?-->/g, '')
+        .replace(/<!--filename:[\s\S]*?-->/g, '')
+        .trim();
+      const descWithMeta = `${rawDesc}\n<!--type:${certType}-->${updatedCert.percentage ? `\n<!--percentage:${updatedCert.percentage}-->` : ''}${updatedCert.fileName ? `\n<!--filename:${updatedCert.fileName}-->` : ''}`.trim();
+
       const payload: any = {
-        id: targetId,
+        id: toUUID(rawId || targetId),
         user_id: userId,
         title: updatedCert.title,
         issuer: updatedCert.issuer,
@@ -4608,32 +4741,21 @@ export default function App() {
         issue_date: dVal,
         expiry_date: updatedCert.expirationDate || updatedCert.expiryDate,
         credential_url: updatedCert.credentialUrl,
-        description: updatedCert.description,
-        file_name: updatedCert.fileName,
-        file_url: updatedCert.fileUrl,
+        description: descWithMeta,
+        file_name: updatedCert.fileName || '',
+        file_url: updatedCert.fileUrl || '',
         storage_path: updatedCert.storagePath,
-        type: updatedCert.type || 'study',
-        percentage: updatedCert.percentage,
+        type: certType,
+        percentage: updatedCert.percentage || '',
         visibility: updatedCert.visibility || 'public'
       };
-      let updatePayload = { ...payload };
-      if (updatePayload.file_url && updatePayload.file_url.startsWith('data:') && updatePayload.file_url.length > 50000) {
-        updatePayload.file_url = '';
-      }
+
       try {
-        const { error: upErr } = await supabase.from('certifications').upsert(updatePayload);
+        const { error: upErr } = await supabase.from('certifications').upsert(payload);
         if (upErr) {
-          console.warn("[Supabase Update Cert Warning]", upErr);
-          let retryPayload = { ...updatePayload };
-          if (retryPayload.file_url) retryPayload.file_url = '';
-          const { error: retryErr } = await supabase.from('certifications').upsert(retryPayload);
-          if (retryErr) {
-            const meta = { type: updatedCert.type || 'study', percentage: updatedCert.percentage || '', desc: updatedCert.description || '' };
-            delete retryPayload.type;
-            delete retryPayload.percentage;
-            retryPayload.description = JSON.stringify(meta);
-            await supabase.from('certifications').upsert(retryPayload);
-          }
+          console.warn("[Supabase Update Cert Warning, retrying without optional columns]", upErr);
+          const { type, percentage, ...retryPayload } = payload;
+          await supabase.from('certifications').upsert(retryPayload);
         }
       } catch (err) {
         console.warn("[Supabase Update Cert Exception]", err);
@@ -7652,9 +7774,18 @@ export default function App() {
 
             return (
               <React.Fragment key={nav.id}>
-                <button
+                <a
+                  href={`#${nav.id}`}
                   id={`sidebar-nav-${nav.id}`}
-                  onClick={() => setActiveTab(nav.id)}
+                  onClick={(e) => {
+                    if (!e.ctrlKey && !e.metaKey && e.button === 0) {
+                      e.preventDefault();
+                      setActiveTab(nav.id);
+                      try {
+                        window.history.pushState(null, '', `#${nav.id}`);
+                      } catch (_) {}
+                    }
+                  }}
                   title={nav.label}
                   className={`w-full group flex items-center ${isSidebarOpen ? 'justify-between px-3' : 'justify-center px-2'} py-2.5 rounded-xl transition-all duration-200 font-semibold cursor-pointer border ${
                     isActive 
@@ -7678,7 +7809,7 @@ export default function App() {
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-700 opacity-0 group-hover:opacity-100 group-hover:bg-emerald-400/70 shrink-0 transition-opacity duration-150" />
                     )
                   )}
-                </button>
+                </a>
 
                 {/* Elegant subtle divider between top pinned items (Home & Profile) and alphabetical modules */}
                 {isDividerAfter && isSidebarOpen && (
@@ -7701,8 +7832,17 @@ export default function App() {
 
         {/* Sidebar Settings & Logout Options at bottom */}
         <div className={`p-3 border-t border-slate-900/80 bg-slate-950/20 space-y-1.5 ${isSidebarOpen ? '' : 'flex flex-col items-center'}`}>
-          <button
-            onClick={() => setActiveTab('settings')}
+          <a
+            href="#settings"
+            onClick={(e) => {
+              if (!e.ctrlKey && !e.metaKey && e.button === 0) {
+                e.preventDefault();
+                setActiveTab('settings');
+                try {
+                  window.history.pushState(null, '', '#settings');
+                } catch (_) {}
+              }
+            }}
             title="Settings"
             className={`w-full flex items-center ${isSidebarOpen ? 'gap-3.5 px-3' : 'justify-center px-2'} py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition ${
               activeTab === 'settings' 
@@ -7712,7 +7852,7 @@ export default function App() {
           >
             <Settings className="w-4 h-4 text-gray-500 shrink-0" />
             {isSidebarOpen && <span>Settings</span>}
-          </button>
+          </a>
 
           <button
             onClick={() => {
@@ -7768,11 +7908,18 @@ export default function App() {
             const isActive = activeTab === nav.id;
 
             return (
-              <button
+              <a
                 key={nav.id}
-                onClick={() => {
-                  setActiveTab(nav.id);
-                  setIsMobileMenuOpen(false);
+                href={`#${nav.id}`}
+                onClick={(e) => {
+                  if (!e.ctrlKey && !e.metaKey && e.button === 0) {
+                    e.preventDefault();
+                    setActiveTab(nav.id);
+                    setIsMobileMenuOpen(false);
+                    try {
+                      window.history.pushState(null, '', `#${nav.id}`);
+                    } catch (_) {}
+                  }
                 }}
                 title={nav.label}
                 className={`w-full group flex items-center justify-between py-2.5 px-3 rounded-lg transition-all text-xs font-semibold cursor-pointer border ${
@@ -7786,21 +7933,28 @@ export default function App() {
                   <span>{nav.label}</span>
                 </div>
                 {isActive && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
-              </button>
+              </a>
             );
           })}
           
           <div className="border-t border-slate-900 pt-3 mt-2 space-y-1">
-            <button
-              onClick={() => {
-                setActiveTab('settings');
-                setIsMobileMenuOpen(false);
+            <a
+              href="#settings"
+              onClick={(e) => {
+                if (!e.ctrlKey && !e.metaKey && e.button === 0) {
+                  e.preventDefault();
+                  setActiveTab('settings');
+                  setIsMobileMenuOpen(false);
+                  try {
+                    window.history.pushState(null, '', '#settings');
+                  } catch (_) {}
+                }
               }}
               className="w-full flex items-center gap-3 py-2 px-3 rounded-lg text-xs font-semibold text-gray-400 hover:text-white hover:bg-slate-900/20 cursor-pointer"
             >
               <Settings className="w-4 h-4 shrink-0" />
               <span>Settings</span>
-            </button>
+            </a>
             <button
               onClick={() => {
                 setConfirmDialog({

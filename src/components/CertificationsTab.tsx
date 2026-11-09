@@ -16,7 +16,9 @@ import {
   EyeOff,
   CheckCircle,
   Download,
-  ChevronDown
+  ChevronDown,
+  Loader2,
+  FileCheck
 } from 'lucide-react';
 import { Certification } from '../types';
 import { openPdfInNewTab, downloadFileUrl, dataUrlToBlobUrl } from '../lib/pdfUtils';
@@ -247,6 +249,9 @@ export default function CertificationsTab({
   const [showForm, setShowForm] = useState(false);
   const [activeTab, setActiveTab] = useState<'study' | 'course' | 'grades'>('study');
   const [isDragging, setIsDragging] = useState(false);
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const [readingFileName, setReadingFileName] = useState('');
+  const [isReadingModalFile, setIsReadingModalFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modalFileInputRef = useRef<HTMLInputElement>(null);
   
@@ -254,6 +259,7 @@ export default function CertificationsTab({
     if (!previewItem || !onUpdateCertification) return;
     const file = e.target.files?.[0];
     if (file) {
+      setIsReadingModalFile(true);
       const reader = new FileReader();
       reader.onloadend = () => {
         const updatedCert: Certification = {
@@ -263,7 +269,9 @@ export default function CertificationsTab({
         };
         onUpdateCertification(updatedCert);
         setPreviewItem(updatedCert);
+        setIsReadingModalFile(false);
       };
+      reader.onerror = () => setIsReadingModalFile(false);
       reader.readAsDataURL(file);
     }
   };
@@ -365,19 +373,30 @@ export default function CertificationsTab({
     setShowForm(false);
   };
 
+  const processUploadedFile = (file: File) => {
+    if (!file) return;
+    setIsReadingFile(true);
+    setReadingFileName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData(prev => ({ 
+        ...prev, 
+        fileName: file.name, 
+        fileUrl: reader.result as string 
+      }));
+      setIsReadingFile(false);
+      setReadingFileName('');
+    };
+    reader.onerror = () => {
+      setIsReadingFile(false);
+      setReadingFileName('');
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ 
-          ...prev, 
-          fileName: file.name, 
-          fileUrl: reader.result as string 
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) processUploadedFile(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -393,17 +412,7 @@ export default function CertificationsTab({
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({ 
-          ...prev, 
-          fileName: file.name, 
-          fileUrl: reader.result as string 
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) processUploadedFile(file);
   };
 
   const triggerFileSelect = () => {
@@ -421,9 +430,17 @@ export default function CertificationsTab({
     return dStr;
   };
 
-  // Filter listings based on the current toggle (study vs course)
+  const normalizeCertType = (t?: string): 'study' | 'course' | 'grades' => {
+    if (!t) return 'study';
+    const s = t.trim().toLowerCase();
+    if (s === 'course' || s === 'courses') return 'course';
+    if (s === 'grades' || s === 'grade' || s === 'marks' || s === 'memo') return 'grades';
+    return 'study';
+  };
+
+  // Filter listings based on the current toggle (study vs course vs grades)
   const filteredCerts = certifications.filter(c => {
-    const type = c.type || 'study';
+    const type = normalizeCertType(c.type);
     return type === activeTab;
   });
 
@@ -788,18 +805,26 @@ export default function CertificationsTab({
                   type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
-                  accept=".pdf,.png,.jpg,.jpeg"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
                   className="hidden"
                 />
 
-                {formData.fileName ? (
+                {isReadingFile ? (
+                  <div className="flex flex-col items-center justify-center space-y-2 py-3 text-center">
+                    <Loader2 className="w-7 h-7 text-emerald-400 animate-spin" />
+                    <p className="text-xs font-mono text-emerald-300">Reading {readingFileName}...</p>
+                    <span className="text-[10px] text-gray-500 font-mono">Preparing document attachment...</span>
+                  </div>
+                ) : formData.fileName ? (
                   <div className="flex flex-col items-center space-y-2 text-center py-1">
-                    <FileText className="w-8 h-8 text-emerald-400" />
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      <FileCheck className="w-8 h-8 text-emerald-400 stroke-[2]" />
+                    </div>
                     <div>
                       <p className="text-xs font-mono font-bold text-white max-w-[280px] truncate">
                         {formData.fileName}
                       </p>
-                      <p className="text-[10px] text-emerald-400 mt-0.5 font-sans">Attached successfully ✔</p>
+                      <p className="text-[10px] text-emerald-400 mt-0.5 font-sans font-semibold">✓ Document Ready to Save</p>
                     </div>
                     <button
                       type="button"
@@ -813,8 +838,9 @@ export default function CertificationsTab({
                   <div className="flex flex-col items-center justify-center space-y-2 py-2">
                     <Upload className="w-7 h-7 text-gray-500" />
                     <p className="text-xs font-sans text-gray-400">
-                      Upload Certificate or Grade Sheet PDF/Image (Max 20MB)
+                      Upload Document (PDF, Word, Excel, Image • Unlimited)
                     </p>
+                    <span className="text-[10px] text-gray-500 font-mono">Click or drag & drop file here</span>
                   </div>
                 )}
               </div>
@@ -917,7 +943,7 @@ export default function CertificationsTab({
               ref={modalFileInputRef}
               onChange={handleModalFileChange}
               className="hidden"
-              accept=".pdf,image/*"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
             />
 
             {/* Document Action Toolbar */}
@@ -932,72 +958,157 @@ export default function CertificationsTab({
               {/* Upload action button inside the modal */}
               <button
                 type="button"
+                disabled={isReadingModalFile}
                 onClick={() => modalFileInputRef.current?.click()}
-                className="bg-[#10b981] hover:bg-emerald-600 text-slate-950 px-4 py-2 rounded-xl text-xs font-sans font-bold transition-all duration-150 cursor-pointer flex items-center justify-center gap-2 select-none h-fit active:scale-[0.98] shrink-0"
+                className="bg-[#10b981] hover:bg-emerald-600 disabled:opacity-50 text-slate-950 px-4 py-2 rounded-xl text-xs font-sans font-bold transition-all duration-150 cursor-pointer flex items-center justify-center gap-2 select-none h-fit active:scale-[0.98] shrink-0"
               >
-                <Upload className="w-3.5 h-3.5 text-slate-950" />
-                <span>
-                  {previewItem.fileUrl && previewItem.fileUrl.startsWith('data:') 
-                    ? "Replace Original Doc" 
-                    : "Attach Original Document"
-                  }
-                </span>
+                {isReadingModalFile ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                    <span>Attaching file...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5 text-slate-950" />
+                    <span>
+                      {previewItem.fileUrl && previewItem.fileUrl.startsWith('data:') 
+                        ? "Replace Original Doc" 
+                        : "Attach Original Document"
+                      }
+                    </span>
+                  </>
+                )}
               </button>
             </div>
 
             {/* Document Content View Area */}
             <div className="space-y-4">
-              
-              {/* RENDER ORIGINAL UPLOAD_FILE OR GENERATED PDF RECORD */}
-              {(previewItem.fileUrl || previewItem.title) ? (
-                <div className="space-y-3">
-                  <div className="border border-slate-850 bg-[#0c0c0e] rounded-2xl relative shadow-inner overflow-hidden flex flex-col justify-center items-center w-full" style={{ minHeight: '550px' }}>
-                    
-                    {/* Render container based on PDF vs Image */}
-                    {(!previewItem.fileUrl || previewItem.fileUrl.startsWith('data:application/pdf') || previewItem.fileName?.toLowerCase().endsWith('.pdf') || previewItem.type === 'study') ? (
-                      <div className="w-full h-full p-4 flex flex-col space-y-3" style={{ minHeight: '520px' }}>
-                        <iframe 
-                          src={dataUrlToBlobUrl(previewItem.fileUrl || '', previewItem.title || 'Certificate Record')} 
-                          title={previewItem.fileName || previewItem.title || 'Document PDF'} 
-                          className="w-full h-[480px] rounded-xl border border-slate-800 bg-[#18181b]" 
-                        />
-                        <div className="flex items-center justify-between text-xs text-gray-400 px-1">
-                          <span>Interactive Certificate PDF View</span>
-                          <button 
-                            onClick={() => openPdfInNewTab(previewItem.fileUrl || '', previewItem.fileName || previewItem.title || 'certificate.pdf')}
-                            className="bg-[#10b981] text-slate-950 hover:bg-emerald-600 font-sans font-bold px-4 py-2 rounded-xl transition-all duration-150 inline-flex items-center gap-2 cursor-pointer text-xs shadow-md active:scale-[0.98]"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                            <span>Open PDF in New Tab</span>
-                          </button>
-                        </div>
+              {previewItem.fileUrl ? (
+                (() => {
+                  const url = previewItem.fileUrl;
+                  const fName = previewItem.fileName || previewItem.title || 'document';
+                  const isImage = url.startsWith('data:image/') || /\.(jpe?g|png|webp|gif|svg)$/i.test(fName) || /\.(jpe?g|png|webp|gif|svg)$/i.test(url);
+                  const isOffice = /\.(docx?|xlsx?|csv|pptx?)$/i.test(fName) || /\.(docx?|xlsx?|csv|pptx?)$/i.test(url);
+
+                  return (
+                    <div className="space-y-3">
+                      <div className="border border-slate-850 bg-[#0c0c0e] rounded-2xl relative shadow-inner overflow-hidden flex flex-col justify-center items-center w-full p-3 sm:p-4" style={{ minHeight: '480px' }}>
+                        {isImage ? (
+                          <div className="w-full max-h-[520px] overflow-auto flex flex-col items-center justify-center p-3">
+                            <img 
+                              src={url} 
+                              alt={fName} 
+                              className="max-w-full max-h-[460px] object-contain rounded-xl border border-slate-800 shadow-xl"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div className="flex items-center justify-between w-full text-xs text-gray-400 px-1 pt-3">
+                              <span className="font-mono text-[11px] truncate max-w-[200px]">{fName}</span>
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={() => downloadFileUrl(url, fName)}
+                                  className="bg-slate-900 hover:bg-slate-800 text-gray-300 px-3 py-1.5 rounded-lg font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => openPdfInNewTab(url, fName)}
+                                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                  <span>Open Image</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : isOffice ? (
+                          <div className="w-full flex flex-col items-center justify-center p-8 space-y-4 text-center">
+                            <div className="p-5 bg-emerald-500/10 border border-emerald-500/25 rounded-2xl text-emerald-400">
+                              <FileText className="w-12 h-12" />
+                            </div>
+                            <div className="space-y-1">
+                              <h4 className="text-white font-bold text-base font-sans">{fName}</h4>
+                              <p className="text-xs text-gray-400 font-mono">
+                                {/\.(xlsx?|csv)$/i.test(fName) ? 'Spreadsheet (Excel / CSV)' : 'Document (Word / Office)'} • Attached Document
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => downloadFileUrl(url, fName)}
+                                className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-lg shadow-emerald-500/20 active:scale-95 transition"
+                              >
+                                <Download className="w-4 h-4" />
+                                <span>Download Document</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openPdfInNewTab(url, fName)}
+                                className="px-4 py-2.5 bg-slate-900 hover:bg-slate-850 text-gray-200 border border-slate-800 rounded-xl text-xs flex items-center gap-2 cursor-pointer transition"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                                <span>Open File</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex flex-col space-y-3" style={{ minHeight: '520px' }}>
+                            <iframe 
+                              src={dataUrlToBlobUrl(url, fName)} 
+                              title={fName} 
+                              className="w-full h-[480px] rounded-xl border border-slate-800 bg-[#18181b]" 
+                            />
+                            <div className="flex items-center justify-between text-xs text-gray-400 px-1">
+                              <span className="font-mono text-[11px] truncate max-w-[200px]">{fName}</span>
+                              <div className="flex items-center gap-2">
+                                <button 
+                                  type="button"
+                                  onClick={() => downloadFileUrl(url, fName)}
+                                  className="bg-slate-900 hover:bg-slate-800 text-gray-300 px-3 py-1.5 rounded-lg font-bold text-xs inline-flex items-center gap-1.5 cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download PDF</span>
+                                </button>
+                                <button 
+                                  type="button"
+                                  onClick={() => openPdfInNewTab(url, fName)}
+                                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs inline-flex items-center gap-1.5 cursor-pointer shadow-md"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                  <span>Open PDF in New Tab</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <div className="w-full max-h-[500px] overflow-y-auto flex items-center justify-center p-6 bg-[#0c0c0e]">
-                        <img 
-                          src={previewItem.fileUrl} 
-                          alt={previewItem.fileName || 'Uploaded Doc'} 
-                          className="max-w-full max-h-[440px] object-contain rounded-xl border border-slate-800 shadow-lg"
-                          referrerPolicy="no-referrer"
-                        />
+                      <div className="text-center font-mono text-[10px] text-gray-500">
+                        File Reference: <span className="text-gray-400">{fName}</span> (Attached Original File)
                       </div>
-                    )}
-                  </div>
-                  <div className="text-center font-mono text-[10px] text-gray-500">
-                    File Reference: <span className="text-gray-400">{previewItem.fileName || previewItem.title}</span> {previewItem.fileUrl ? '(Attached Document File)' : '(Interactive PDF Vault Record)'}
-                  </div>
-                </div>
+                    </div>
+                  );
+                })()
               ) : (
                 <div className="space-y-3">
-                  <div className="border border-slate-850 bg-[#0c0c0e] rounded-2xl relative shadow-inner p-12 flex flex-col justify-center items-center w-full text-center space-y-4" style={{ minHeight: '450px' }}>
-                    <div className="p-4 bg-emerald-500/5 rounded-full text-emerald-400 border border-emerald-500/15">
+                  <div className="border border-slate-850 bg-[#0c0c0e] rounded-2xl relative shadow-inner p-10 flex flex-col justify-center items-center w-full text-center space-y-4" style={{ minHeight: '400px' }}>
+                    <div className="p-4 bg-emerald-500/10 rounded-full text-emerald-400 border border-emerald-500/20">
                       <Upload className="w-10 h-10" />
                     </div>
                     <div className="space-y-1.5 max-w-md">
-                      <h4 className="text-white font-bold text-sm font-sans">No Original Document Attached</h4>
-                      <p className="text-xs text-gray-455 leading-relaxed font-sans">
-                        You have not attached your physical PDF or image file for this record yet. Please click the <b>Attach Original Document</b> button above to upload.
+                      <h4 className="text-white font-bold text-sm font-sans">No Physical Document Attached Yet</h4>
+                      <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                        You have not attached your PDF, Word, Excel, or image file for this record yet. Please click the button below to upload your file.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => modalFileInputRef.current?.click()}
+                        className="mt-3 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs inline-flex items-center gap-2 cursor-pointer transition shadow-md shadow-emerald-500/20 active:scale-95"
+                      >
+                        <Upload className="w-4 h-4" />
+                        <span>Attach Document (PDF, Word, Excel, Image)</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1415,13 +1526,7 @@ export default function CertificationsTab({
               <button
                 onClick={() => {
                   if (previewItem.fileUrl) {
-                    // Download actual file!
-                    const link = document.createElement('a');
-                    link.href = previewItem.fileUrl;
-                    link.download = previewItem.fileName || `${previewItem.title.replace(/\s+/g, '_')}_document.pdf`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    downloadFileUrl(previewItem.fileUrl, previewItem.fileName || `${previewItem.title.replace(/\s+/g, '_')}_document.pdf`);
                   } else {
                     // Generate and download formal security clearance transcript file (.txt)
                     const dateVal = previewItem.dateIssued || new Date().toISOString().split('T')[0];
