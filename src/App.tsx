@@ -882,6 +882,7 @@ export default function App() {
   const isDocsRestoringRef = useRef<boolean>(true);
   const isCertsRestoringRef = useRef<boolean>(true);
   const isProjsRestoringRef = useRef<boolean>(true);
+  const loadProjectsAndProductsRef = useRef<(() => Promise<void>) | null>(null);
 
   // Enforce clean slate ONCE initially to secure empty-by-default behavior
   if (!localStorage.getItem('nexus_empty_slate_initialized_v2')) {
@@ -1523,7 +1524,7 @@ export default function App() {
       const local = getLocal('projects', isUserLoggedIn ? [] : INITIAL_PROJECTS);
       const existing = prev || [];
       const merged = local.map((p: any) => {
-        const match = existing.find(e => e.id === p.id || toUUID(e.id) === toUUID(p.id));
+        const match = existing.find(e => e && (e.id === p.id || toUUID(e.id) === toUUID(p.id)));
         return {
           ...p,
           pdfUrl: match?.pdfUrl || p.pdfUrl,
@@ -1532,13 +1533,14 @@ export default function App() {
           imageUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl
         };
       });
-      return deduplicateProjects(merged);
+      const extra = existing.filter(e => e && !local.some((p: any) => p && (p.id === e.id || toUUID(p.id) === toUUID(e.id))));
+      return deduplicateProjects([...merged, ...extra]);
     });
     setProducts(prev => {
       const local = getLocal('products', []);
       const existing = prev || [];
       const merged = local.map((p: any) => {
-        const match = existing.find(e => e.id === p.id || toUUID(e.id) === toUUID(p.id));
+        const match = existing.find(e => e && (e.id === p.id || toUUID(e.id) === toUUID(p.id)));
         return {
           ...p,
           pdfUrl: match?.pdfUrl || p.pdfUrl,
@@ -1547,13 +1549,14 @@ export default function App() {
           imageUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl
         };
       });
-      return deduplicateProjects(merged);
+      const extra = existing.filter(e => e && !local.some((p: any) => p && (p.id === e.id || toUUID(p.id) === toUUID(e.id))));
+      return deduplicateProjects([...merged, ...extra]);
     });
     setOthers(prev => {
       const local = getLocal('others', []);
       const existing = prev || [];
       const merged = local.map((p: any) => {
-        const match = existing.find(e => e.id === p.id || toUUID(e.id) === toUUID(p.id));
+        const match = existing.find(e => e && (e.id === p.id || toUUID(e.id) === toUUID(p.id)));
         return {
           ...p,
           pdfUrl: match?.pdfUrl || p.pdfUrl,
@@ -1562,7 +1565,8 @@ export default function App() {
           imageUrl: match?.coverUrl || match?.imageUrl || p.coverUrl || p.imageUrl
         };
       });
-      return deduplicateProjects(merged);
+      const extra = existing.filter(e => e && !local.some((p: any) => p && (p.id === e.id || toUUID(p.id) === toUUID(e.id))));
+      return deduplicateProjects([...merged, ...extra]);
     });
     setEducation(deduplicateEducation(getLocal('education', isUserLoggedIn ? [] : INITIAL_EDUCATION)));
     setSpecializations(deduplicateSpecializations(getLocal('specializations', [])));
@@ -1912,7 +1916,12 @@ export default function App() {
       const email = currentUser.email.toLowerCase().trim();
       if (isProjsRestoringRef.current) return;
       safeLocalStorageSetItem(`${email}_projects`, JSON.stringify(projects));
-      heavyStorage.set(`${email}_projects`, projects).catch(e => {});
+      heavyStorage.get(`${email}_projects`).then(existing => {
+        const merged = deduplicateProjects([...(projects || []), ...(Array.isArray(existing) ? existing : [])]);
+        heavyStorage.set(`${email}_projects`, merged).catch(() => {});
+      }).catch(() => {
+        heavyStorage.set(`${email}_projects`, projects).catch(() => {});
+      });
     }
   }, [projects, currentUser]);
 
@@ -1921,7 +1930,12 @@ export default function App() {
       const email = currentUser.email.toLowerCase().trim();
       if (isProjsRestoringRef.current) return;
       safeLocalStorageSetItem(`${email}_products`, JSON.stringify(products));
-      heavyStorage.set(`${email}_products`, products).catch(e => {});
+      heavyStorage.get(`${email}_products`).then(existing => {
+        const merged = deduplicateProjects([...(products || []), ...(Array.isArray(existing) ? existing : [])]);
+        heavyStorage.set(`${email}_products`, merged).catch(() => {});
+      }).catch(() => {
+        heavyStorage.set(`${email}_products`, products).catch(() => {});
+      });
     }
   }, [products, currentUser]);
 
@@ -1930,7 +1944,12 @@ export default function App() {
       const email = currentUser.email.toLowerCase().trim();
       if (!isProjsRestoringRef.current) {
         safeLocalStorageSetItem(`${email}_others`, JSON.stringify(others));
-        heavyStorage.set(`${email}_others`, others).catch(e => {});
+        heavyStorage.get(`${email}_others`).then(existing => {
+          const merged = deduplicateProjects([...(others || []), ...(Array.isArray(existing) ? existing : [])]);
+          heavyStorage.set(`${email}_others`, merged).catch(() => {});
+        }).catch(() => {
+          heavyStorage.set(`${email}_others`, others).catch(() => {});
+        });
       }
     }
   }, [others, currentUser]);
@@ -3023,7 +3042,26 @@ export default function App() {
 
         // 10. Projects, Products, Others
         const loadProjectsAndProducts = async () => {
+          loadProjectsAndProductsRef.current = loadProjectsAndProducts;
           try {
+            let activeUserId = userId;
+            if (!activeUserId) {
+              try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user?.id) activeUserId = session.user.id;
+              } catch (_) {}
+              if (!activeUserId && currentUser?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUser.id)) {
+                activeUserId = currentUser.id;
+              }
+              if (!activeUserId && email) {
+                try {
+                  const { data: p } = await supabase.from('profiles').select('user_id').eq('email', email).maybeSingle();
+                  if (p?.user_id) activeUserId = p.user_id;
+                } catch (_) {}
+              }
+            }
+            if (activeUserId) userId = activeUserId;
+
             const [projRes, prodRes, othRes] = await Promise.allSettled([
               supabase.from('projects').select('*').eq('user_id', userId),
               supabase.from('products').select('*').eq('user_id', userId),
@@ -3314,6 +3352,7 @@ export default function App() {
             }
           } catch (err) { console.warn("[Supabase Projects Load]", err); }
         };
+        loadProjectsAndProductsRef.current = loadProjectsAndProducts;
 
         // 11. Career Timeline
         const loadTimeline = async () => {
@@ -3518,6 +3557,23 @@ export default function App() {
     };
 
     loadSupabaseUserData();
+  }, [currentUser]);
+
+  // Cross-device and tab synchronization for projects, products, and others
+  useEffect(() => {
+    if (activeTab === 'projects' && currentUser?.email) {
+      loadProjectsAndProductsRef.current?.();
+    }
+  }, [activeTab, currentUser]);
+
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      if (currentUser?.email && !isProjsRestoringRef.current) {
+        loadProjectsAndProductsRef.current?.();
+      }
+    };
+    window.addEventListener('focus', handleWindowFocus);
+    return () => window.removeEventListener('focus', handleWindowFocus);
   }, [currentUser]);
 
   // Morning Daily Reminder Notification Scheduler for Weekly Milestones & Tasks

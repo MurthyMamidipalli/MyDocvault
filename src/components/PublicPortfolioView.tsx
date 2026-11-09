@@ -958,25 +958,32 @@ export default function PublicPortfolioView({
                           )}
 
                           <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
-                            {docUrl && (
-                              <>
-                                <button 
-                                  onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
-                                  className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                                  title={docName || 'View Document'}
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
-                                </button>
-                                <button 
-                                  onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
-                                  className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
-                                  title={docName || 'Download'}
-                                >
-                                  <Download className="w-3 h-3" />
-                                  <span>Download</span>
-                                </button>
-                              </>
+                            {(docUrl || docName) && (
+                              docUrl ? (
+                                <>
+                                  <button 
+                                    onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
+                                    className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                    title={docName || 'View Document'}
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
+                                    className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                                    title={docName || 'Download'}
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Download</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 font-mono text-[9px] flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800" title={`Document: ${docName}`}>
+                                  <FileText className="w-3 h-3 text-emerald-400" />
+                                  <span className="truncate max-w-[130px]">{docName}</span>
+                                </span>
+                              )
                             )}
                             {proj.liveUrl && (
                               <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
@@ -1057,25 +1064,32 @@ export default function PublicPortfolioView({
                           )}
 
                           <div className="flex flex-wrap items-center gap-3 font-mono text-[10px]">
-                            {docUrl && (
-                              <>
-                                <button 
-                                  onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
-                                  className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                                  title={docName || 'View Document'}
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
-                                </button>
-                                <button 
-                                  onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
-                                  className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
-                                  title={docName || 'Download'}
-                                >
-                                  <Download className="w-3 h-3" />
-                                  <span>Download</span>
-                                </button>
-                              </>
+                            {(docUrl || docName) && (
+                              docUrl ? (
+                                <>
+                                  <button 
+                                    onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
+                                    className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                    title={docName || 'View Document'}
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
+                                    className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800 cursor-pointer"
+                                    title={docName || 'Download'}
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Download</span>
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 font-mono text-[9px] flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800" title={`Document: ${docName}`}>
+                                  <FileText className="w-3 h-3 text-emerald-400" />
+                                  <span className="truncate max-w-[130px]">{docName}</span>
+                                </span>
+                              )
                             )}
                             {proj.liveUrl && (
                               <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">
@@ -1139,25 +1153,32 @@ export default function PublicPortfolioView({
                         </div>
 
                         <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-slate-900/60 font-mono text-[10px]">
-                          {docUrl && (
-                            <>
-                              <button 
-                                onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
-                                className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
-                                title={docName || 'View Document'}
-                              >
-                                <Eye className="w-3 h-3" />
-                                <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
-                              </button>
-                              <button 
-                                onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
-                                className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
-                                title={docName || 'Download'}
-                              >
-                                <Download className="w-3 h-3" />
-                                <span>Download</span>
-                              </button>
-                            </>
+                          {(docUrl || docName) && (
+                            docUrl ? (
+                              <>
+                                <button 
+                                  onClick={() => openPdfInNewTab(docUrl, docName || `${proj.name}.pdf`)}
+                                  className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-500/20 cursor-pointer"
+                                  title={docName || 'View Document'}
+                                >
+                                  <Eye className="w-3 h-3" />
+                                  <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
+                                </button>
+                                <button 
+                                  onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
+                                  className="text-gray-300 hover:text-white font-bold flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800 cursor-pointer"
+                                  title={docName || 'Download'}
+                                >
+                                  <Download className="w-3 h-3" />
+                                  <span>Download</span>
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-gray-400 font-mono text-[9px] flex items-center gap-1 bg-slate-900 px-2.5 py-1 rounded border border-slate-800" title={`Document: ${docName}`}>
+                                <FileText className="w-3 h-3 text-emerald-400" />
+                                <span className="truncate max-w-[130px]">{docName}</span>
+                              </span>
+                            )
                           )}
                           {proj.liveUrl && (
                             <a href={proj.liveUrl} target="_blank" rel="noopener noreferrer" className="text-white hover:text-emerald-400 font-semibold flex items-center gap-1 transition">

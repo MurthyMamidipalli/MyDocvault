@@ -25,9 +25,11 @@ import {
   BookOpen,
   Link2,
   Download,
-  File
+  File,
+  Loader2,
+  FileCheck
 } from 'lucide-react';
-import { Project, isDemoItem } from '../types';
+import { Project, isDemoItem, toUUID } from '../types';
 import { openPdfInNewTab, downloadFileUrl } from '../lib/pdfUtils';
 import { supabase, STORAGE_BUCKETS, uploadFileToSupabaseStorage } from '../lib/supabase';
 
@@ -102,7 +104,7 @@ export default function ProjectsTab({
     });
 
     for (const p of candidateProjects) {
-      const idKey = p.id ? p.id.toLowerCase().trim() : '';
+      const idKey = p.id ? toUUID(p.id).toLowerCase().trim() : '';
       const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
       if (idKey) {
         if (seen.has(`id:${idKey}`)) continue;
@@ -131,7 +133,7 @@ export default function ProjectsTab({
       if (isUserLoggedIn && isDemoItem(p)) continue;
       if (p.type && p.type !== 'product' && p.category !== 'products') continue;
 
-      const idKey = p.id ? p.id.toLowerCase().trim() : '';
+      const idKey = p.id ? toUUID(p.id).toLowerCase().trim() : '';
       const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
       if (idKey) {
         if (seen.has(`id:${idKey}`)) continue;
@@ -166,7 +168,7 @@ export default function ProjectsTab({
       if (p.type && p.type !== 'other' && p.category !== 'others' && !p.docType) continue;
       if (!isNonCertificate(p)) continue;
 
-      const idKey = p.id ? p.id.toLowerCase().trim() : '';
+      const idKey = p.id ? toUUID(p.id).toLowerCase().trim() : '';
       const nameKey = (p.name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
       if (idKey) {
         if (seen.has(`id:${idKey}`)) continue;
@@ -753,16 +755,27 @@ export default function ProjectsTab({
                     if (file) processPdfFile(file);
                   }}
                   className={`border border-dashed rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition flex-1 min-h-[110px] select-none ${
-                    pdfUrl 
+                    (pdfUrl || pdfName || isReadingFile)
                       ? 'border-[#10b981]/50 bg-slate-950' 
                       : 'border-slate-800 hover:border-slate-700 bg-slate-950/45'
                   }`}
                 >
-                  {pdfUrl ? (
+                  {isReadingFile ? (
                     <div className="space-y-1.5 w-full flex flex-col items-center">
-                      <Paperclip className="w-6 h-6 text-[#10b981]" />
-                      <span className="text-[11px] text-[#10b981] font-bold block truncate max-w-[200px]" title={pdfName}>
+                      <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                      <span className="text-[11px] text-emerald-400 font-bold block truncate max-w-[220px]">
+                        Reading {pdfName || 'file'}...
+                      </span>
+                      <span className="text-[9px] text-gray-400">Processing document content...</span>
+                    </div>
+                  ) : (pdfUrl || pdfName) ? (
+                    <div className="space-y-1.5 w-full flex flex-col items-center">
+                      <FileCheck className="w-6 h-6 text-[#10b981]" />
+                      <span className="text-[11px] text-[#10b981] font-bold block truncate max-w-[220px]" title={pdfName}>
                         {pdfName || "document.pdf"}
+                      </span>
+                      <span className="text-[9px] text-emerald-400/80 font-mono">
+                        {pdfUrl ? '✓ Document Ready to Save' : '✓ Document Attached'}
                       </span>
                       <button
                         type="button"
@@ -771,9 +784,9 @@ export default function ProjectsTab({
                           setPdfUrl('');
                           setPdfName('');
                         }}
-                        className="text-[10px] text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+                        className="text-[10px] text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer pt-0.5"
                       >
-                        <X className="w-3 h-3" /> Remove file
+                        <X className="w-3 h-3" /> Remove / Change file
                       </button>
                     </div>
                   ) : (
@@ -803,12 +816,19 @@ export default function ProjectsTab({
                     if (file) processCoverFile(file);
                   }}
                   className={`border border-dashed rounded-2xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition flex-1 min-h-[110px] select-none ${
-                    coverUrl 
+                    (coverUrl || isReadingCover)
                       ? 'border-emerald-500/50 bg-slate-950' 
                       : 'border-slate-800 hover:border-slate-700 bg-slate-950/45'
                   }`}
                 >
-                  {coverUrl ? (
+                  {isReadingCover ? (
+                    <div className="space-y-1.5 w-full flex flex-col items-center">
+                      <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                      <span className="text-[11px] text-emerald-400 font-bold block">
+                        Processing image...
+                      </span>
+                    </div>
+                  ) : coverUrl ? (
                     <div className="space-y-1.5 w-full flex flex-col items-center">
                       <img src={coverUrl} className="w-12 h-10 object-cover rounded mx-auto border border-emerald-500/20 shadow-md" alt="Preview" />
                       <span className="text-[10px] text-emerald-400 font-bold block truncate max-w-[120px]">Image Loaded</span>
@@ -1185,28 +1205,40 @@ export default function ProjectsTab({
                   </span>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    {/* Separate View / Open and Download File Buttons - Always visible when file is present */}
-                    {cardPdfUrl && (
-                      <>
-                        <button 
-                          onClick={() => openPdfInNewTab(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                          title={/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel sheet' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word document' : 'View file in new tab'}
+                    {/* Separate View / Open and Download File Buttons - Always visible when file or filename is present */}
+                    {(cardPdfUrl || cardPdfName) && (
+                      cardPdfUrl ? (
+                        <>
+                          <button 
+                            onClick={() => openPdfInNewTab(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
+                            title={/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel sheet' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word document' : 'View file in new tab'}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>
+                              {/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word' : 'View Document'}
+                            </span>
+                          </button>
+                          <button 
+                            onClick={() => downloadFileUrl(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
+                            title={cardPdfName || "Download file"}
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => handleStartEdit(item)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 font-bold rounded-xl transition-colors text-xs cursor-pointer"
+                          title={`Document "${cardPdfName}" attached. Click to upload/update document file.`}
                         >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>
-                            {/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word' : 'View Document'}
-                          </span>
+                          <Paperclip className="w-3.5 h-3.5 text-amber-400" />
+                          <span className="truncate max-w-[120px]">{cardPdfName}</span>
+                          <span className="text-[9px] uppercase px-1 py-0.5 bg-amber-500/20 rounded">Upload file</span>
                         </button>
-                        <button 
-                          onClick={() => downloadFileUrl(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                          title={cardPdfName || "Download file"}
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Download</span>
-                        </button>
-                      </>
+                      )
                     )}
 
                     {/* GitHub Repo Link (For projects) */}
