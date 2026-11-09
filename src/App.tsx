@@ -6698,6 +6698,8 @@ export default function App() {
         t: deduplicatedTestimonials,
         l: deduplicatedLinks,
         res: deduplicatedResumes,
+        doc: deduplicatePayloadArray((documents || []).filter(d => d.visibility !== 'private'), d => d.id || d.name || ''),
+        cj: currentJob,
         cal: deduplicatedPlatformEvents
       };
       
@@ -6782,7 +6784,7 @@ export default function App() {
     }, 1500);
 
     return () => clearTimeout(timer);
-  }, [profile, skills, experience, certifications, projects, products, education, achievements, testimonials, links, resumeLinks, calendarEvents, notes, resumes, currentUser]);
+  }, [profile, skills, experience, certifications, projects, products, education, achievements, testimonials, links, resumeLinks, calendarEvents, notes, resumes, currentJob, documents, currentUser]);
 
   // Async loader side effect for clean multi-device shared URLs
   useEffect(() => {
@@ -6851,6 +6853,8 @@ export default function App() {
     let sharedTestimonials: Testimonial[] = isDemo ? INITIAL_TESTIMONIALS : [];
     let sharedLinks: PortfolioLink[] = isDemo ? INITIAL_LINKS : [];
     let sharedResumes: ResumeItem[] = [];
+    let sharedDocuments: VaultDocument[] = [];
+    let sharedCurrentJob: CurrentJob | undefined = undefined;
     let sharedCalendarEvents: CalendarEvent[] = isDemo ? INITIAL_CALENDAR_EVENTS : [];
 
     // Find if any registered user matches this slug
@@ -6936,6 +6940,8 @@ export default function App() {
         sharedTestimonials = [];
         sharedLinks = [];
         sharedResumes = [];
+        sharedDocuments = [];
+        sharedCurrentJob = undefined;
         sharedCalendarEvents = [];
       } else {
         const locS = getLocalData('skills');
@@ -6949,7 +6955,9 @@ export default function App() {
         const locT = getLocalData('testimonials');
         const locL = getLocalData('links');
         const locResL = getLocalData('resume_links');
-        const locRes = getLocalData('resumes') || getLocalData('vault_resumes');
+        const locRes = getLocalData('nexus_vault_resumes') || getLocalData('resumes') || getLocalData('vault_resumes');
+        const locDocs = getLocalData('documents');
+        const locJob = getLocalData('current_job');
         const locCal = getLocalData('calendar_events');
 
         sharedSkills = locS !== null ? locS : (isDemo ? INITIAL_SKILLS : []);
@@ -6963,6 +6971,8 @@ export default function App() {
         sharedTestimonials = locT !== null ? locT : (isDemo ? INITIAL_TESTIMONIALS : []);
         sharedLinks = (locL !== null || locResL !== null) ? [...(locL || []), ...(locResL || [])] : (isDemo ? INITIAL_LINKS : []);
         sharedResumes = locRes !== null ? locRes : [];
+        sharedDocuments = locDocs !== null ? locDocs : [];
+        sharedCurrentJob = locJob !== null ? locJob : undefined;
         sharedCalendarEvents = locCal !== null ? locCal : (isDemo ? INITIAL_CALENDAR_EVENTS : []);
       }
     } else {
@@ -7018,6 +7028,8 @@ export default function App() {
         testimonials: sharedTestimonials,
         links: sharedLinks,
         resumes: sharedResumes,
+        documents: sharedDocuments,
+        currentJob: sharedCurrentJob,
         calendarEvents: sharedCalendarEvents
       });
     }
@@ -7060,6 +7072,9 @@ export default function App() {
           achievements: isPayloadPrivate ? [] : (decoded.a || sharedAchievements),
           testimonials: isPayloadPrivate ? [] : (decoded.t || sharedTestimonials),
           links: isPayloadPrivate ? [] : (decoded.l || sharedLinks),
+          resumes: isPayloadPrivate ? [] : (decoded.res || sharedResumes),
+          documents: isPayloadPrivate ? [] : (decoded.doc || sharedDocuments),
+          currentJob: isPayloadPrivate ? undefined : (decoded.cj || sharedCurrentJob),
           calendarEvents: isPayloadPrivate ? [] : (decoded.cal || [])
         };
         setRemoteShareData(finalData);
@@ -7360,7 +7375,7 @@ export default function App() {
               expiryDate: d.expiry_date,
               tags: d.tags,
               visibility: d.visibility || 'public'
-            })) : [],
+            })) : (sharedDocuments || []),
             resumes: (resData && resData.length > 0) ? resData.filter((r: any) => r.is_public !== false && r.is_public !== 'false').map((r: any) => ({
               id: r.id,
               name: r.title || r.file_name || 'Resume Document',
@@ -7372,7 +7387,7 @@ export default function App() {
               visibility: 'public',
               isPublic: true,
               type: r.file_type || 'Resume'
-            })) : [],
+            })) : (sharedResumes || []),
             currentJob: cjData ? {
               employer: cjData.company,
               company: cjData.company,
@@ -7387,7 +7402,21 @@ export default function App() {
               currentProjects: [],
               dailyStandupText: '',
               weeklyGoals: []
-            } : undefined
+            } : (sharedCurrentJob || (pRow.company ? {
+              employer: pRow.company,
+              company: pRow.company,
+              role: pRow.headline || 'Active Professional',
+              department: '',
+              startDate: '',
+              joiningDate: '',
+              location: pRow.location || '',
+              employmentType: 'Full-time',
+              description: '',
+              isPublic: true,
+              currentProjects: [],
+              dailyStandupText: '',
+              weeklyGoals: []
+            } : undefined))
           };
 
           setRemoteShareData(publicSharePayload);

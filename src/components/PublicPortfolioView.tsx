@@ -23,7 +23,8 @@ import {
   Download,
   Folder,
   Package,
-  File
+  File,
+  User
 } from 'lucide-react';
 import { 
   PersonalProfile, 
@@ -462,6 +463,50 @@ export default function PublicPortfolioView({
 
         </div>
 
+        {/* Mandatory About Me Section */}
+        <div className="bg-[#0c0d12]/90 border border-slate-800 p-6 md:p-8 rounded-3xl relative overflow-hidden backdrop-blur-sm space-y-4 shadow-xl">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800/60">
+            <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+              <User className={`w-4 h-4 ${getThemeTextGlow()}`} />
+              About Me
+            </h3>
+            <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-bold uppercase">
+              Core Biography
+            </span>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-xs md:text-sm text-gray-300 leading-relaxed font-sans">
+              {profile.bio || `${profile.name || 'Professional'} is a dedicated specialist focusing on enterprise operations, technology management, and scalable business solutions.`}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+              <div className="bg-slate-950/60 border border-slate-850 p-3 rounded-xl">
+                <span className="text-[9px] font-mono text-gray-500 uppercase block">Full Name</span>
+                <span className="text-xs font-bold text-white block mt-0.5">{profile.name}</span>
+              </div>
+              {profile.headline && (
+                <div className="bg-slate-950/60 border border-slate-850 p-3 rounded-xl">
+                  <span className="text-[9px] font-mono text-gray-500 uppercase block">Specialization</span>
+                  <span className="text-xs font-bold text-emerald-400 block mt-0.5 truncate">{profile.headline}</span>
+                </div>
+              )}
+              {profile.company && (
+                <div className="bg-slate-950/60 border border-slate-850 p-3 rounded-xl">
+                  <span className="text-[9px] font-mono text-gray-500 uppercase block">Organization</span>
+                  <span className="text-xs font-bold text-gray-300 block mt-0.5 truncate">{profile.company}</span>
+                </div>
+              )}
+              {profile.location && (
+                <div className="bg-slate-950/60 border border-slate-850 p-3 rounded-xl">
+                  <span className="text-[9px] font-mono text-gray-500 uppercase block">Location</span>
+                  <span className="text-xs font-bold text-gray-300 block mt-0.5">{profile.location}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Dynamic Column Grid System for Resume Portions */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
@@ -617,13 +662,13 @@ export default function PublicPortfolioView({
           {/* Middle Column blocks (Education, Certifications, Achievements, Testimonials) */}
           <div className="space-y-8 lg:col-span-1">
 
-            {/* Academic Credentials (MIDDLE) */}
-            {cleanEducation.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
-                <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                  <GraduationCap className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Academics & Education
-                </h3>
+            {/* Academic Credentials (Mandatory) */}
+            <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
+              <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                <GraduationCap className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                Academics & Education
+              </h3>
+              {cleanEducation.length > 0 ? (
                 <div className="space-y-3.5 pt-1">
                   {cleanEducation.map(edu => (
                     <div key={edu.id} className="relative pl-3 border-l-2 border-slate-850">
@@ -639,8 +684,14 @@ export default function PublicPortfolioView({
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="p-3.5 bg-slate-950/45 rounded-xl border border-slate-900 space-y-1">
+                  <strong className="text-white text-xs block leading-tight">Graduate Degree & Qualifications</strong>
+                  <span className="text-[11px] text-gray-400 font-medium block">Accredited Academic Curriculum</span>
+                  <p className="text-[11px] text-gray-500 font-sans pt-1">Foundational academic qualifications and specialized coursework.</p>
+                </div>
+              )}
+            </div>
 
             {/* Certifications Block */}
             {publicCerts.length > 0 && (
@@ -785,41 +836,48 @@ export default function PublicPortfolioView({
           {/* Right Column blocks (Current Job, Experience Timeline, Projects, Products, Others) */}
           <div className="space-y-8 lg:col-span-1">
             
-            {/* Current Job / Employment Card */}
-            {currentJob && (currentJob.role || currentJob.employer || currentJob.company) && currentJob.isPublic !== false && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
-                    <Briefcase className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                    Current Employment
-                  </h3>
-                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
-                    {currentJob.employmentType || 'Active Role'}
-                  </span>
-                </div>
-
-                <div className="space-y-2 pt-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                    <h4 className="text-white font-bold text-sm">{currentJob.role}</h4>
-                    {(currentJob.joiningDate || currentJob.startDate) && (
-                      <span className="text-[10px] font-mono text-gray-500">Joined {currentJob.joiningDate || currentJob.startDate}</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-emerald-400 font-semibold">{currentJob.employer || currentJob.company} {currentJob.department ? `• ${currentJob.department}` : ''}</p>
-                  {currentJob.location && <p className="text-[11px] text-gray-400 font-mono">📍 {currentJob.location}</p>}
-                  {currentJob.description && <p className="text-xs text-gray-300 font-sans leading-relaxed pt-1">{currentJob.description}</p>}
-                </div>
-              </div>
-            )}
-
-            {/* Enterprise tenure timeline */}
-            {filteredExperience.length > 0 && (
-              <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-6">
+            {/* Current Job / Employment Card (Mandatory) */}
+            <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-4">
+              <div className="flex items-center justify-between">
                 <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
                   <Briefcase className={`w-4 h-4 ${getThemeTextGlow()}`} />
-                  Experience Timeline
+                  Current Employment
                 </h3>
+                <span className="text-[9px] bg-emerald-500/10 text-emerald-400 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/20 uppercase">
+                  {currentJob?.employmentType || 'Active Role'}
+                </span>
+              </div>
 
+              <div className="space-y-2 pt-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <h4 className="text-white font-bold text-sm">
+                    {currentJob?.role || profile.headline || 'Active Professional'}
+                  </h4>
+                  {(currentJob?.joiningDate || currentJob?.startDate) && (
+                    <span className="text-[10px] font-mono text-gray-500">Joined {currentJob.joiningDate || currentJob.startDate}</span>
+                  )}
+                </div>
+                <p className="text-xs text-emerald-400 font-semibold">
+                  {currentJob?.employer || currentJob?.company || profile.company || 'Enterprise Solutions Organization'} 
+                  {currentJob?.department ? ` • ${currentJob.department}` : ''}
+                </p>
+                {(currentJob?.location || profile.location) && (
+                  <p className="text-[11px] text-gray-400 font-mono">📍 {currentJob?.location || profile.location}</p>
+                )}
+                <p className="text-xs text-gray-300 font-sans leading-relaxed pt-1">
+                  {currentJob?.description || 'Leading key organizational initiatives, driving business execution, and delivering mission-critical outcomes.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Enterprise tenure timeline (Mandatory) */}
+            <div className="bg-[#0b0c10]/70 border border-slate-850 p-6 rounded-2xl space-y-6">
+              <h3 className="text-white font-extrabold text-xs uppercase tracking-widest font-mono flex items-center gap-2">
+                <Briefcase className={`w-4 h-4 ${getThemeTextGlow()}`} />
+                Experience Timeline
+              </h3>
+
+              {filteredExperience.length > 0 ? (
                 <div className="space-y-6 pl-4 border-l border-slate-800">
                   {filteredExperience.map(exp => (
                     <div key={exp.id} className="relative space-y-2">
@@ -893,8 +951,16 @@ export default function PublicPortfolioView({
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="p-3.5 bg-slate-950/45 rounded-xl border border-slate-900 space-y-1">
+                  <strong className="text-white text-xs block leading-tight">{profile.headline || 'Professional Specialist'}</strong>
+                  <span className="text-[11px] text-emerald-400 font-medium block">{profile.company || 'Corporate & Industry Experience'}</span>
+                  <p className="text-[11px] text-gray-500 font-sans pt-1">
+                    Extensive experience managing enterprise projects, technical implementations, cross-functional teamwork, and delivering results.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Projects Category */}
             {projectsList.length > 0 && (
@@ -967,7 +1033,7 @@ export default function PublicPortfolioView({
                                     title={docName || 'View Document'}
                                   >
                                     <Eye className="w-3 h-3" />
-                                    <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
+                                    <span>Open</span>
                                   </button>
                                   <button 
                                     onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
@@ -1073,7 +1139,7 @@ export default function PublicPortfolioView({
                                     title={docName || 'View Document'}
                                   >
                                     <Eye className="w-3 h-3" />
-                                    <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
+                                    <span>Open</span>
                                   </button>
                                   <button 
                                     onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
@@ -1162,7 +1228,7 @@ export default function PublicPortfolioView({
                                   title={docName || 'View Document'}
                                 >
                                   <Eye className="w-3 h-3" />
-                                  <span>{/\.(xlsx?|csv)$/i.test(docName) ? 'Open Excel' : /\.(docx?)$/i.test(docName) ? 'Open Word' : 'View Document'}</span>
+                                  <span>Open</span>
                                 </button>
                                 <button 
                                   onClick={() => downloadFileUrl(docUrl, docName || `${proj.name}.pdf`)}
