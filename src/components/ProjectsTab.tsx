@@ -86,6 +86,88 @@ export default function ProjectsTab({
   // Refs for hidden inputs
   const coverInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const cardFileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingCardItem, setPendingCardItem] = useState<Project | null>(null);
+  const [pendingCardAction, setPendingCardAction] = useState<'open' | 'download'>('open');
+
+  const resolveFileUrlByName = (targetName: string): string => {
+    if (!targetName) return '';
+    const cleanTarget = targetName.trim().toLowerCase();
+    
+    // 1. Check all projects, products, others
+    const all = [...(projects || []), ...(products || []), ...(others || [])];
+    for (const p of all) {
+      if (!p) continue;
+      const pName = (p.pdfName || (p as any).fileName || '').trim().toLowerCase();
+      const pUrl = p.pdfUrl || (p as any).fileUrl || '';
+      if (pName === cleanTarget && pUrl) return pUrl;
+    }
+
+    // 2. Check localStorage documents and resumes
+    try {
+      const email = getCurrentUserEmail();
+      if (email) {
+        const rawDocs = localStorage.getItem(`${email}_documents`);
+        if (rawDocs) {
+          const docs = JSON.parse(rawDocs);
+          if (Array.isArray(docs)) {
+            for (const d of docs) {
+              const dName = (d.name || d.fileName || d.title || '').trim().toLowerCase();
+              if ((dName === cleanTarget || cleanTarget.includes(dName)) && d.fileUrl) return d.fileUrl;
+            }
+          }
+        }
+        const rawResumes = localStorage.getItem(`${email}_nexus_vault_resumes`);
+        if (rawResumes) {
+          const resumes = JSON.parse(rawResumes);
+          if (Array.isArray(resumes)) {
+            for (const r of resumes) {
+              const rName = (r.name || r.fileName || '').trim().toLowerCase();
+              if ((rName === cleanTarget || cleanTarget.includes(rName)) && (r.fileUrl || r.dataUrl)) return r.fileUrl || r.dataUrl;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    return '';
+  };
+
+  const handleCardOpen = (item: Project, cardPdfUrl: string, cardPdfName: string) => {
+    if (cardPdfUrl) {
+      openPdfInNewTab(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`);
+      return;
+    }
+    const resolved = resolveFileUrlByName(cardPdfName);
+    if (resolved) {
+      openPdfInNewTab(resolved, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`);
+      if (onUpdateProject) {
+        onUpdateProject({ ...item, pdfUrl: resolved, pdfName: cardPdfName });
+      }
+      return;
+    }
+    setPendingCardItem(item);
+    setPendingCardAction('open');
+    cardFileInputRef.current?.click();
+  };
+
+  const handleCardDownload = (item: Project, cardPdfUrl: string, cardPdfName: string) => {
+    if (cardPdfUrl) {
+      downloadFileUrl(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`);
+      return;
+    }
+    const resolved = resolveFileUrlByName(cardPdfName);
+    if (resolved) {
+      downloadFileUrl(resolved, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`);
+      if (onUpdateProject) {
+        onUpdateProject({ ...item, pdfUrl: resolved, pdfName: cardPdfName });
+      }
+      return;
+    }
+    setPendingCardItem(item);
+    setPendingCardAction('download');
+    cardFileInputRef.current?.click();
+  };
 
   const isUserLoggedIn = typeof window !== 'undefined' && Boolean(localStorage.getItem('nexus_current_user'));
 
@@ -737,6 +819,35 @@ export default function ProjectsTab({
               onChange={handlePdfChange}
               className="hidden"
             />
+            <input 
+              type="file" 
+              ref={cardFileInputRef}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && pendingCardItem && onUpdateProject) {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                    const url = reader.result as string;
+                    const updated: Project = {
+                      ...pendingCardItem,
+                      pdfUrl: url,
+                      pdfName: file.name
+                    };
+                    onUpdateProject(updated);
+                    if (pendingCardAction === 'download') {
+                      downloadFileUrl(url, file.name);
+                    } else {
+                      openPdfInNewTab(url, file.name);
+                    }
+                    setPendingCardItem(null);
+                  };
+                  reader.readAsDataURL(file);
+                }
+                if (cardFileInputRef.current) cardFileInputRef.current.value = '';
+              }}
+              className="hidden"
+            />
 
             {/* File Upload Dropzones */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1018,28 +1129,7 @@ export default function ProjectsTab({
                     </div>
                   </div>
 
-                  {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
-                  <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                    <button 
-                      onClick={() => handleStartEdit(item)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                      title={`Edit ${item.name}`}
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Edit</span>
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setDeleteId(item.id);
-                        setDeleteName(item.name);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                      title={`Delete ${item.name}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Delete</span>
-                    </button>
-                  </div>
+
                 </div>
               ) : (
                 /* Projects & Products Mockup / Cover Region */
@@ -1104,28 +1194,7 @@ export default function ProjectsTab({
                     </div>
                   )}
 
-                  {/* Floating Edit/Delete Actions overlay - clearly visible with label and icon */}
-                  <div className="absolute top-3 right-3 flex items-center gap-2 z-20">
-                    <button 
-                      onClick={() => handleStartEdit(item)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-blue-600/30 border border-blue-500/50 hover:border-blue-400 text-blue-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                      title={`Edit ${item.name}`}
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Edit</span>
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setDeleteId(item.id);
-                        setDeleteName(item.name);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 hover:bg-rose-600/30 border border-rose-500/50 hover:border-rose-400 text-rose-300 hover:text-white font-bold rounded-xl cursor-pointer transition select-none text-xs shadow-lg backdrop-blur-md"
-                      title={`Delete ${item.name}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Delete</span>
-                    </button>
-                  </div>
+
                 </div>
               )}
 
@@ -1205,40 +1274,32 @@ export default function ProjectsTab({
                   </span>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    {/* Separate View / Open and Download File Buttons - Always visible when file or filename is present */}
+                    {/* Open and Download File Buttons - Always visible when file or filename is present */}
                     {(cardPdfUrl || cardPdfName) && (
-                      cardPdfUrl ? (
-                        <>
-                          <button 
-                            onClick={() => openPdfInNewTab(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                            title={/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel sheet' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word document' : 'View file in new tab'}
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>
-                              {/\.(xlsx?|csv)$/i.test(cardPdfName) ? 'Open Excel' : /\.(docx?)$/i.test(cardPdfName) ? 'Open Word' : 'View Document'}
-                            </span>
-                          </button>
-                          <button 
-                            onClick={() => downloadFileUrl(cardPdfUrl, cardPdfName || `${item.name.replace(/\s+/g, '_')}.pdf`)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                            title={cardPdfName || "Download file"}
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Download</span>
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={() => handleStartEdit(item)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 font-bold rounded-xl transition-colors text-xs cursor-pointer"
-                          title={`Document "${cardPdfName}" attached. Click to upload/update document file.`}
+                      <div className="flex items-center gap-2">
+                        {cardPdfName && (
+                          <span className="text-gray-400 font-mono text-[10px] hidden sm:flex items-center gap-1 bg-slate-950 px-2 py-1 rounded border border-slate-800 select-none" title={`Attached: ${cardPdfName}`}>
+                            <Paperclip className="w-3 h-3 text-emerald-400 shrink-0" />
+                            <span className="truncate max-w-[120px]">{cardPdfName}</span>
+                          </span>
+                        )}
+                        <button 
+                          onClick={() => handleCardOpen(item, cardPdfUrl, cardPdfName)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#10b981]/15 border border-[#10b981]/30 hover:bg-[#10b981]/25 text-emerald-400 font-bold rounded-xl transition-colors text-xs cursor-pointer"
+                          title={cardPdfName ? `Open ${cardPdfName}` : 'Open file'}
                         >
-                          <Paperclip className="w-3.5 h-3.5 text-amber-400" />
-                          <span className="truncate max-w-[120px]">{cardPdfName}</span>
-                          <span className="text-[9px] uppercase px-1 py-0.5 bg-amber-500/20 rounded">Upload file</span>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Open</span>
                         </button>
-                      )
+                        <button 
+                          onClick={() => handleCardDownload(item, cardPdfUrl, cardPdfName)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-300 hover:text-white font-bold rounded-xl transition-colors text-xs cursor-pointer"
+                          title={cardPdfName || "Download file"}
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download</span>
+                        </button>
+                      </div>
                     )}
 
                     {/* GitHub Repo Link (For projects) */}

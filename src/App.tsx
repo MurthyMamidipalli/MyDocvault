@@ -3258,7 +3258,7 @@ export default function App() {
                     const rawDesc = (p.description || '').replace(/<!--banner:[\s\S]*?-->/g, '').replace(/<!--filename:[\s\S]*?-->/g, '').trim();
                     const descWithFile = p.pdfName ? `${rawDesc}\n<!--filename:${p.pdfName}-->` : rawDesc;
                     const descWithBanner = banner ? `${descWithFile}\n<!--banner:${banner}-->` : descWithFile;
-                    await supabase.from('projects').upsert({
+                    const basePayload: any = {
                       id: ensureUUID(p.id),
                       user_id: userId,
                       name: p.name,
@@ -3270,10 +3270,15 @@ export default function App() {
                       live_url: p.liveUrl || '',
                       github_url: p.githubUrl || '',
                       pdf_url: p.pdfUrl || '',
-                      pdf_name: p.pdfName || '',
+                      image_url: banner,
                       is_public: p.isPublic !== false,
                       date: p.date || ''
-                    });
+                    };
+                    const { error } = await supabase.from('projects').upsert(basePayload);
+                    if (error) {
+                      const { image_url, ...fallbackPayload } = basePayload;
+                      await supabase.from('projects').upsert(fallbackPayload);
+                    }
                   } catch (_) {}
                 }
               }
@@ -5055,7 +5060,7 @@ export default function App() {
           const descWithBanner = cleanImg 
             ? `${descWithFile}\n<!--banner:${cleanImg}-->` 
             : descWithFile;
-          const payload = {
+          const basePayload: any = {
             id,
             user_id: userId,
             name: newPr.name,
@@ -5067,14 +5072,15 @@ export default function App() {
             live_url: newPr.liveUrl || '',
             github_url: newPr.githubUrl || '',
             pdf_url: cleanPdf,
-            pdf_name: cleanPdfName,
+            image_url: cleanImg,
             is_public: newPr.isPublic !== false,
             date: newPr.date || ''
           };
-          const { error } = await supabase.from('projects').upsert(payload);
+          const { error } = await supabase.from('projects').upsert(basePayload);
           if (error) {
-            console.error("[Supabase Add Project Error]", error);
-            triggerToast(`Project Error: ${error.message}`);
+            console.error("[Supabase Add Project Error, retrying fallback]", error);
+            const { image_url, ...fallbackPayload } = basePayload;
+            await supabase.from('projects').upsert(fallbackPayload);
           }
         } catch (err) { console.warn("[Supabase Add Project Error]", err); }
       }
@@ -5262,7 +5268,7 @@ export default function App() {
           const descWithBanner = resolvedImg 
             ? `${descWithFile}\n<!--banner:${resolvedImg}-->` 
             : descWithFile;
-          const payload = {
+          const basePayload: any = {
             id: toUUID(rawId || targetId),
             user_id: userId,
             name: updatedPr.name,
@@ -5274,11 +5280,16 @@ export default function App() {
             live_url: updatedPr.liveUrl || '',
             github_url: updatedPr.githubUrl || '',
             pdf_url: resolvedPdf,
-            pdf_name: resolvedPdfName,
+            image_url: resolvedImg,
             is_public: updatedPr.isPublic !== false,
             date: updatedPr.date || ''
           };
-          await supabase.from('projects').upsert(payload);
+          const { error: projErr } = await supabase.from('projects').upsert(basePayload);
+          if (projErr) {
+            console.warn("[Supabase Update Project Fallback]", projErr);
+            const { image_url, ...restPayload } = basePayload;
+            await supabase.from('projects').upsert(restPayload);
+          }
         } catch (err) { console.warn("[Supabase Update Project Error]", err); }
       }
     }
@@ -7733,15 +7744,26 @@ export default function App() {
         <div className={`p-4 border-b border-slate-900/80 flex items-center ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
           {isSidebarOpen ? (
             <>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="bg-emerald-500/10 text-emerald-400 p-2 rounded-xl border border-emerald-500/25 shrink-0">
+              <a 
+                href="#overview"
+                onClick={(e) => {
+                  if (!e.ctrlKey && !e.metaKey && e.button === 0) {
+                    e.preventDefault();
+                    setActiveTab('overview');
+                    try { window.history.pushState(null, '', '#overview'); } catch (_) {}
+                  }
+                }}
+                className="flex items-center gap-2.5 min-w-0 cursor-pointer group"
+                title="Go to Overview"
+              >
+                <div className="bg-emerald-500/10 text-emerald-400 p-2 rounded-xl border border-emerald-500/25 shrink-0 group-hover:bg-emerald-500/20 transition-colors">
                   <Sparkles className="w-5 h-5 animate-pulse" />
                 </div>
                 <div className="truncate">
-                  <h1 className="font-sans font-bold text-sm tracking-tight text-white leading-none">MyDocVault</h1>
+                  <h1 className="font-sans font-bold text-sm tracking-tight text-white leading-none group-hover:text-emerald-300 transition-colors">MyDocVault</h1>
                   <span className="text-[9px] text-gray-500 font-mono tracking-wider font-semibold">Personal Document Saver</span>
                 </div>
-              </div>
+              </a>
               <button
                 type="button"
                 onClick={toggleSidebar}
